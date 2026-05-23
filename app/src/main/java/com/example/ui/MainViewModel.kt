@@ -58,6 +58,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _worksList = MutableStateFlow<List<ScratchWork>>(emptyList())
     val worksList: StateFlow<List<ScratchWork>> = _worksList.asStateFlow()
 
+    // --- 教师端专用的全校/全班提交作品及学生列表 ---
+    private val _allWorksList = MutableStateFlow<List<ScratchWork>>(emptyList())
+    val allWorksList: StateFlow<List<ScratchWork>> = _allWorksList.asStateFlow()
+
+    private val _studentsList = MutableStateFlow<List<Student>>(emptyList())
+    val studentsList: StateFlow<List<Student>> = _studentsList.asStateFlow()
+
     // --- 选中的作品详情评测数据 ---
     private val _activeReport = MutableStateFlow<WorkAiReport?>(null)
     val activeReport: StateFlow<WorkAiReport?> = _activeReport.asStateFlow()
@@ -147,6 +154,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _tasksList.value = it
                 }
             }
+            // 教师端获取所有的作业提交(不分班级，解决班级挑选阻碍)
+            viewModelScope.launch {
+                repository.getAllWorksFlow().collect {
+                    _allWorksList.value = it
+                }
+            }
+            // 教师端获取所有注册的学生
+            viewModelScope.launch {
+                repository.getAllStudentsFlow().collect {
+                    _studentsList.value = it
+                }
+            }
         }
     }
 
@@ -200,6 +219,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     userName = name,
                     classId = classId,
                     identifier = studentNum
+                )
+                _isLoggedIn.value = true
+                onUserLoggedIn()
+                onSuccess()
+            }
+            _currentBtnLoading.value = false
+        }
+    }
+
+    fun teacherRegister(workId: String, name: String, pass: String, onSuccess: () -> Unit) {
+        viewModelScope.launch {
+            _currentBtnLoading.value = true
+            _authError.value = null
+            val existing = repository.getTeacherByWorkId(workId)
+            if (existing != null) {
+                _authError.value = "该工号已被注册！请直接登录。"
+            } else {
+                val newId = repository.registerTeacher(
+                    Teacher(
+                        workId = workId,
+                        name = name,
+                        password = pass
+                    )
+                ).toInt()
+                SharedPreferencesUtil.saveLoginSession(
+                    context = context,
+                    userId = newId,
+                    role = "teacher",
+                    userName = name,
+                    identifier = workId
                 )
                 _isLoggedIn.value = true
                 onUserLoggedIn()
@@ -366,12 +415,56 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _aiDailyLimitReached.value = false
 
             // 2. 根据玩法装配 Prompt 模板
+            // 引入专为小学3-6年级订制的少儿认知增强式 AI Prompt 系统
+            val systemInstruction = """
+                你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程(Scratch 3.0)“编程精灵姐姐”。
+                因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
+                1. 【态度特别温柔、热情】：千万不能用成年人冰冷严肃的书面式文字！多用鼓励性话语（如“宝贝真棒！”、“这个创意妙极了！”、“来，精灵姐姐教你一个新魔法！”），并多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
+                2. 【绝对要具体、提供一步步可跟着做的动作指南】：绝对不要讲抽象概念（诸如“在适当的生命周期回调中加入循环”、“保证边界校验完整”等）。必须具体到：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字的积木】并用手指拖拽出来；第三步，把它粘在【什么积木】的下面。
+                3. 【一定要用有趣好玩的比喻解说术语】：
+                   - 【变量】比作“用来收纳玩具的魔法彩色小盒子”。
+                   - 【循环/重复执行】比作“小猫坐上了永远停不下来的欢快旋转木马”。
+                   - 【条件判断/如果..那么】比作“天气预报小哨兵”，只在符合条件时才吹哨放行。
+                   - 【坐标(X, Y)】比作“小猫站在一排横座位和一排纵座位交叉的方格教室里”。
+                4. 【视觉分段排版】：句子短小，多用 ①、②、③ 标清动手步骤，重点积木和参数名字用中括号【】和粗体加亮以便小学生看清。
+            """.trimIndent()
+
             val code = currentDraftCode.value
             val prompt = when (funcType) {
-                "语法纠错" -> "分析以下Scratch项目JSON代码，找出所有语法错误和积木拼接错误，给出修正方案和对应知识点讲解：$code"
-                "创意引导" -> "我正在用Scratch做一个【${currentDraftName.value}】的主题作品，给我3个创意实现思路和分步实现步骤，不要生成完整代码：$code"
-                "知识点讲解" -> "讲解以下Scratch项目代码中涉及的编程知识点、原理和核心积木的用法关系：$code"
-                else -> "你是一个Scratch教师。请分析以下Scratch积木：$code"
+                "语法纠错" -> """
+                    $systemInstruction
+                    
+                    我的 Scratch 积木代码是：$code
+                    请用最有爱心、最具体的口吻帮我看看：
+                    1. 先热烈夸奖我今天努力编程的尝试！
+                    2. 帮我挑出有没有悬空无用的积木、或者积木没拼对顺序的“小逻辑冲突（小迷糊）”。
+                    3. 给出特别可执行的、①②③步极简拼搭改错步骤，告诉我在哪个积木分区，找什么积木，换到哪一步拼好。
+                """.trimIndent()
+                
+                "创意引导" -> """
+                    $systemInstruction
+                    
+                    我的作品主题是【${currentDraftName.value}】。我现在的积木块是：$code
+                    请给我 2个 简单、好玩并且小孩子很容易做出来的进阶创意点子，能让我的作品变得好玩10倍！
+                    对于每个点子，请给出极度具体的、小学生一二三拼搭步骤指南，格式如下：
+                    🎈 创意亮点：...
+                    💡 好玩在什么地方：...
+                    🐾 推荐拼插魔法步骤：
+                    ① 点击左边【什么颜色分类】...
+                    ② 拖出【什么名字积木】...
+                    ③ 拼在【什么积木】下面...
+                """.trimIndent()
+                
+                "知识点讲解" -> """
+                    $systemInstruction
+                    
+                    请帮我讲讲我现在做出来的这个 Scratch 积木代码：$code
+                    1. 用崇拜和赞美的语气告诉我这里面用到的最酷的“编程魔法知识点”是什么。
+                    2. 面向小学生，用生动形象的比喻（例如玩具盒、旋转木马、小哨兵）解释这个知识点的妙用。
+                    3. 告诉我这个魔法在别的小游戏（例如打地鼠、接水果等）里面可以怎么用来创造乐趣。
+                """.trimIndent()
+                
+                else -> "$systemInstruction\n请分析以下Scratch积木代码并给出温暖有爱的具体拼搭指引：$code"
             }
 
             // 3. 异步获取 Gemini 响应并填充记录
@@ -390,6 +483,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
             )
             _aiLoading.value = false
+        }
+    }
+
+    // --- 教师审查与修改打回重做 ---
+    fun submitTeacherReview(workId: Int, status: String, score: Int, comment: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.updateWorkReview(workId, status, score, comment)
+                onResult("作品评审完毕！状态设为【$status】，评分 $score 分。")
+                // 刷新主页状态
+                onUserLoggedIn()
+            } catch (e: Exception) {
+                onResult("评审提交异常：${e.message}")
+            }
         }
     }
 
@@ -427,7 +534,44 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // --- 教师端创建新班级 & 配制默认 AI 安全等级 ---
+    fun createNewClassByTeacher(className: String, grade: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val teacherId = _currentUserId.value
+            if (teacherId == -1) return@launch
+
+            val classEntity = ClassEntity(
+                className = className,
+                grade = grade,
+                teacherId = teacherId
+            )
+            val newClassId = repository.createClass(classEntity).toInt()
+            if (newClassId > 0) {
+                // 同时为新班级自动配制一套绿色防沉迷 AI 提示安全规范
+                repository.saveConfig(
+                    com.example.data.AiTeachingConfig(
+                        classId = newClassId,
+                        teacherId = teacherId,
+                        aiHintLevel = "入门阶梯引导",
+                        creativeGuideDailyLimit = 8,
+                        codeGenerationLimit = 0 // 阻断抄袭模式
+                    )
+                )
+                onResult("班级【${className}】创建成功，AI阶梯防护罩及防沉迷设定已就绪！")
+                loadClasses()
+                // 刷一下
+                onUserLoggedIn()
+            } else {
+                onResult("创建班级失败，请确认名称是否冲突。")
+            }
+        }
+    }
+
     // --- 查看评测报告详情 ---
+    fun getReportForWorkFlow(workId: Int): Flow<WorkAiReport?> {
+        return repository.getReportForWorkFlow(workId)
+    }
+
     fun loadReportForWork(workId: Int) {
         viewModelScope.launch {
             _activeReport.value = repository.getReportForWork(workId)

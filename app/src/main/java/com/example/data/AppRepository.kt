@@ -185,4 +185,20 @@ class AppRepository(context: Context) {
     suspend fun getWorksByClass(classId: Int): List<ScratchWork> = withContext(Dispatchers.IO) {
         dao.getWorksByClass(classId)
     }
+
+    fun getAllWorksFlow(): Flow<List<ScratchWork>> = dao.getAllWorksFlow()
+
+    fun getAllStudentsFlow(): Flow<List<Student>> = dao.getAllStudentsFlow()
+
+    suspend fun getAllStudents(): List<Student> = withContext(Dispatchers.IO) {
+        dao.getAllStudents()
+    }
+
+    suspend fun getAllTasksList(): List<LearningTask> = withContext(Dispatchers.IO) {
+        dao.getAllTasksList()
+    }
+
+    suspend fun updateWorkReview(workId: Int, status: String, score: Int?, comment: String?) = withContext(Dispatchers.IO) {
+        dao.updateWorkReview(workId, status, score, comment, System.currentTimeMillis())
+    }
 }

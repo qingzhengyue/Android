@@ -95,7 +95,10 @@ data class ScratchWork(
     @ColumnInfo(name = "taskId") val taskId: Int, // 对应任务ID
     @ColumnInfo(name = "submitCount") val submitCount: Int, // 提交次数
     @ColumnInfo(name = "submitTime") val submitTime: Long = System.currentTimeMillis(), // 提交时间
-    @ColumnInfo(name = "reviewStatus") val reviewStatus: String // 审核状态 (如: "待审核", "已评测", "已打分")
+    @ColumnInfo(name = "reviewStatus") val reviewStatus: String, // 审核状态 (如: "待审核", "已评测", "已打分", "打回重做")
+    @ColumnInfo(name = "teacherScore") val teacherScore: Int? = null, // 教师评分 (满分100)
+    @ColumnInfo(name = "teacherComment") val teacherComment: String? = null, // 教师评语
+    @ColumnInfo(name = "teacherReviewTime") val teacherReviewTime: Long? = null // 评价时间
 )
 
 // 9. 作品AI评测报告 (WorkAiReport)
@@ -216,6 +219,21 @@ interface AppDao {
     @Query("SELECT * FROM scratch_work WHERE classId = :classId ORDER BY submitTime DESC")
     suspend fun getWorksByClass(classId: Int): List<ScratchWork>
 
+    @Query("SELECT * FROM scratch_work ORDER BY submitTime DESC")
+    fun getAllWorksFlow(): Flow<List<ScratchWork>>
+
+    @Query("SELECT * FROM student")
+    fun getAllStudentsFlow(): Flow<List<Student>>
+
+    @Query("SELECT * FROM student")
+    suspend fun getAllStudents(): List<Student>
+
+    @Query("SELECT * FROM learning_task")
+    suspend fun getAllTasksList(): List<LearningTask>
+
+    @Query("UPDATE scratch_work SET reviewStatus = :status, teacherScore = :score, teacherComment = :comment, teacherReviewTime = :reviewTime WHERE workId = :workId")
+    suspend fun updateWorkReview(workId: Int, status: String, score: Int?, comment: String?, reviewTime: Long)
+
     // --- AI 评测报告 ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAiReport(report: WorkAiReport): Long
@@ -239,7 +257,7 @@ interface AppDao {
         ScratchWork::class,
         WorkAiReport::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
