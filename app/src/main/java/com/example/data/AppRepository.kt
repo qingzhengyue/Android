@@ -5,7 +5,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class AppRepository(context: Context) {
+class AppRepository(private val context: Context) {
     private val db = AppDatabase.getDatabase(context)
     private val dao = db.appDao
 
@@ -40,6 +40,20 @@ class AppRepository(context: Context) {
 
     suspend fun getClassById(classId: Int): ClassEntity? = withContext(Dispatchers.IO) {
         dao.getClassById(classId)
+    }
+
+    suspend fun deleteClass(classId: Int) = withContext(Dispatchers.IO) {
+        dao.deleteClassById(classId)
+        dao.deleteStudentsByClass(classId)
+        dao.deleteTasksByClass(classId)
+    }
+
+    suspend fun updateClass(classId: Int, className: String, grade: String) = withContext(Dispatchers.IO) {
+        dao.updateClass(classId, className, grade)
+    }
+
+    suspend fun getAiAssistCountByClass(classId: Int): Int = withContext(Dispatchers.IO) {
+        dao.getAiAssistCountByClass(classId)
     }
 
     // --- 学生 ---
@@ -120,8 +134,22 @@ class AppRepository(context: Context) {
         val endOfDay = startOfDay + (24 * 60 * 60 * 1000L) - 1
 
         val currentCount = dao.getDailyAssistCount(studentId, startOfDay, endOfDay)
-        val config = dao.getConfigByClassId(classId)
-        val limit = config?.creativeGuideDailyLimit ?: 5 // 默认每天限额 5 次
+        
+        val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
+        var limit = 10
+        if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
+            try {
+                val json = org.json.JSONObject(classDesc)
+                limit = json.optInt("dailyLimit", 10)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        } else {
+            val config = dao.getConfigByClassId(classId)
+            if (config != null) {
+                limit = config.creativeGuideDailyLimit
+            }
+        }
         currentCount < limit
     }
 
@@ -154,6 +182,35 @@ class AppRepository(context: Context) {
             codeJson = work.workCode
         )
 
+        // Calculate dynamic average score based on custom radar weights
+        val classDesc = SharedPreferencesUtil.getClassDescription(context, work.classId)
+        var weightGrammar = 25
+        var weightLogic = 30
+        var weightTask = 25
+        var weightCreative = 20
+        if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
+            try {
+                val json = org.json.JSONObject(classDesc)
+                weightGrammar = json.optInt("weightGrammar", 25)
+                weightLogic = json.optInt("weightLogic", 30)
+                weightTask = json.optInt("weightTask", 25)
+                weightCreative = json.optInt("weightCreative", 20)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        val totalWeight = (weightGrammar + weightLogic + weightTask + weightCreative).toDouble()
+        val calculatedAverageScore = if (totalWeight > 0) {
+            Math.round(
+                (eval.grammarScore * weightGrammar +
+                 eval.logicScore * weightLogic +
+                 eval.taskMatchScore * weightTask +
+                 eval.creativeScore * weightCreative) / totalWeight
+            ).toInt()
+        } else {
+            eval.averageScore
+        }
+
         // 4. 将 AI 评测报告插入数据库
         val report = WorkAiReport(
             workId = workId,
@@ -162,7 +219,7 @@ class AppRepository(context: Context) {
             logicScore = eval.logicScore,
             taskMatchScore = eval.taskMatchScore,
             creativeScore = eval.creativeScore,
-            averageScore = eval.averageScore,
+            averageScore = calculatedAverageScore,
             optimizationSuggestions = eval.suggestions
         )
         dao.insertAiReport(report)

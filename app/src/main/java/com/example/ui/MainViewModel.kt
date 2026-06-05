@@ -101,9 +101,97 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun loadClasses() {
         viewModelScope.launch {
             repository.getAllClasses().collect {
-                _classesList.value = it
+                _classesList.value = sortClassesSmart(it)
             }
         }
+    }
+
+    private fun sortClassesSmart(list: List<ClassEntity>): List<ClassEntity> {
+        val chineseToNumMap = mapOf(
+            "一" to 1, "二" to 2, "两" to 2, "三" to 3, "四" to 4, "五" to 5,
+            "六" to 6, "七" to 7, "八" to 8, "九" to 9, "十" to 10
+        )
+
+        fun parseChineseOrArabic(str: String): Int? {
+            val clean = str.trim()
+            val arabic = clean.toIntOrNull()
+            if (arabic != null) return arabic
+            if (chineseToNumMap.containsKey(clean)) {
+                return chineseToNumMap[clean]
+            }
+            if (clean.length == 2) {
+                val first = clean[0].toString()
+                val second = clean[1].toString()
+                if (first == "十") {
+                    val sVal = chineseToNumMap[second] ?: 0
+                    return 10 + sVal
+                }
+                if (second == "十") {
+                    val fVal = chineseToNumMap[first] ?: 0
+                    return fVal * 10
+                }
+            } else if (clean.length == 3) {
+                val first = clean[0].toString()
+                val second = clean[1].toString()
+                val third = clean[2].toString()
+                if (second == "十") {
+                    val fVal = chineseToNumMap[first] ?: 0
+                    val tVal = chineseToNumMap[third] ?: 0
+                    return fVal * 10 + tVal
+                }
+            }
+            return null
+        }
+
+        fun getGradeNum(classEntity: ClassEntity): Int {
+            val gText = classEntity.grade
+            if (gText.isNotBlank()) {
+                val p1 = Regex("([一二三四五六七八九十1234567890]+)")
+                val match = p1.find(gText)
+                if (match != null) {
+                    val parsed = parseChineseOrArabic(match.groupValues[1])
+                    if (parsed != null) return parsed
+                }
+            }
+            val cText = classEntity.className
+            val p2 = Regex("([一二三四五六七八九十1234567890]+)\\s*(年级|级)")
+            val match2 = p2.find(cText)
+            if (match2 != null) {
+                val parsed = parseChineseOrArabic(match2.groupValues[1])
+                if (parsed != null) return parsed
+            }
+            return Int.MAX_VALUE
+        }
+
+        fun getClassNum(classEntity: ClassEntity): Int {
+            val text = classEntity.className
+            val p1 = Regex("([一二三四五六七八九十1234567890]+)\\s*班")
+            val match = p1.find(text)
+            if (match != null) {
+                val parsed = parseChineseOrArabic(match.groupValues[1])
+                if (parsed != null) return parsed
+            }
+            val p2 = Regex("班级\\s*([一二三四五六七八九十1234567890]+)")
+            val match2 = p2.find(text)
+            if (match2 != null) {
+                val parsed = parseChineseOrArabic(match2.groupValues[1])
+                if (parsed != null) return parsed
+            }
+            val re = Regex("[一二三四五六七八九十1234567890]+")
+            val allMatches = re.findAll(text).mapNotNull { parseChineseOrArabic(it.value) }.toList()
+            if (allMatches.size >= 2) {
+                return allMatches[1]
+            } else if (allMatches.size == 1) {
+                return allMatches[0]
+            }
+            return Int.MAX_VALUE
+        }
+
+        return list.sortedWith(compareBy<ClassEntity> { classEntity ->
+            getGradeNum(classEntity)
+        }.thenBy { classEntity ->
+            getClassNum(classEntity)
+        })
     }
 
     private fun onUserLoggedIn() {
@@ -414,8 +502,50 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             _aiDailyLimitReached.value = false
 
+            // Check if feature is disabled by teacher config JSON
+            val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
+            var level = "三年级"
+            var style = "趣味活泼"
+            if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
+                try {
+                    val json = org.json.JSONObject(classDesc)
+                    val grammarCorrect = json.optBoolean("grammarCorrect", true)
+                    val creativeGuide = json.optBoolean("creativeGuide", true)
+                    val knowledgeExplain = json.optBoolean("knowledgeExplain", true)
+                    val codeGenerate = json.optBoolean("codeGenerate", false)
+                    level = json.optString("level", "三年级")
+                    style = json.optString("style", "趣味活泼")
+
+                    if (funcType == "语法纠错" && !grammarCorrect) {
+                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级参数中关闭了「语法纠错」功能噢。去尝试自己调试解决或者询问老师吧！"
+                        _aiLoading.value = false
+                        return@launch
+                    }
+                    if (funcType == "创意引导" && !creativeGuide) {
+                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级配置中关闭了「创意引导」功能噢。"
+                        _aiLoading.value = false
+                        return@launch
+                    }
+                    if ((funcType == "知识点讲解" || funcType == "考点讲解") && !knowledgeExplain) {
+                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级配置中关闭了「知识点讲解/考点讲解」功能噢。"
+                        _aiLoading.value = false
+                        return@launch
+                    }
+                    if ((funcType == "代码优化建议" || funcType == "完整代码生成") && !codeGenerate) {
+                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级配置中关闭了「完整代码生成/优化建议」功能噢。"
+                        _aiLoading.value = false
+                        return@launch
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
             // 2. 根据玩法装配 Prompt 模板
             // 引入专为小学3-6年级订制的少儿认知增强式 AI Prompt 系统
+            val styleInstruction = "【语调特色】：特别注意，你现在说话的辅导语调语气必须表现出【$style】的提示词特色风格。"
+            val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律和实际能力。"
+
             val systemInstruction = """
                 你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程(Scratch 3.0)“编程精灵姐姐”。
                 因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
@@ -427,6 +557,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                    - 【条件判断/如果..那么】比作“天气预报小哨兵”，只在符合条件时才吹哨放行。
                    - 【坐标(X, Y)】比作“小猫站在一排横座位和一排纵座位交叉的方格教室里”。
                 4. 【视觉分段排版】：句子短小，多用 ①、②、③ 标清动手步骤，重点积木和参数名字用中括号【】和粗体加亮以便小学生看清。
+                5. $styleInstruction
+                6. $levelInstruction
             """.trimIndent()
 
             val code = currentDraftCode.value
@@ -464,6 +596,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     3. 告诉我这个魔法在别的小游戏（例如打地鼠、接水果等）里面可以怎么用来创造乐趣。
                 """.trimIndent()
                 
+                "代码优化建议" -> """
+                    $systemInstruction
+                    
+                    我的 Scratch 积木代码是：$code
+                    请以极其温柔、富有童趣的口吻，帮我看看这个代码有没有可以精简或者优化的地方：
+                    1. 热烈赞赏我当前的编写，指出写得棒的地方！
+                    2. 告诉我有没有重复拼搭或者可以更巧妙用“重复执行”或“变量”来减少多余积木的思路。
+                    3. 给出幽默而通俗的比喻，并说明一二三步具体的优化教程。
+                """.trimIndent()
+                
                 else -> "$systemInstruction\n请分析以下Scratch积木代码并给出温暖有爱的具体拼搭指引：$code"
             }
 
@@ -479,6 +621,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     assistType = funcType,
                     requestContent = "对应草稿: ${currentDraftName.value}",
                     aiResult = aiResponse,
+                    draftId = null
+                )
+            )
+            _aiLoading.value = false
+        }
+    }
+
+    fun callAiCustomQuestion(question: String, onResponse: (String) -> Unit) {
+        viewModelScope.launch {
+            val studentId = _currentUserId.value
+            val classId = _currentClassId.value
+            if (studentId == -1) return@launch
+
+            _aiLoading.value = true
+            _aiDailyLimitReached.value = false
+
+            // 1. 验证调用额度限制
+            val countOk = repository.checkDailyAssistOk(studentId, classId)
+            if (!countOk) {
+                _aiDailyLimitReached.value = true
+                onResponse("【调用超额】你今天调用 AI 实时辅助的资助限额已经用完啦！请向王老师申请解除上限，或者明天再来向 AI 姐姐提问哦！")
+                _aiLoading.value = false
+                return@launch
+            }
+
+            val code = currentDraftCode.value
+            val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
+            var level = "三年级"
+            var style = "趣味活泼"
+            if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
+                try {
+                    val json = org.json.JSONObject(classDesc)
+                    level = json.optString("level", "三年级")
+                    style = json.optString("style", "趣味活泼")
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            val styleInstruction = "【语调特色】：特别注意，你现在说话的辅导语调语气必须表现出【$style】的提示词特色风格。"
+            val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律和实际能力。"
+
+            val systemInstruction = """
+                你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程(Scratch 3.0)“编程精灵姐姐”。
+                因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
+                1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
+                2. 【绝对要具体、提供一步步可跟着做的动作指南】。
+                例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字的积木】并用手指拖拽出来；第三步，把它贴在组件下方。
+                3. $styleInstruction
+                4. $levelInstruction
+                现有 Scratch 代码如下：
+                $code
+            """.trimIndent()
+
+            val prompt = "$systemInstruction\n\n小朋友问：“$question”"
+            val response = GeminiClient.generateContent(prompt)
+            onResponse(response)
+
+            // 写回本地调用日志
+            repository.saveAssistRecord(
+                AiAssistRecord(
+                    studentId = studentId,
+                    classId = classId,
+                    assistType = "在线对答",
+                    requestContent = question,
+                    aiResult = response,
                     draftId = null
                 )
             )
@@ -535,10 +743,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- 教师端创建新班级 & 配制默认 AI 安全等级 ---
-    fun createNewClassByTeacher(className: String, grade: String, onResult: (String) -> Unit) {
+    fun createNewClassByTeacher(className: String, grade: String, description: String, onResult: (String) -> Unit) {
         viewModelScope.launch {
             val teacherId = _currentUserId.value
             if (teacherId == -1) return@launch
+
+            // 1. 去重校验
+            val exists = _classesList.value.any { it.grade == grade && it.className == className }
+            if (exists) {
+                onResult("该年级下已存在同名班级")
+                return@launch
+            }
 
             val classEntity = ClassEntity(
                 className = className,
@@ -547,6 +762,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             val newClassId = repository.createClass(classEntity).toInt()
             if (newClassId > 0) {
+                // 保存班级简述到 SharedPreferences
+                SharedPreferencesUtil.saveClassDescription(context, newClassId, description)
                 // 同时为新班级自动配制一套绿色防沉迷 AI 提示安全规范
                 repository.saveConfig(
                     com.example.data.AiTeachingConfig(
@@ -567,6 +784,188 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // --- 教师端自动批量生成年级班级 (三年级一班至六班) & AI 安全等级初始化 (优化三) ---
+    fun batchCreateClassesByTeacher(grade: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val teacherId = _currentUserId.value
+            if (teacherId == -1) {
+                onResult("当前会话已失效，请重新登录。")
+                return@launch
+            }
+
+            val suffixList = listOf("一班", "二班", "三班", "四班", "五班", "六班")
+            var successfullyCreatedCount = 0
+            
+            for (suffix in suffixList) {
+                val fullClassName = "$grade$suffix"
+                // Check deduplication
+                val exists = _classesList.value.any { it.grade == grade && it.className == fullClassName }
+                if (exists) continue
+
+                val classEntity = ClassEntity(
+                    className = fullClassName,
+                    grade = grade,
+                    teacherId = teacherId
+                )
+                val newClassId = repository.createClass(classEntity).toInt()
+                if (newClassId > 0) {
+                    SharedPreferencesUtil.saveClassDescription(context, newClassId, "自动化创建的 $fullClassName 班级空间")
+                    // 同时为每个新班级自动配制一套绿色防沉迷 AI 提示安全规范
+                    repository.saveConfig(
+                        com.example.data.AiTeachingConfig(
+                            classId = newClassId,
+                            teacherId = teacherId,
+                            aiHintLevel = "入门阶梯引导",
+                            creativeGuideDailyLimit = 8,
+                            codeGenerationLimit = 0 // 阻断抄袭模式
+                        )
+                    )
+                    successfullyCreatedCount++
+                }
+            }
+            
+            if (successfullyCreatedCount > 0) {
+                onResult("成功！已自动完成【$grade】一班至六班共 $successfullyCreatedCount 个班级的批量创建与 AI 防护罩设定！")
+                loadClasses()
+                onUserLoggedIn()
+            } else {
+                onResult("批量生成完成，跳过了已建立同名档的班级。")
+            }
+        }
+    }
+
+    fun deleteClassByTeacher(classId: Int, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.deleteClass(classId)
+                onResult("班级已成功删除，关联的学生及任务已一并移除。")
+                loadClasses()
+                onUserLoggedIn()
+            } catch (e: Exception) {
+                onResult("删除班级异常：${e.message}")
+            }
+        }
+    }
+
+    fun updateClassByTeacher(classId: Int, className: String, grade: String, description: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                // Check deduplication (excluding current classId)
+                val exists = _classesList.value.any { it.classId != classId && it.className == className && it.grade == grade }
+                if (exists) {
+                    onResult("该年级下已存在同名班级")
+                    return@launch
+                }
+
+                repository.updateClass(classId, className, grade)
+                SharedPreferencesUtil.saveClassDescription(context, classId, description)
+                
+                // Also parse JSON parameters and update Room database's AiTeachingConfig
+                try {
+                    val existingConfig = repository.getConfigByClassId(classId)
+                    val configId = existingConfig?.configId ?: 0
+                    val teacherId = existingConfig?.teacherId ?: 0
+                    
+                    var level = "基础班"
+                    var limitCount = 10
+                    var codeGen = 0
+                    if (description.trim().startsWith("{") && description.trim().endsWith("}")) {
+                        try {
+                            val json = org.json.JSONObject(description)
+                            level = json.optString("level", "基础班")
+                            limitCount = json.optInt("dailyLimit", 10)
+                            codeGen = if (json.optBoolean("codeGenerate", false)) 1 else 0
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    }
+                    val updatedConfig = com.example.data.AiTeachingConfig(
+                        configId = configId,
+                        classId = classId,
+                        teacherId = teacherId,
+                        aiHintLevel = level,
+                        codeGenerationLimit = codeGen,
+                        creativeGuideDailyLimit = limitCount
+                    )
+                    repository.saveConfig(updatedConfig)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+
+                onResult("班级信息修改成功！")
+                loadClasses()
+                onUserLoggedIn()
+            } catch (e: Exception) {
+                onResult("修改班级异常：${e.message}")
+            }
+        }
+    }
+
+    fun registerStudentByTeacher(studentNumber: String, name: String, pass: String, classId: Int, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            if (studentNumber.isBlank() || name.isBlank() || pass.isBlank()) {
+                onResult("各项输入不能为空！")
+                return@launch
+            }
+            val existing = repository.getStudentByNumber(studentNumber)
+            if (existing != null) {
+                onResult("该学号已被占用！")
+                return@launch
+            }
+            val student = Student(
+                studentNumber = studentNumber,
+                name = name,
+                password = pass,
+                classId = classId
+            )
+            val id = repository.registerStudent(student)
+            if (id > 0) {
+                onResult("学生【$name】添加成功！")
+                onUserLoggedIn() // refresh list
+            } else {
+                onResult("添加失败，请重试")
+            }
+        }
+    }
+
+    fun batchImportStudentsByTeacher(namesStr: String, classId: Int, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            if (namesStr.isBlank()) {
+                onResult("请输入学生明细名单")
+                return@launch
+            }
+            val names = namesStr.split(Regex("[,，、\n]")).map { it.trim() }.filter { it.isNotBlank() }
+            if (names.isEmpty()) {
+                onResult("未能解析出学生名单")
+                return@launch
+            }
+            var count = 0
+            val prefix = "S${classId}"
+            val randSuffix = (1000..9999).random()
+            names.forEachIndexed { index, name ->
+                val num = "$prefix${randSuffix + index}"
+                val student = Student(
+                    studentNumber = num,
+                    name = name,
+                    password = "123456",
+                    classId = classId
+                )
+                val id = repository.registerStudent(student)
+                if (id > 0) count++
+            }
+            onResult("成功批量导入 $count 名学生！学号前缀为 $prefix，默认密码 123456")
+            onUserLoggedIn()
+        }
+    }
+
+    fun getClassDescription(classId: Int): String {
+        return SharedPreferencesUtil.getClassDescription(context, classId)
+    }
+
+    suspend fun getClassAiAssistCount(classId: Int): Int {
+        return repository.getAiAssistCountByClass(classId)
+    }
+
     // --- 查看评测报告详情 ---
     fun getReportForWorkFlow(workId: Int): Flow<WorkAiReport?> {
         return repository.getReportForWorkFlow(workId)
@@ -579,7 +978,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- 静态获取 Scratch 练习模板代码 ---
-    private fun getTemplateCode(id: Int): String {
+    fun getTemplateCode(id: Int): String {
         return when (id) {
             1 -> """{
   "targets": [

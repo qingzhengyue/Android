@@ -141,6 +141,18 @@ interface AppDao {
     @Query("SELECT * FROM class WHERE classId = :classId LIMIT 1")
     suspend fun getClassById(classId: Int): ClassEntity?
 
+    @Query("DELETE FROM class WHERE classId = :classId")
+    suspend fun deleteClassById(classId: Int)
+
+    @Query("DELETE FROM student WHERE classId = :classId")
+    suspend fun deleteStudentsByClass(classId: Int)
+
+    @Query("DELETE FROM learning_task WHERE classId = :classId")
+    suspend fun deleteTasksByClass(classId: Int)
+
+    @Query("UPDATE class SET className = :className, grade = :grade WHERE classId = :classId")
+    suspend fun updateClass(classId: Int, className: String, grade: String)
+
     // --- 学生操作 ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStudent(student: Student): Long
@@ -202,6 +214,9 @@ interface AppDao {
 
     @Query("SELECT COUNT(*) FROM ai_assist_record WHERE studentId = :studentId AND callTime >= :startOfDay AND callTime <= :endOfDay")
     suspend fun getDailyAssistCount(studentId: Int, startOfDay: Long, endOfDay: Long): Int
+
+    @Query("SELECT COUNT(*) FROM ai_assist_record WHERE classId = :classId")
+    suspend fun getAiAssistCountByClass(classId: Int): Int
 
     // --- 作品提交 ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)

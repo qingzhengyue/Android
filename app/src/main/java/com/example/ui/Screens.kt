@@ -49,6 +49,8 @@ import com.example.data.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 @Composable
 fun AppNavigation(viewModel: MainViewModel) {
@@ -748,102 +750,87 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                 )
             }
 
-            Surface(
-                color = Color.White,
-                shadowElevation = 2.dp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .statusBarsPadding()
-                    .height(56.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(horizontal = 14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.SmartToy,
-                            contentDescription = null,
-                            tint = Color(0xFFFF9800),
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "星梭智学编程助教",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color(0xFF1E88E5)
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column {
+                if (!(userRole == "student" && selectedScreenIndex == 0)) {
+                    Surface(
+                        color = Color.White,
+                        shadowElevation = 2.dp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .statusBarsPadding()
+                            .height(56.dp)
                     ) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (userRole == "student") Color(0xFFE3F2FD) else Color(0xFFE8F5E9)
-                            ),
-                            shape = RoundedCornerShape(12.dp)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "${if (userRole == "student") "👦" else "👩‍🏫"} $currentUserName",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (userRole == "student") Color(0xFF1565C0) else Color(0xFF2E7D32),
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.SmartToy,
+                                    contentDescription = null,
+                                    tint = Color(0xFFFF9800),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "星梭智学编程助教",
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = Color(0xFF1E88E5)
+                                )
+                            }
 
-                        IconButton(
-                            onClick = {
-                                showLogoutConfirm = true
-                            },
-                            modifier = Modifier.size(48.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ExitToApp,
-                                contentDescription = "退出登录",
-                                tint = Color.Red,
-                                modifier = Modifier.size(24.dp)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (userRole == "student") Color(0xFFE3F2FD) else Color(0xFFE8F5E9)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        text = "${if (userRole == "student") "👦" else "👩‍🏫"} $currentUserName",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (userRole == "student") Color(0xFF1565C0) else Color(0xFF2E7D32),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        showLogoutConfirm = true
+                                    },
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ExitToApp,
+                                        contentDescription = "退出登录",
+                                        tint = Color.Red,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
                         }
                     }
+                }
+
+                if (userRole == "student") {
+                    StudentHorizontalTabBar(
+                        selectedScreenIndex = selectedScreenIndex,
+                        onTabSelected = { selectedScreenIndex = it }
+                    )
                 }
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                if (userRole == "student") {
-                    NavigationBarItem(
-                        selected = selectedScreenIndex == 0,
-                        onClick = { selectedScreenIndex = 0 },
-                        label = { Text("Scratch编程") },
-                        icon = { Icon(Icons.Default.Code, contentDescription = null) }
-                    )
-                    NavigationBarItem(
-                        selected = selectedScreenIndex == 1,
-                        onClick = { selectedScreenIndex = 1 },
-                        label = { Text("学习任务") },
-                        icon = { Icon(Icons.Default.Assignment, contentDescription = null) }
-                    )
-                    NavigationBarItem(
-                        selected = selectedScreenIndex == 2,
-                        onClick = { selectedScreenIndex = 2 },
-                        label = { Text("我的作品") },
-                        icon = { Icon(Icons.Default.Collections, contentDescription = null) }
-                    )
-                    NavigationBarItem(
-                        selected = selectedScreenIndex == 3,
-                        onClick = { selectedScreenIndex = 3 },
-                        label = { Text("AI 辅助") },
-                        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) }
-                    )
-                } else {
-                    // 教师专属底模 - 重构为 3 个选项卡
+            if (userRole != "student") {
+                NavigationBar(containerColor = Color.White) {
                     NavigationBarItem(
                         selected = selectedScreenIndex == 0,
                         onClick = { selectedScreenIndex = 0 },
@@ -862,6 +849,12 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                         label = { Text("本班作品") },
                         icon = { Icon(Icons.Default.SupervisorAccount, contentDescription = null) }
                     )
+                    NavigationBarItem(
+                        selected = selectedScreenIndex == 3,
+                        onClick = { selectedScreenIndex = 3 },
+                        label = { Text("班级管理") },
+                        icon = { Icon(Icons.Default.Class, contentDescription = null) }
+                    )
                 }
             }
         }
@@ -873,7 +866,7 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
         ) {
             if (userRole == "student") {
                 when (selectedScreenIndex) {
-                    0 -> InteractiveScratchProgrammingScreen(viewModel = viewModel)
+                    0 -> InteractiveScratchProgrammingScreen(viewModel = viewModel, onBackToHall = { selectedScreenIndex = 1 })
                     1 -> StudentTasksScreen(viewModel = viewModel, onGoToCode = { selectedScreenIndex = 0 })
                     2 -> StudentWorksScreen(viewModel = viewModel)
                     3 -> StudentAiAssistHistoricalHub(viewModel = viewModel)
@@ -883,6 +876,76 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                     0 -> TeacherTaskManagementScreen(viewModel = viewModel)
                     1 -> TeacherTaskListScreen(viewModel = viewModel)
                     2 -> TeacherWorksClassViewScreen(viewModel = viewModel)
+                    3 -> TeacherClassManagementUnifiedScreen(viewModel = viewModel)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StudentHorizontalTabBar(
+    selectedScreenIndex: Int,
+    onTabSelected: (Int) -> Unit
+) {
+    Surface(
+        color = Color(0xFF1A237E),
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            val tabs = listOf(
+                "Scratch编程" to Icons.Default.Code,
+                "学习任务" to Icons.Default.Assignment,
+                "我的作品" to Icons.Default.Collections,
+                "AI 辅助" to Icons.Default.AutoAwesome
+            )
+            tabs.forEachIndexed { index, (title, icon) ->
+                val isSelected = selectedScreenIndex == index
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .clickable { onTabSelected(index) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxHeight()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = null,
+                                tint = if (isSelected) Color.White else Color(0xFFB0BEC5),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = title,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                color = if (isSelected) Color.White else Color(0xFFB0BEC5)
+                            )
+                        }
+                    }
+                    if (isSelected) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth(0.9f)
+                                .height(3.dp)
+                                .background(Color.White, shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                        )
+                    }
                 }
             }
         }
@@ -893,7 +956,396 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
 // 3. 在线编程与 Scratch 编辑区
 // ==========================================
 @Composable
-fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
+fun TopBarActionButton(
+    onClick: () -> Unit,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    containerColor: Color
+) {
+    Surface(
+        onClick = onClick,
+        color = containerColor,
+        shape = RoundedCornerShape(8.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f)),
+        modifier = Modifier.height(34.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = text,
+                tint = Color.White,
+                modifier = Modifier.size(14.dp)
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = text,
+                fontSize = 11.sp,
+                color = Color.White,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+data class TemplateItem(
+    val title: String,
+    val desc: String,
+    val code: String
+)
+
+@Composable
+fun MagicBoxDrawerPanel(
+    webView: WebView?,
+    viewModel: MainViewModel,
+    onClose: () -> Unit,
+    onInsertText: (String) -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf("运动") }
+    var showTemplateDialog by remember { mutableStateOf<TemplateItem?>(null) }
+    val context = LocalContext.current
+
+    val categories = listOf("运动", "外观", "声音", "事件", "控制", "侦测", "运算", "变量")
+
+    val blocks = mapOf(
+        "运动" to listOf(
+            "移动10步" to "让角色在舞台上朝它的朝向移动10步",
+            "右转15度" to "将角色顺时针旋转15度",
+            "左转15度" to "将角色逆时针旋转15度",
+            "移到x:0 y:0" to "让角色精准移到屏幕正中央位置坐标 0,0",
+            "碰到边缘就反弹" to "适合做来回折返运动的角色，防止移出或卡死在边缘",
+            "面向90度方向" to "调整角色的水平朝向，90度代表面向右侧"
+        ),
+        "外观" to listOf(
+            "说\"你好\"2秒" to "在角色头上悬浮气泡文字说你好2秒钟",
+            "显示" to "让处于隐藏状态的角色重新显露在舞台上",
+            "隐藏" to "让角色在舞台中隐匿消失，常用于怪物死亡或换幕效果",
+            "切换造型为造型1" to "切换并改变角色的动作形态或外观造型",
+            "下一个造型" to "按顺序切换为角色的下一套外观动作细节切换",
+            "将大小增加10" to "使角色的整体缩放比例增加指定的数值，体积变大"
+        ),
+        "声音" to listOf(
+            "播放声音喵" to "后台播放特定喵叫声，并不阻塞后续积木的继续执行",
+            "播放声音喵直到结束" to "完整播放完喵叫音效后，才往后前进执行其他后续积木",
+            "停止所有声音" to "瞬间强制关停舞台上正在播放的所有音效"
+        ),
+        "事件" to listOf(
+            "当绿旗被点击" to "整套编程的首要控制起点。点击绿旗后全剧本触发开始",
+            "当按下空格键" to "通过实体键盘的空格按压，触发特定行为控制，适合做操控",
+            "当角色被点击" to "触控打击交互，让角色在被手指或滑鼠点击时作出响应",
+            "当接收到消息1" to "接收跨越角色的群聊广播消息，对消息进行接收反馈触发"
+        ),
+        "控制" to listOf(
+            "重复执行10次" to "在内部代码处产生规定好的10次小范围循环流程",
+            "永远" to "创造舞台中的无限运行循环，作为动作更新主线程引擎",
+            "如果那么" to "条件判定如果分支。判断是否符合判定条件",
+            "等待1秒" to "设置特定的运行时间延迟空挡，调节交互缓冲频次操作",
+            "停止全部脚本" to "全面叫停终止一切当前已经拉起运行的动作序列"
+        ),
+        "侦测" to listOf(
+            "碰到鼠标指针？" to "雷达防碰撞判定首选，探知角色此时是否接触了外部指针",
+            "碰到颜色红色？" to "常用于物理防墙，当边缘探头遇到极佳的目标色时反弹",
+            "鼠标的x坐标" to "获取外部输入物理指针当前在主视窗内的水平轴向像素位置",
+            "询问\"你好\"并等待" to "呼出问题询问交互框，让玩家能够从键盘键入文字并回传"
+        ),
+        "运算" to listOf(
+            "1+1" to "两个数值相加。可以放入变量或数值进行数学加法合并运算",
+            "1>1" to "大于关系对比判断。若左侧比右侧大则传回为真成立",
+            "1<1" to "小于关系对比判断。若左侧比右侧小则传回为真成立",
+            "在1和10之间取随机数" to "做掉落率、暴击、随机刷新坐标点时不可或缺的随机数产生积木",
+            "连接\"hello\"和\"world\"" to "拼接首尾两段文字。做游戏积分文字展示有极大帮助"
+        ),
+        "变量" to listOf(
+            "将变量设为0" to "将自定义存储游戏数据的变量初始重置数值为 0",
+            "变量增加1" to "用于打中怪物、吃得香蕉红苹果等玩乐时的计功累分加一"
+        )
+    )
+
+    val templates = listOf(
+        TemplateItem("🐱 小猫走路", "控制小猫在舞台上左右来回走动，并自动完成基础造型动作切换", "事件 -> 1. 当🟢被点击\n控制 -> 2. 重复执行\n  运动 ->   3. 移动 10 步\n  外观 ->   4. 下一个造型\n  控制 ->   5. 等待 0.1 秒\n  运动 ->   6. 碰到边缘就反弹"),
+        TemplateItem("🔨 疯狂打地鼠", "随机坐标点浮现地鼠，点击地鼠播放音效并增加游戏积分", "事件 -> 1. 当🟢被点击\n变量 -> 2. 将 [我的得分] 设为 0\n事件 -> 3. 当角色被点击\n声音 -> 4. 播放声音 (打中)\n变量 -> 5. 将 [我的得分] 增加 1\n外观 -> 6. 隐藏\n事件 -> 7. 当🟢被点击\n控制 -> 8. 重复执行\n  运动 ->   9. 移到 (随机位置)\n  外观 ->   10. 显示\n  控制 ->   11. 等待 1.5 秒\n  外观 ->   12. 隐藏\n  控制 ->   13. 等待 1 秒"),
+        TemplateItem("🍎 接住红苹果", "苹果在屏幕上方随机水平坐标产生，重力直向下落，碗若接住则得分", "事件 -> 1. 当🟢被点击\n控制 -> 2. 重复执行\n  运动 ->   3. 移到 x:在 -200 到 200 间随机数 y:180\n  控制 ->   4. 重复执行直到 (y 坐标 < -170)\n    运动 ->     5. 将 y 坐标增加 -5\n    控制 ->     6. 如果 碰到 (小碗) 那么\n      声音 ->       7. 播放声音 (得分)\n      变量 ->       8. 将 [金币] 增加 1\n      控制 ->       9. 退出当前循环"),
+        TemplateItem("🏓 弹球小游戏", "小球碰壁反弹，如果滑板没接住小球落入深渊则游戏结束", "事件 -> 1. 当🟢被点击\n运动 -> 2. 面向 45 方向\n控制 -> 3. 重复执行\n  运动 ->   4. 移动 6 步\n  控制 ->   5. 如果 碰到 (滑板) 那么\n    运动 ->     6. 旋转 180 度\n  控制 ->   7. 如果 碰到边缘 那么\n    运动 ->     8. 碰到边缘反弹\n  控制 ->   9. 如果 y 坐标 < -170 那么\n    控制 ->     10. 停止全部"),
+        TemplateItem("🌀 趣味走迷宫", "玩家使用方向键操控小人出发，碰到黑色迷宫死胡同墙壁则被弹回起点", "事件 -> 1. 当🟢被点击\n运动 -> 2. 移到 x:-200 y:150\n控制 -> 3. 重复执行\n  控制 ->   4. 如果 按下 (右移) 键 那么\n    运动 ->     5. 将 x 坐标增加 5\n  控制 ->   6. 如果 碰到颜色 (迷宫黑色) 那么\n    运动 ->     7. 移到 x:-200 y:150"),
+        TemplateItem("♻️ 垃圾分类助手", "拖动垃圾图案，放入正确的分类箱子加分，分错打回", "事件 -> 1. 当角色被点击\n控制 -> 2. 如果 碰到 (可回收垃圾箱) 那么\n  声音 ->   3. 播放声音 (正确)\n  变量 ->   4. 将 [环保积分] 增加 10\n控制 -> 5. 否则\n  声音 ->   6. 播放声音 (错误)\n  外观 ->   7. 说 放错了哦 1 秒"),
+        TemplateItem("🎨 自制魔法画笔", "跟着鼠标画出绚丽图案，轻敲空格按键瞬间清屏重来", "事件 -> 1. 当🟢被点击\n画笔 -> 2. 全部擦除\n控制 -> 3. 重复执行\n  运动 ->   4. 移到 (鼠标指针)\n  控制 ->   5. 如果 按下鼠标 那么\n    画笔 ->     6. 落笔\n  控制 ->   7. 否则\n    画笔 ->     8. 抬笔\n事件 -> 9. 当按下 (空格) 键\n画笔 -> 10. 全部擦除"),
+        TemplateItem("🐠 蔚蓝海底世界", "各种大小海底小鱼在大洋深处欢快游来游去，碰到大白鲨就被一口吞掉", "事件 -> 1. 当🟢被点击\n控制 -> 2. 重复执行\n  运动 ->   3. 移动 3 步\n  运动 ->   4. 碰到边缘反弹\n  控制 ->   5. 如果 碰到 (大白鲨) 那么\n    外观 ->     6. 隐藏\n    控制 ->     7. 等待 5 秒\n    外观 ->     8. 显示"),
+        TemplateItem("⏰ 守护小闹钟", "后台轮询当前时间，当抵达设定秒数后，欢快响起欢天喜地叫醒曲", "事件 -> 1. 当🟢被点击\n控制 -> 2. 重复执行\n  控制 ->   3. 如果 计时器当前秒 = 30 那么\n    声音 ->     4. 播放声音 (起床歌)\n    控制 ->     5. 等待 1 秒"),
+        TemplateItem("🚀 太空陨石机战", "雷霆战机随时按鼠标发射子弹，陨石随机刷新直坠，火爆击碎", "事件 -> 1. 当🟢被点击\n控制 -> 2. 重复执行\n  控制 ->   3. 如果 碰到 (自制激光子弹) 那么\n    特效 ->     4. 播放爆炸动画\n    声音 ->     5. 播放声音 (轰鸣)\n    运动 ->     6. 移到 (随机位置)"),
+        TemplateItem("🎙️ 声控高空气球", "灵敏侦测麦克风声音响度大小，声音越高气球在舞台越向上升", "事件 -> 1. 当🟢被点击\n控制 -> 2. 重复执行\n  运动 ->   3. 将 y 坐标设为 (麦克风声音响度 * 2.5)")
+    )
+
+    Surface(
+        color = Color.White,
+        modifier = Modifier
+            .width(280.dp)
+            .fillMaxHeight(),
+        shadowElevation = 8.dp,
+        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF303F9F))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.CardGiftcard, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("编程魔法盒 🎒", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            var drawerTab by remember { mutableStateOf(0) }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFE8EAF6))
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Button(
+                    onClick = { drawerTab = 0 },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (drawerTab == 0) Color(0xFF3F51B5) else Color.White,
+                        contentColor = if (drawerTab == 0) Color.White else Color(0xFF3F51B5)
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                    modifier = Modifier.weight(1f).height(28.dp)
+                ) {
+                    Text("常用积木 🧩", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+                Button(
+                    onClick = { drawerTab = 1 },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (drawerTab == 1) Color(0xFF3F51B5) else Color.White,
+                        contentColor = if (drawerTab == 1) Color.White else Color(0xFF3F51B5)
+                    ),
+                    shape = RoundedCornerShape(6.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
+                    modifier = Modifier.weight(1f).height(28.dp)
+                ) {
+                    Text("项目模板 📒", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            if (drawerTab == 0) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .background(Color(0xFFFAFAFA))
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    categories.forEach { cat ->
+                        val isSel = selectedCategory == cat
+                        val catColor = when (cat) {
+                            "运动" -> Color(0xFF4C97FF)
+                            "外观" -> Color(0xFF9966FF)
+                            "声音" -> Color(0xFFCF63CF)
+                            "事件" -> Color(0xFFFFBF00)
+                            "控制" -> Color(0xFFFFAB19)
+                            "侦测" -> Color(0xFF4CBFE6)
+                            "运算" -> Color(0xFF59C059)
+                            "变量" -> Color(0xFFFF8C1A)
+                            else -> Color.Gray
+                        }
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSel) catColor else Color(0xFFF1F1F1)
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.clickable { selectedCategory = cat }
+                        ) {
+                            Text(
+                                text = cat,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isSel) Color.White else Color.DarkGray,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+
+                Divider(color = Color(0xFFECEFF1))
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val currentCategoryBlocks = blocks[selectedCategory] ?: emptyList()
+                    items(currentCategoryBlocks.size) { i ->
+                        val (blockText, blockDesc) = currentCategoryBlocks[i]
+                        val themeColor = when (selectedCategory) {
+                            "运动" -> Color(0xFF4C97FF)
+                            "外观" -> Color(0xFF9966FF)
+                            "声音" -> Color(0xFFCF63CF)
+                            "事件" -> Color(0xFFFFBF00)
+                            "控制" -> Color(0xFFFFAB19)
+                            "侦测" -> Color(0xFF4CBFE6)
+                            "运算" -> Color(0xFF59C059)
+                            "变量" -> Color(0xFFFF8C1A)
+                            else -> Color(0xFF555555)
+                        }
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFAFA)),
+                            border = BorderStroke(1.dp, themeColor.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(themeColor, shape = RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        .fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = blockText,
+                                        color = Color.White,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "💡 用途：$blockDesc",
+                                    fontSize = 9.sp,
+                                    color = Color.Gray,
+                                    lineHeight = 11.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(templates.size) { i ->
+                        val template = templates[i]
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFFF9FBE7)),
+                            border = BorderStroke(1.dp, Color(0xFF9E9D24)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showTemplateDialog = template }
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = template.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF558B2F)
+                                    )
+                                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color(0xFF558B2F), modifier = Modifier.size(12.dp))
+                                }
+                                Text(
+                                    text = template.desc,
+                                    fontSize = 9.sp,
+                                    color = Color.Gray,
+                                    maxLines = 2,
+                                    lineHeight = 11.sp,
+                                    modifier = Modifier.padding(top = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showTemplateDialog != null) {
+        val t = showTemplateDialog!!
+        AlertDialog(
+            onDismissRequest = { showTemplateDialog = null },
+            title = { Text(t.title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF3F51B5)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("📦 模板创意描述：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                    Text(t.desc, fontSize = 11.sp)
+                    Divider()
+                    Text("🧩 推荐拼搭积木块顺序：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 150.dp)
+                            .background(Color(0xFFF5F5F5), shape = RoundedCornerShape(4.dp))
+                            .padding(8.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = t.code,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            color = Color(0xFF333333),
+                            lineHeight = 14.sp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val tId = when {
+                            t.title.contains("小猫") -> 1
+                            t.title.contains("苹果") || t.title.contains("地鼠") -> 2
+                            else -> 3
+                        }
+                        try {
+                            val templateCode = viewModel.getTemplateCode(tId)
+                            val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Scratch Template Code", templateCode)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "模板代码已复制到剪贴板！请在Scratch编辑器中点击'文件→从电脑上传'导入", Toast.LENGTH_LONG).show()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            Toast.makeText(context, "复制失败，请重试", Toast.LENGTH_SHORT).show()
+                        }
+                        showTemplateDialog = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F51B5))
+                ) {
+                    Text("复制到剪贴板", fontSize = 12.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTemplateDialog = null }) {
+                    Text("关闭")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: () -> Unit) {
     val draftCode by viewModel.currentDraftCode.collectAsState()
     val draftName by viewModel.currentDraftName.collectAsState()
     val taskName by viewModel.currentTaskName.collectAsState()
@@ -909,15 +1361,33 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
     var showLoadDraftDialog by remember { mutableStateOf(false) }
     var showLoadWorkDialog by remember { mutableStateOf(false) }
     
-    // Draggable and foldable floating console state
+    // Draggable and foldable floating console state (优化一 & 优化二)
     var isExpanded by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) } // 0: AI, 1: Backups, 2: Submit
-    var dragOffset by remember { mutableStateOf(Offset(0f, 0f)) }
+    val coroutineScope = rememberCoroutineScope()
+    val animX = remember { androidx.compose.animation.core.Animatable(0f) }
+    val animY = remember { androidx.compose.animation.core.Animatable(0f) }
     var isDragging by remember { mutableStateOf(false) }
+    var isSnapped by remember { mutableStateOf(false) }
+    var snappedSide by remember { mutableStateOf("right") }
+    var hasInitializedPosition by remember { mutableStateOf(false) }
+
+    var showMagicBoxDrawer by remember { mutableStateOf(false) }
 
     var localInputName by remember { mutableStateOf(draftName) }
 
     val context = LocalContext.current
+
+    val coerceInSafe = remember {
+        { value: Float, min: Float, max: Float ->
+            if (max < min) min else value.coerceIn(min, max)
+        }
+    }
+
+    // 首次进入编程界面缩放提示 (优化二)
+    LaunchedEffect(Unit) {
+        android.widget.Toast.makeText(context, "双指捏合可缩放画布 🔍", android.widget.Toast.LENGTH_LONG).show()
+    }
 
     // Scratch editor mirror URLs: allows seamless toggle when official MIT Scratch is blocked (Problem 2 Requirement 2)
     val mirrors = remember {
@@ -973,7 +1443,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
         // Immersive Distraction-Free full-screen (Problem 3 point 2)
         val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
         try {
-            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            if (activity?.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
+                activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            }
             insetsController?.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             insetsController?.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         } catch (e: Exception) {
@@ -981,7 +1453,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
         }
         onDispose {
             try {
-                activity?.requestedOrientation = originalOrientation
+                if (activity?.requestedOrientation != originalOrientation) {
+                    activity?.requestedOrientation = originalOrientation
+                }
                 insetsController?.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -989,11 +1463,136 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFFF5F5F5))
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // High 48dp Top Bar (Status Bar) - Problem 3.3
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .background(Color(0xFF1A237E))
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 1. Return Button
+            Row(
+                modifier = Modifier
+                    .clickable { onBackToHall() }
+                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = "返回",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = if (taskName.isNullOrBlank()) "返回创意空间" else "返回学习任务大厅",
+                    color = Color.White,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // 2. Draft & Task Information
+            val displayTaskInfo = if (taskName.isNullOrBlank()) "自由创作" else "学习任务: $taskName"
+            Text(
+                text = "📦 $draftName [$displayTaskInfo]",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold
+            )
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // 3. 编程魔法盒 Button
+            TopBarActionButton(
+                onClick = { showMagicBoxDrawer = !showMagicBoxDrawer },
+                icon = Icons.Default.Widgets,
+                text = "编程魔法盒 🎒",
+                containerColor = Color(0xFFF57C00) // Deep warm amber
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 4. Manual Fallback Switch Mirror
+            TopBarActionButton(
+                onClick = {
+                    if (currentMirrorIndex < mirrors.size - 1) {
+                        currentMirrorIndex++
+                    } else {
+                        currentMirrorIndex = 0
+                    }
+                    scratchUrl = mirrors[currentMirrorIndex]
+                    android.widget.Toast.makeText(context, "已手动切换到第 ${currentMirrorIndex + 1} 个极速镜像 ⚡", android.widget.Toast.LENGTH_SHORT).show()
+                },
+                icon = Icons.Default.Language,
+                text = "手动换源 ⚡",
+                containerColor = Color(0xFF2E7D32) // Soft forest green
+            )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 5. 智能精灵姐姐 Button
+            TopBarActionButton(
+                onClick = {
+                    showAiAssistSheet = !showAiAssistSheet
+                },
+                icon = Icons.Default.AutoAwesome,
+                text = "智能精灵姐姐 👩‍💻",
+                containerColor = Color(0xFFC2185B) // Deep rose ruby
+            )
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth().weight(1f)
+        ) {
+            this@Row.AnimatedVisibility(
+                visible = showMagicBoxDrawer,
+                enter = slideInHorizontally(animationSpec = androidx.compose.animation.core.tween(durationMillis = 250)) { -it } + fadeIn(animationSpec = androidx.compose.animation.core.tween(250)),
+                exit = slideOutHorizontally(animationSpec = androidx.compose.animation.core.tween(250)) { -it } + fadeOut(animationSpec = androidx.compose.animation.core.tween(250))
+            ) {
+                MagicBoxDrawerPanel(
+                    webView = webViewInstance,
+                    viewModel = viewModel,
+                    onClose = { showMagicBoxDrawer = false },
+                    onInsertText = { text ->
+                        val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("scratch", text)
+                        clipboardManager.setPrimaryClip(clip)
+                        android.widget.Toast.makeText(context, "星梭拼搭秘籍已写入剪贴板 ⚡！请进入网页编辑区并拼搭它们噢！✨", android.widget.Toast.LENGTH_LONG).show()
+                    }
+                )
+            }
+
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .background(Color(0xFFF5F5F5))
+            ) {
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val screenWidthPx = with(density) { maxWidth.toPx() }
+        val screenHeightPx = with(density) { maxHeight.toPx() }
+        val buttonWidthPx = with(density) { 60.dp.toPx() }
+        val buttonHeightPx = with(density) { 60.dp.toPx() }
+        val topPaddingPx = with(density) { 50.dp.toPx() }
+        val bottomPaddingPx = with(density) { 50.dp.toPx() }
+
+        // Position initial state once screen thickness is measured (优化一)
+        LaunchedEffect(screenWidthPx, screenHeightPx) {
+            if (!hasInitializedPosition && screenWidthPx > 0) {
+                val initX = screenWidthPx - buttonWidthPx - with(density) { 20.dp.toPx() }
+                // 距离底部导航栏上方20dp (系统底栏大概56dp, 加上20dp等于76dp, 设置为80dp完美避开)
+                val initY = screenHeightPx - buttonHeightPx - with(density) { 80.dp.toPx() }
+                animX.snapTo(initX)
+                animY.snapTo(initY)
+                hasInitializedPosition = true
+            }
+        }
+
         // Full Screen Scratch WebView Editor
         AndroidView(
             factory = { ctx ->
@@ -1007,6 +1606,22 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             isPageLoading = false
+                            
+                            // 优化二：注入口：通过给HTML注入自定义Viewport限制双指缩放范围 (0.5x 到 2.0x, 默认 1.0x)
+                            val viewportJs = """
+                                (function() {
+                                    var meta = document.createElement('meta');
+                                    meta.name = 'viewport';
+                                    meta.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes';
+                                    var head = document.getElementsByTagName('head')[0];
+                                    if (head) {
+                                        var existingViewports = document.querySelectorAll('meta[name="viewport"]');
+                                        existingViewports.forEach(function(el) { el.remove(); });
+                                        head.appendChild(meta);
+                                    }
+                                })();
+                            """.trimIndent()
+                            view?.evaluateJavascript(viewportJs, null)
                         }
 
                         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -1069,11 +1684,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
                         useWideViewPort = true
                         loadWithOverviewMode = true
                         
-                        // Disable nested Zoom controls of WebView because Scratch provides its own 
-                        // SVG zoom controls (+ / - in the corner). Disabling zoom keeps standard touchscreen 
-                        // dragging (moving blocks around) buttery smooth without browser panning interruption.
-                        setSupportZoom(false)
-                        builtInZoomControls = false
+                        // 优化二：启用并且配置底层的 WebSettings 手势双指缩放支持
+                        setSupportZoom(true)
+                        builtInZoomControls = true
                         displayZoomControls = false
 
                         // iPad User-Agent is the perfect golden standard (Problem 2 requirement 5):
@@ -1086,9 +1699,17 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
                     // Request focus immediately so that touches register without initial delays
                     requestFocus()
                     
-                    // Bypass Jetpack Compose gesture interception so dragging Scratch blocks on canvas is flawless
+                    // 优化二：手势冲突彻底解决：
+                    // - 只有当多个手指（pointerCount >= 2）触屏时，才触发系统的 WebView 缩放
+                    // - 单指触屏时直接关闭 WebView 的 supportZoom 以免干扰 Scratch 积木正常拼搭
                     setOnTouchListener { v, event ->
                         v.parent?.requestDisallowInterceptTouchEvent(true)
+                        val pointerCount = event.pointerCount
+                        if (pointerCount >= 2) {
+                            settings.setSupportZoom(true)
+                        } else {
+                            settings.setSupportZoom(false)
+                        }
                         false
                     }
                     
@@ -1173,554 +1794,20 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
                 }
             }
         }
+    }
 
-        // Super compact translucent label top-center & mirror switch
-        Row(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xAA000000)),
-                shape = RoundedCornerShape(16.dp)
+            this@Row.AnimatedVisibility(
+                visible = showAiAssistSheet,
+                enter = slideInHorizontally(animationSpec = androidx.compose.animation.core.tween(durationMillis = 250)) { it } + fadeIn(animationSpec = androidx.compose.animation.core.tween(250)),
+                exit = slideOutHorizontally(animationSpec = androidx.compose.animation.core.tween(250)) { it } + fadeOut(animationSpec = androidx.compose.animation.core.tween(250))
             ) {
-                Text(
-                    text = "✨ 正在进行 Scratch 互动编程 (全屏适配手机) ✨",
-                    fontSize = 10.sp,
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                AiAssistPanel(
+                    viewModel = viewModel,
+                    onClose = { showAiAssistSheet = false }
                 )
             }
-
-            // High-speed Domestic editor Mirror selector (extremely important for classroom and VPN-less usage) (Problem 2 Requirement 2)
-            Card(
-                colors = CardDefaults.cardColors(containerColor = Color(0xCC2E7D32)),
-                shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.clickable {
-                    if (currentMirrorIndex < mirrors.size - 1) {
-                        currentMirrorIndex++
-                    } else {
-                        currentMirrorIndex = 0
-                    }
-                    scratchUrl = mirrors[currentMirrorIndex]
-                    android.widget.Toast.makeText(context, "已手动切换到第 ${currentMirrorIndex + 1} 个极速镜像 ⚡", android.widget.Toast.LENGTH_SHORT).show()
-                }
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Language,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "手动换源 ⚡",
-                        fontSize = 10.sp,
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-        }
-
-        // Draggable & Foldable Control System
-        // Completely removed click-outside auto-collapse overlay to prevent accidental dismissals.
-        // Collapse/expand is now exclusively controlled via tapping the floating bubble / 'X' button.
-
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset { IntOffset(dragOffset.x.roundToInt(), dragOffset.y.roundToInt()) }
-                .padding(16.dp)
-        ) {
-            if (!isExpanded) {
-                // MINIMIZED MODE: Draggable round magic bubble.
-                // Dragging requires a long press to prevent accidental dragging during simple taps.
-                Button(
-                    onClick = { isExpanded = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp),
-                    shape = RoundedCornerShape(24.dp),
-                    modifier = Modifier
-                        .height(48.dp)
-                        .alpha(if (isDragging) 0.6f else 1.0f)
-                        .pointerInput(Unit) {
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { isDragging = true },
-                                onDragEnd = {
-                                    isDragging = false
-                                    // Auto-snap to screen edges on release
-                                    dragOffset = Offset(if (dragOffset.x < -185f) -370f else 0f, dragOffset.y)
-                                },
-                                onDragCancel = { isDragging = false },
-                                onDrag = { change, dragAmount ->
-                                    change.consume()
-                                    dragOffset += dragAmount
-                                }
-                            )
-                        },
-                    contentPadding = PaddingValues(horizontal = 16.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoAwesome,
-                        contentDescription = "🎒 编程魔法盒",
-                        tint = Color.White,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "🎒 编程魔法盒",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                }
-            } else {
-                // EXPANDED MODE: Drag-enabled floating window card
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier
-                        .width(360.dp)
-                        .alpha(if (isDragging) 0.6f else 1.0f)
-                ) {
-                    // Floating button becomes Close icon ('X') when expanded.
-                    Box(
-                        modifier = Modifier
-                            .padding(bottom = 6.dp)
-                            .size(38.dp)
-                            .background(Color(0xFFFF9800), shape = CircleShape)
-                            .clickable { isExpanded = false },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "收起",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(265.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
-                        border = BorderStroke(2.dp, Color(0xFF3F51B5))
-                    ) {
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            // HEADER (Drag handle)
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFF3F51B5))
-                                    .pointerInput(Unit) {
-                                        detectDragGesturesAfterLongPress(
-                                            onDragStart = { isDragging = true },
-                                            onDragEnd = {
-                                                isDragging = false
-                                                dragOffset = Offset(if (dragOffset.x < -185f) -370f else 0f, dragOffset.y)
-                                            },
-                                            onDragCancel = { isDragging = false },
-                                            onDrag = { change, dragAmount ->
-                                                change.consume()
-                                                dragOffset += dragAmount
-                                            }
-                                        )
-                                    }
-                                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "✨ 创意控制舱",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color.White
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = "(长按由此拖动 ✥)",
-                                        fontSize = 9.sp,
-                                        color = Color(0xFFD2DDFC)
-                                    )
-                                }
-                            }
-
-                            // Gray descriptive caption at the top of the cabin
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(Color(0xFFEEEEEE))
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    text = "Click × to collapse / 点击上面橘色 × 按钮收起 🧡",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.Gray
-                                )
-                            }
-                        
-                        // TAB SELECTION BAR
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(Color(0xFFEEEEEE))
-                                .padding(vertical = 2.dp, horizontal = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            listOf("🤖 AI诊断", "💾 备份恢复", "🔌 硬件联控", "📤 正式提交").forEachIndexed { index, title ->
-                                val isSelected = selectedTab == index
-                                Button(
-                                    onClick = { selectedTab = index },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = if (isSelected) Color(0xFFFF9800) else Color.White,
-                                        contentColor = if (isSelected) Color.White else Color(0xFF555555)
-                                    ),
-                                    shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(28.dp),
-                                    elevation = if (isSelected) ButtonDefaults.buttonElevation(defaultElevation = 2.dp) else null
-                                ) {
-                                    Text(text = title, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                        }
-                        
-                        // TAB CONTENT DISPLAY
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                                .background(Color(0xFFFAFAFA))
-                                .padding(8.dp)
-                        ) {
-                            when (selectedTab) {
-                                0 -> {
-                                    // Tab 0: AI diagnostics
-                                    Column(
-                                        modifier = Modifier.fillMaxSize(),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Button(
-                                                onClick = { viewModel.callAiAssistant("语法纠错") },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Text("🛑 语法纠正", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                            Button(
-                                                onClick = { viewModel.callAiAssistant("创意引导") },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Text("💡 创意启发", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                            Button(
-                                                onClick = { viewModel.callAiAssistant("知识点讲解") },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF009688)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Text("🎓 考点分析", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                        
-                                        Card(
-                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFDE7)),
-                                            border = BorderStroke(1.dp, Color(0xFFFFF59D)),
-                                            modifier = Modifier.fillMaxSize()
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .verticalScroll(rememberScrollState())
-                                                    .padding(6.dp)
-                                            ) {
-                                                if (aiLoading) {
-                                                    CircularProgressIndicator(
-                                                        modifier = Modifier.align(Alignment.Center).size(20.dp),
-                                                        color = Color(0xFFFF9800),
-                                                        strokeWidth = 2.dp
-                                                    )
-                                                } else {
-                                                    Text(
-                                                        text = aiResult ?: "点击上方魔法卡诊断，AI 姐姐可以帮你分析 Scratch 逻辑并给出生动指导噢！✨",
-                                                        fontSize = 10.sp,
-                                                        lineHeight = 13.sp,
-                                                        color = if (aiResult != null) Color.Black else Color.Gray
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                1 -> {
-                                    // Tab 1: Backups & Restoration
-                                    Column(
-                                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Button(
-                                                onClick = {
-                                                    viewModel.saveDraftToDb { mes ->
-                                                        Toast.makeText(context, mes, Toast.LENGTH_SHORT).show()
-                                                    }
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3F51B5)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1.1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Icon(Icons.Default.Save, contentDescription = null, tint = Color.White, modifier = Modifier.size(10.dp))
-                                                Spacer(modifier = Modifier.width(2.dp))
-                                                Text("立即存草稿", fontSize = 9.sp)
-                                            }
-                                            Button(
-                                                onClick = { showLoadDraftDialog = true },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE3F2FD)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1.1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFF1E88E5), modifier = Modifier.size(10.dp))
-                                                Spacer(modifier = Modifier.width(2.dp))
-                                                Text("草稿箱(${drafts.size})", fontSize = 9.sp, color = Color(0xFF1E88E5), fontWeight = FontWeight.Bold)
-                                            }
-                                            Button(
-                                                onClick = { showLoadWorkDialog = true },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFF3E0)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1.1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Icon(Icons.Default.Collections, contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(10.dp))
-                                                Spacer(modifier = Modifier.width(2.dp))
-                                                Text("已交作品(${works.size})", fontSize = 9.sp, color = Color(0xFFFF9800), fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                        
-                                        Card(
-                                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                                            border = BorderStroke(1.dp, Color(0xFFE0E0E0))
-                                        ) {
-                                            Column(modifier = Modifier.padding(6.dp)) {
-                                                Text("🐾 官方创意玩法大范本：", fontSize = 9.sp, color = Color.Gray, fontWeight = FontWeight.Bold)
-                                                Row(
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                                    modifier = Modifier.fillMaxWidth().padding(top = 2.dp)
-                                                ) {
-                                                    listOf(
-                                                        1 to "🐱猫漫步",
-                                                        2 to "🍎抓苹果",
-                                                        3 to "🎹弹钢琴"
-                                                    ).forEach { (id, label) ->
-                                                        TextButton(
-                                                            onClick = {
-                                                                viewModel.selectTemplate(id)
-                                                                Toast.makeText(context, "$label 模板已快车载入！", Toast.LENGTH_SHORT).show()
-                                                            },
-                                                            contentPadding = PaddingValues(horizontal = 4.dp),
-                                                            modifier = Modifier.weight(1f).height(24.dp)
-                                                        ) {
-                                                            Text(label, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                2 -> {
-                                    // Tab 2: Hardware bridge and concentration shields
-                                    Column(
-                                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(Icons.Default.Power, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(14.dp))
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text("🔌 硬件联动与绿色专注屏蔽", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                        }
-
-                                        Text(
-                                            text = "★ 专为物理课堂定制。搭载掌上硬件，防止小学生打开浏览器娱乐分心，高度便携！",
-                                            fontSize = 8.5.sp,
-                                            lineHeight = 11.sp,
-                                            color = Color.DarkGray
-                                        )
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Button(
-                                                onClick = {
-                                                    Toast.makeText(context, "🟢 乐高智能电机 / ESP32 芯片蓝牙桥接成功！", Toast.LENGTH_SHORT).show()
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1976D2)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Text("🔌 连接智能硬件", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
-
-                                            Button(
-                                                onClick = {
-                                                    Toast.makeText(context, "🛡️ 小学生专注盾：已封锁一切娱乐网站阻断干扰，专注编程！", Toast.LENGTH_SHORT).show()
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1f).height(28.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Text("🛡️ 开启防分心锁", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-
-                                        Card(
-                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFEBF5FB)),
-                                            border = BorderStroke(1.dp, Color(0xFFAED5F8)),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Column(modifier = Modifier.padding(6.dp)) {
-                                                Text("🎒 课堂专属创新点与优势：", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color(0xFF0D47A1))
-                                                Text("1. 便携防沉迷：取代传统机房笨重电脑，有效堵塞玩网游路子！\n2. 高频交互：拖动代码物理显化硬件执行，激发小学生学习心智。\n3. 高度灵活：随时随地结合掌上开发板做物理现实交互组装！", fontSize = 8.sp, lineHeight = 10.sp, color = Color.DarkGray)
-                                            }
-                                        }
-                                    }
-                                }
-                                3 -> {
-                                    // Tab 3: Submissions
-                                    Column(
-                                        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.SpaceBetween
-                                        ) {
-                                            Text(
-                                                text = "🧸 设定名字: $draftName",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            IconButton(
-                                                onClick = {
-                                                    localInputName = draftName
-                                                    saveNameDialog = true
-                                                },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(12.dp), tint = Color(0xFF3F51B5))
-                                            }
-                                        }
-                                        
-                                        Text(text = "📌 班级关联任务: ${taskName ?: "自由创新拼拼搭"}", fontSize = 10.sp, color = Color.Gray)
-                                        
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Button(
-                                                onClick = {
-                                                    viewModel.clearWorkspaceToNew()
-                                                    Toast.makeText(context, "全新创意工作区创建成功！", Toast.LENGTH_SHORT).show()
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF757575)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1f).height(32.dp),
-                                                shape = RoundedCornerShape(6.dp)
-                                            ) {
-                                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                                Spacer(modifier = Modifier.width(2.dp))
-                                                Text("清空新建", fontSize = 9.sp)
-                                            }
-                                            
-                                            Button(
-                                                onClick = {
-                                                    viewModel.submitWorkAndAiReport { mes ->
-                                                        Toast.makeText(context, mes, Toast.LENGTH_LONG).show()
-                                                    }
-                                                },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                                                contentPadding = PaddingValues(horizontal = 4.dp),
-                                                modifier = Modifier.weight(1.3f).height(32.dp),
-                                                shape = RoundedCornerShape(6.dp),
-                                                enabled = !aiLoading
-                                            ) {
-                                                if (aiLoading) {
-                                                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(10.dp), strokeWidth = 1.dp)
-                                                } else {
-                                                    Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.White, modifier = Modifier.size(12.dp))
-                                                    Spacer(modifier = Modifier.width(2.dp))
-                                                    Text("评测提交作品", fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                                                }
-                                            }
-                                        }
-                                        
-                                        Spacer(modifier = Modifier.height(2.dp))
-                                        
-                                        TextButton(
-                                            onClick = { viewModel.logout() },
-                                            modifier = Modifier.align(Alignment.End).height(24.dp)
-                                        ) {
-                                            Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color.Red, modifier = Modifier.size(10.dp))
-                                            Spacer(modifier = Modifier.width(2.dp))
-                                            Text("退出登录", fontSize = 9.sp, color = Color.Red)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    }
+        } // Closes side-by-side Row
+    } // Closes main Column
 
 
     // 重命名 Dialog
@@ -1787,25 +1874,28 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel) {
                             onClick = { viewModel.callAiAssistant("语法纠错") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
+                            modifier = Modifier.weight(0.3f).widthIn(min = 120.dp)
                         ) {
-                            Text("语法纠错", fontSize = 11.sp)
+                            Text("语法纠错", fontSize = 16.sp, maxLines = 1, softWrap = false)
                         }
                         Button(
                             onClick = { viewModel.callAiAssistant("创意引导") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
+                            modifier = Modifier.weight(0.3f).widthIn(min = 120.dp)
                         ) {
-                            Text("创意引导", fontSize = 11.sp)
+                            Text("创意引导", fontSize = 16.sp, maxLines = 1, softWrap = false)
                         }
                         Button(
                             onClick = { viewModel.callAiAssistant("知识点讲解") },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF009688)),
                             shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f)
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
+                            modifier = Modifier.weight(0.3f).widthIn(min = 120.dp)
                         ) {
-                            Text("考点讲解", fontSize = 11.sp)
+                            Text("考点讲解", fontSize = 16.sp, maxLines = 1, softWrap = false)
                         }
                     }
 
@@ -2187,7 +2277,7 @@ fun StudentTasksScreen(viewModel: MainViewModel, onGoToCode: () -> Unit) {
             ) {
                 Icon(Icons.Default.LocalActivity, contentDescription = null, tint = Color(0xFF1E88E5))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("班级本期学习任务", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                Text("班级本学期学习任务", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
             }
 
             if (tasks.isEmpty()) {
@@ -2300,7 +2390,7 @@ fun StudentWorksScreen(viewModel: MainViewModel) {
         ) {
             Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFFFFC107))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("我的 Scratch 作品列表", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("我的 Scratch 作品列表", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
         }
 
         if (works.isEmpty()) {
@@ -2506,7 +2596,7 @@ fun StudentWorksScreen(viewModel: MainViewModel) {
 
                         // AI 优化评析与辅导
                         Text("💡 AI 姐姐精细优化辅导指引：", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFF9800))
-
+                        Spacer(modifier = Modifier.height(8.dp))
                         Card(
                             colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF9C4)),
                             modifier = Modifier
@@ -2556,15 +2646,10 @@ fun EvaluationProgressRow(label: String, score: Int, maxScore: Int, color: Color
     }
 }
 
-// ==========================================
-// 6. AI 辅助日志记录 HUB
-// ==========================================
 @Composable
 fun StudentAiAssistHistoricalHub(viewModel: MainViewModel) {
     val history by viewModel.aiRecordHistory.collectAsState()
     val classConfig by viewModel.aiClassConfig.collectAsState()
-    val dailyLimitReached by viewModel.aiDailyLimitReached.collectAsState()
-
     val context = LocalContext.current
 
     Column(
@@ -2573,7 +2658,6 @@ fun StudentAiAssistHistoricalHub(viewModel: MainViewModel) {
             .background(Color(0xFFFAFAFA))
             .padding(12.dp)
     ) {
-        // 当前限制看板
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -2588,12 +2672,13 @@ fun StudentAiAssistHistoricalHub(viewModel: MainViewModel) {
                 }
                 Spacer(modifier = Modifier.height(4.dp))
                 classConfig?.let {
-                    Text("• AI 提示支持度：${it.aiHintLevel}模式", fontSize = 12.sp)
-                    Text("• 创意向单日获取最大调用上限：${it.creativeGuideDailyLimit} 次", fontSize = 12.sp)
-                    Text("• 是否阻断直抄完整源码：${if (it.codeGenerationLimit == 0) "全面阻断抄袭 (纯指导模式)" else "允许部分参考"}", fontSize = 12.sp)
+                    Text("• AI 提示支持度：${it.aiHintLevel}模式", fontSize = 14.sp, color = Color(0xFF333333))
+                    Text("• 创意向单日获取最大调用上限：${it.creativeGuideDailyLimit} 次", fontSize = 14.sp, color = Color(0xFF333333))
+                    Text("• 是否阻断直抄完整源码：${if (it.codeGenerationLimit == 0) "全面阻断抄袭 (纯指导模式)" else "允许部分参考"}", fontSize = 14.sp, color = Color(0xFF333333))
                 } ?: run {
-                    Text("• AI 提示支持度：默认入门模式", fontSize = 12.sp)
-                    Text("• 创意向单日获取最大调用上限：5 次", fontSize = 12.sp)
+                    Text("• AI 提示支持度：默认入门模式", fontSize = 14.sp, color = Color(0xFF333333))
+                    Text("• 创意向单日获取最大调用上限：5 次", fontSize = 14.sp, color = Color(0xFF333333))
+                    Text("• 是否阻断直抄完整源码：全面阻断抄袭 (纯指导模式)", fontSize = 14.sp, color = Color(0xFF333333))
                 }
             }
         }
@@ -2604,12 +2689,12 @@ fun StudentAiAssistHistoricalHub(viewModel: MainViewModel) {
         ) {
             Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFF3F51B5))
             Spacer(modifier = Modifier.width(8.dp))
-            Text("AI 随身指导问答足迹", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text("AI 随身指导问答足迹", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
         }
 
         if (history.isEmpty()) {
             Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
-                Text("你的足迹里还没有问答记录。请快去编程工作区找 AI 提问并分析吧！", color = Color.Gray, fontSize = 13.sp, textAlign = TextAlign.Center)
+                Text("你的足迹里还没有问答记录。请快去编程工作区找 AI 提问并分析吧！", color = Color(0xFF666666), fontSize = 14.sp, textAlign = TextAlign.Center)
             }
         } else {
             LazyColumn(
@@ -2650,7 +2735,7 @@ fun StudentAiAssistHistoricalHub(viewModel: MainViewModel) {
                                     )
                                 }
 
-                                val dateStr = SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(Date(record.callTime))
+                                val dateStr = java.text.SimpleDateFormat("MM月dd日 HH:mm", java.util.Locale.getDefault()).format(java.util.Date(record.callTime))
                                 Text(text = dateStr, fontSize = 10.sp, color = Color.Gray)
                             }
 
@@ -2672,9 +2757,6 @@ fun StudentAiAssistHistoricalHub(viewModel: MainViewModel) {
     }
 }
 
-// ==========================================
-// 7. 教师端 - 发布任务及管理面板
-// ==========================================
 @Composable
 fun TeacherTaskManagementScreen(viewModel: MainViewModel) {
     val classes by viewModel.classesList.collectAsState()
@@ -2686,10 +2768,6 @@ fun TeacherTaskManagementScreen(viewModel: MainViewModel) {
 
     var classSelectIndex by remember { mutableStateOf(0) }
     var classSelectExpanded by remember { mutableStateOf(false) }
-
-    // 班级管理新建输入状态
-    var newClassNameInput by remember { mutableStateOf("") }
-    var newClassGradeInput by remember { mutableStateOf("三年级") }
 
     val context = LocalContext.current
 
@@ -2717,108 +2795,6 @@ fun TeacherTaskManagementScreen(viewModel: MainViewModel) {
             }
         }
 
-        // 1. 🏫 教学班级管理与新建 (MOVED TO THE VERY TOP as requested by Problem 3.1)
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                border = BorderStroke(1.dp, Color(0xFFEEEEEE))
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.School, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("🏫 教学班级管理", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                        }
-                        Text("共：${classes.size} 个教学班级", fontSize = 11.sp, color = Color.Gray)
-                    }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    
-                    // 已有班级列表横向滑动
-                    if (classes.isEmpty()) {
-                        Text("当前尚无班级建档，请在下方建档！", color = Color.Gray, fontSize = 12.sp, modifier = Modifier.padding(vertical = 4.dp))
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState())
-                                .padding(vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            classes.forEach { c ->
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
-                                    border = BorderStroke(1.dp, Color(0xFFF1F1F1)),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Column(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                                        Text(c.className, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2E7D32))
-                                        Text("年级：${c.grade}", fontSize = 10.sp, color = Color.Gray)
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Text("🆕 添加新的教学班级档案 (添加后立即在此页下发任务)：", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.DarkGray)
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = newClassNameInput,
-                            onValueChange = { newClassNameInput = it },
-                            label = { Text("班级名称（如：三班 / 培优一班）", fontSize = 11.sp) },
-                            singleLine = true,
-                            modifier = Modifier.weight(1.3f).height(54.dp)
-                        )
-                        OutlinedTextField(
-                            value = newClassGradeInput,
-                            onValueChange = { newClassGradeInput = it },
-                            label = { Text("所属年级", fontSize = 11.sp) },
-                            singleLine = true,
-                            modifier = Modifier.weight(0.7f).height(54.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = {
-                            if (newClassNameInput.isBlank()) {
-                                Toast.makeText(context, "请输入新添加班级名称！", Toast.LENGTH_SHORT).show()
-                                return@Button
-                            }
-                            viewModel.createNewClassByTeacher(newClassNameInput, newClassGradeInput) { msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                newClassNameInput = ""
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
-                        modifier = Modifier.fillMaxWidth().height(40.dp),
-                        shape = RoundedCornerShape(8.dp),
-                        contentPadding = PaddingValues(0.dp)
-                    ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("新增本校班级", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                    }
-                }
-            }
-        }
-
         // 2. Clear Visual Separator (Divider) as requested by Problem 3.1
         item {
             Divider(
@@ -2840,83 +2816,175 @@ fun TeacherTaskManagementScreen(viewModel: MainViewModel) {
                     Text("🎺 创作并向班级快捷下发新任务", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E88E5))
                     Spacer(modifier = Modifier.height(12.dp))
 
+                    // 1. 任务名称 (优化四) - 优化1
+                    Text("任务名称", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = taskNameInput,
                         onValueChange = { taskNameInput = it },
-                        label = { Text("输入任务名称 (例如: 快乐猫捉老鼠)") },
+                        placeholder = { Text("输入任务名称 (例如: 快乐猫捉老鼠)", color = Color(0xFF666666), fontSize = 14.sp) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF1976D2),
+                            unfocusedBorderColor = Color(0xFF2196F3)
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     )
 
-                    OutlinedTextField(
-                        value = taskGradeInput,
-                        onValueChange = { taskGradeInput = it },
-                        label = { Text("面向年级（如：三年级 或 四年级）") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                    )
+                    Spacer(modifier = Modifier.height(16.dp))
 
+                    // 2. 面向年级 - 优化1
+                    var taskGradeDropdownExpanded by remember { mutableStateOf(false) }
+                    Text("面向年级", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = taskGradeInput.ifEmpty { "请选择年级" },
+                            onValueChange = {},
+                            readOnly = true,
+                            placeholder = { Text("请选择年级", color = Color(0xFF666666), fontSize = 14.sp) },
+                            trailingIcon = {
+                                IconButton(onClick = { taskGradeDropdownExpanded = true }) {
+                                    Icon(imageVector = if (taskGradeDropdownExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF1976D2),
+                                unfocusedBorderColor = Color(0xFF2196F3)
+                            ),
+                            modifier = Modifier.fillMaxWidth().height(56.dp).clickable { taskGradeDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = taskGradeDropdownExpanded,
+                            onDismissRequest = { taskGradeDropdownExpanded = false },
+                            modifier = Modifier.fillMaxWidth(0.9f)
+                        ) {
+                            listOf("三年级", "四年级", "五年级", "六年级").forEach { grade ->
+                                DropdownMenuItem(
+                                    text = { Text(grade) },
+                                    onClick = {
+                                        taskGradeInput = grade
+                                        taskGradeDropdownExpanded = false
+                                        // Auto-reset target class index to stay safe!
+                                        classSelectIndex = 0
+                                    }
+                                    )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 3. 截止日期 - 优化1
+                    Text("截止日期", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = taskDeadlineInput,
                         onValueChange = { taskDeadlineInput = it },
-                        label = { Text("截止日期（格式: YYYY-MM-DD）") },
+                        placeholder = { Text("格式: YYYY-MM-DD", color = Color(0xFF666666), fontSize = 14.sp) },
                         singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF1976D2),
+                            unfocusedBorderColor = Color(0xFF2196F3)
+                        ),
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     )
 
-                    // 班级选择卡
-                    if (classes.isNotEmpty()) {
-                        val selClass = classes.getOrNull(classSelectIndex) ?: classes.first()
-                        Box(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
-                            Card(
-                                onClick = { classSelectExpanded = !classSelectExpanded },
-                                border = BorderStroke(1.dp, Color.LightGray),
-                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFAFAFA)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text("发派目标班级：${selClass.className}", fontSize = 14.sp)
-                                    Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
-                                }
-                            }
+                    Spacer(modifier = Modifier.height(16.dp))
 
+                    // 4. 派发目标班级 (仅显示当前选定年级下的所有班级 - 优化四) - 优化1
+                    val filteredClasses = remember(classes, taskGradeInput) {
+                        if (taskGradeInput.isBlank() || taskGradeInput == "请选择年级") {
+                            classes
+                        } else {
+                            classes.filter { it.grade == taskGradeInput }
+                        }
+                    }
+
+                    Text("派发目标班级", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (filteredClasses.isNotEmpty()) {
+                        val safeIndex = classSelectIndex.coerceIn(0, filteredClasses.size - 1)
+                        val selClass = filteredClasses[safeIndex]
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedTextField(
+                                value = "发派目标班级：${selClass.className}",
+                                onValueChange = {},
+                                readOnly = true,
+                                placeholder = { Text("请选择班级", color = Color(0xFF666666), fontSize = 14.sp) },
+                                trailingIcon = {
+                                    IconButton(onClick = { classSelectExpanded = true }) {
+                                        Icon(imageVector = if (classSelectExpanded) Icons.Default.ArrowDropUp else Icons.Default.ArrowDropDown, contentDescription = null)
+                                    }
+                                },
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF1976D2),
+                                    unfocusedBorderColor = Color(0xFF2196F3)
+                                ),
+                                modifier = Modifier.fillMaxWidth().height(56.dp).clickable { classSelectExpanded = true }
+                            )
                             DropdownMenu(
                                 expanded = classSelectExpanded,
                                 onDismissRequest = { classSelectExpanded = false },
                                 modifier = Modifier.fillMaxWidth(0.9f)
                             ) {
-                                classes.forEachIndexed { i, c ->
+                                filteredClasses.forEachIndexed { i, c ->
                                     DropdownMenuItem(
                                         text = { Text(c.className) },
                                         onClick = {
                                             classSelectIndex = i
                                             classSelectExpanded = false
                                         }
-                                    )
+                                        )
                                 }
                             }
                         }
+                    } else {
+                        // Display message if there are no classes in the filtered list
+                        OutlinedTextField(
+                            value = "该年级暂无已建班级，请在上方“班级管理”中添加！",
+                            onValueChange = {},
+                            readOnly = true,
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF1976D2),
+                                unfocusedBorderColor = Color(0xFF2196F3)
+                            ),
+                            modifier = Modifier.fillMaxWidth().height(56.dp)
+                        )
                     }
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 5. 详细描述 (优化一 200dp height with 8dp padding in scrollable layout) - 优化1
+                    Text("具体编程任务指引与积木块要求详情", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF333333))
+                    Spacer(modifier = Modifier.height(8.dp))
                     OutlinedTextField(
                         value = taskDetailInput,
                         onValueChange = { taskDetailInput = it },
-                        label = { Text("具体编程任务指引与积木块要求详情", fontSize = 13.sp) },
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
-                        minLines = 3
+                        placeholder = { Text("请输入具体的作业设计内容与评分块要求...", color = Color(0xFF666666), fontSize = 14.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF1976D2),
+                            unfocusedBorderColor = Color(0xFF2196F3)
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 200.dp)
+                            .padding(8.dp),
+                        maxLines = 10
                     )
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 6. 下发发布按钮 (56dp height, match_parent width, bold 16sp centered - 优化四)
                     Button(
                         onClick = {
-                            if (taskNameInput.isEmpty() || taskDetailInput.isEmpty() || classes.isEmpty()) {
-                                Toast.makeText(context, "请填齐必填字段，并确认已有教学班级！", Toast.LENGTH_SHORT).show()
+                            if (taskNameInput.isEmpty() || taskDetailInput.isEmpty() || filteredClasses.isEmpty()) {
+                                Toast.makeText(context, "请填齐基本字段，并确认当前所选年级已建班级！", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
-                            val classId = classes[classSelectIndex].classId
+                            val safeIndex = classSelectIndex.coerceIn(0, filteredClasses.size - 1)
+                            val classId = filteredClasses[safeIndex].classId
                             viewModel.publishNewTaskByTeacher(
                                 name = taskNameInput,
                                 detail = taskDetailInput,
@@ -2930,12 +2998,12 @@ fun TeacherTaskManagementScreen(viewModel: MainViewModel) {
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
-                        modifier = Modifier.fillMaxWidth().height(48.dp), // Comfort height touch spec!
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
                         shape = RoundedCornerShape(8.dp)
                     ) {
                         Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("立即向选定班级下发发布", fontWeight = FontWeight.Bold, color = Color.White)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("立即向选定班级下发发布", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
                     }
                 }
             }
@@ -3133,53 +3201,40 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                 )
             }
 
-            // 任务基础描述卡
+            // 任务基础描述卡 (优化二：整体布局、单独多行文本、灰字单独下发班级，间距8dp)
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White),
                 border = BorderStroke(1.dp, Color(0xFFEAEAEA))
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "📌 ${task.taskName}",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1E88E5)
-                        )
-                        Text(
-                            text = "下发班级: $taskClassName",
-                            fontSize = 11.sp,
-                            color = Color.Gray,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        text = "📖 截止时间: ${task.deadline}",
-                        fontSize = 11.sp,
-                        color = Color.Red,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Divider(color = Color(0xFFF0F0F0))
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "🎯 任务要求:",
-                        fontSize = 12.sp,
+                        text = task.taskName,
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.DarkGray
+                        color = Color.Black,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = "下发班级：$taskClassName",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                    Text(
+                        text = "截止日期：${task.deadline}",
+                        fontSize = 14.sp,
+                        color = Color.Gray
                     )
                     Text(
                         text = task.taskDetail,
-                        fontSize = 12.sp,
-                        color = Color.Gray,
-                        lineHeight = 16.sp,
-                        modifier = Modifier.padding(top = 2.dp)
+                        fontSize = 14.sp,
+                        color = Color.DarkGray,
+                        lineHeight = 18.sp
                     )
                 }
             }
@@ -3845,5 +3900,1808 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                 }
             }
         )
+    }
+}
+
+fun parseConfigFromDescription(desc: String): Map<String, Any> {
+    val result = mutableMapOf<String, Any>()
+    val trimmed = desc.trim()
+    if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        try {
+            val json = org.json.JSONObject(trimmed)
+            result["level"] = json.optString("level", "三年级")
+            result["dailyLimit"] = json.optInt("dailyLimit", 10)
+            result["grammarCorrect"] = json.optBoolean("grammarCorrect", true)
+            result["creativeGuide"] = json.optBoolean("creativeGuide", true)
+            result["knowledgeExplain"] = json.optBoolean("knowledgeExplain", true)
+            result["codeGenerate"] = json.optBoolean("codeGenerate", false)
+            result["style"] = json.optString("style", "趣味活泼")
+            result["weightGrammar"] = json.optInt("weightGrammar", 25)
+            result["weightLogic"] = json.optInt("weightLogic", 30)
+            result["weightTask"] = json.optInt("weightTask", 25)
+            result["weightCreative"] = json.optInt("weightCreative", 20)
+            result["teachingLock"] = json.optBoolean("teachingLock", false)
+            result["remark"] = json.optString("remark", "")
+            return result
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+    
+    // Fallback/standard values
+    result["level"] = "三年级"
+    result["dailyLimit"] = 10
+    result["grammarCorrect"] = true
+    result["creativeGuide"] = true
+    result["knowledgeExplain"] = true
+    result["codeGenerate"] = false
+    result["style"] = "趣味活泼"
+    result["weightGrammar"] = 25
+    result["weightLogic"] = 30
+    result["weightTask"] = 25
+    result["weightCreative"] = 20
+    result["teachingLock"] = false
+    result["remark"] = ""
+
+    val lines = trimmed.split("\n")
+    for (line in lines) {
+        val parts = line.split(":", "：", limit = 2)
+        if (parts.size == 2) {
+            val key = parts[0].trim()
+            val value = parts[1].trim()
+            when (key) {
+                "难度等级" -> result["level"] = value
+                "单日AI调用总上限" -> result["dailyLimit"] = value.toIntOrNull() ?: 10
+                "语法纠错" -> result["grammarCorrect"] = (value == "开启" || value == "true")
+                "创意引导" -> result["creativeGuide"] = (value == "开启" || value == "true")
+                "知识点讲解" -> result["knowledgeExplain"] = (value == "开启" || value == "true")
+                "完整代码生成" -> result["codeGenerate"] = (value == "开启" || value == "true")
+                "AI提示风格" -> result["style"] = value
+                "语法评分权重" -> result["weightGrammar"] = value.toIntOrNull() ?: 25
+                "逻辑评分权重" -> result["weightLogic"] = value.toIntOrNull() ?: 30
+                "任务匹配权重" -> result["weightTask"] = value.toIntOrNull() ?: 25
+                "创意评分权重" -> result["weightCreative"] = value.toIntOrNull() ?: 20
+                "教学锁" -> result["teachingLock"] = (value == "开启" || value == "true")
+                "备注", "班级备注" -> result["remark"] = value
+            }
+        }
+    }
+    return result
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
+    val classes by viewModel.classesList.collectAsState()
+    val students by viewModel.studentsList.collectAsState()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
+    // 新班级添加表单输入状态
+    var newClassNameInput by remember { mutableStateOf("") }
+    var newClassGradeInput by remember { mutableStateOf("三年级") }
+    var newClassDescInput by remember { mutableStateOf("") }
+    var manualGradeDropdownExpanded by remember { mutableStateOf(false) }
+
+    // 各种弹窗管理
+    var showEditClassDialog by remember { mutableStateOf(false) }
+    var activeClassToEdit by remember { mutableStateOf<ClassEntity?>(null) }
+    var editClassName by remember { mutableStateOf("") }
+    var editClassGrade by remember { mutableStateOf("三年级") }
+    var editClassDesc by remember { mutableStateOf("") }
+    var editGradeDropdownExpanded by remember { mutableStateOf(false) }
+
+    var editClassLevel by remember { mutableStateOf("三年级") }
+    var editClassDailyLimit by remember { mutableStateOf(10) }
+    var editClassGrammarCorrect by remember { mutableStateOf(true) }
+    var editClassCreativeGuide by remember { mutableStateOf(true) }
+    var editClassKnowledgeExplain by remember { mutableStateOf(true) }
+    var editClassCodeGenerate by remember { mutableStateOf(false) }
+    var editClassStyle by remember { mutableStateOf("趣味活泼") }
+    var editClassWeightGrammar by remember { mutableStateOf(25) }
+    var editClassWeightLogic by remember { mutableStateOf(30) }
+    var editClassWeightTask by remember { mutableStateOf(25) }
+    var editClassWeightCreative by remember { mutableStateOf(20) }
+    var editClassTeachingLock by remember { mutableStateOf(false) }
+    var editClassRemark by remember { mutableStateOf("") }
+
+    var editClassLevelDropdownExpanded by remember { mutableStateOf(false) }
+    var editClassStyleDropdownExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showEditClassDialog, activeClassToEdit, editClassDesc) {
+        if (showEditClassDialog && activeClassToEdit != null) {
+            val parsedResult = parseConfigFromDescription(editClassDesc)
+            editClassLevel = parsedResult["level"] as? String ?: "三年级"
+            editClassDailyLimit = parsedResult["dailyLimit"] as? Int ?: 10
+            editClassGrammarCorrect = parsedResult["grammarCorrect"] as? Boolean ?: true
+            editClassCreativeGuide = parsedResult["creativeGuide"] as? Boolean ?: true
+            editClassKnowledgeExplain = parsedResult["knowledgeExplain"] as? Boolean ?: true
+            editClassCodeGenerate = parsedResult["codeGenerate"] as? Boolean ?: false
+            editClassStyle = parsedResult["style"] as? String ?: "趣味活泼"
+            editClassWeightGrammar = parsedResult["weightGrammar"] as? Int ?: 25
+            editClassWeightLogic = parsedResult["weightLogic"] as? Int ?: 30
+            editClassWeightTask = parsedResult["weightTask"] as? Int ?: 25
+            editClassWeightCreative = parsedResult["weightCreative"] as? Int ?: 20
+            editClassTeachingLock = parsedResult["teachingLock"] as? Boolean ?: false
+            editClassRemark = parsedResult["remark"] as? String ?: ""
+        }
+    }
+
+    var showDeleteClassConfirm by remember { mutableStateOf(false) }
+    var activeClassToDelete by remember { mutableStateOf<ClassEntity?>(null) }
+
+    // 单个学生建档弹窗
+    var showAddStudentDialog by remember { mutableStateOf(false) }
+    var targetClassForStudent by remember { mutableStateOf<ClassEntity?>(null) }
+    var newStudentNum by remember { mutableStateOf("") }
+    var newStudentName by remember { mutableStateOf("") }
+    var newStudentPass by remember { mutableStateOf("123456") } // 默认密码
+
+    // 批量导入学生弹窗
+    var showBatchImportDialog by remember { mutableStateOf(false) }
+    var targetClassForBatch by remember { mutableStateOf<ClassEntity?>(null) }
+    var batchNamesInput by remember { mutableStateOf("") }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFFAFAFA))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 顶部控制台标题卡
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFECE0)),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.School,
+                        contentDescription = null,
+                        tint = Color(0xFFE65100),
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "班级教务与 3D 创意 AI 指导规范",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFE65100)
+                        )
+                        Text(
+                            text = "管理各班级 parameters、分配学生账号、设置本班专属 AI 提示支持度与灵感纠错限额等",
+                            fontSize = 11.sp,
+                            color = Color(0xFF5D4037)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 添加新教学班级卡片
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                border = BorderStroke(1.dp, Color(0xFFEEEEEE)),
+                elevation = CardDefaults.cardElevation(2.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LibraryAdd,
+                            contentDescription = null,
+                            tint = Color(0xFF1976D2),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "🆕 建立新的班级大纲（及一键批量生成）",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF1976D2)
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 班级名称
+                        OutlinedTextField(
+                            value = newClassNameInput,
+                            onValueChange = { newClassNameInput = it },
+                            label = { Text("自定义班级名", fontSize = 12.sp) },
+                            placeholder = { Text("如：培优1班", fontSize = 12.sp) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1.2f)
+                        )
+
+                        // 年级下拉框选择
+                        Box(modifier = Modifier.weight(0.8f)) {
+                            OutlinedTextField(
+                                value = newClassGradeInput,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("阶段", fontSize = 12.sp) },
+                                trailingIcon = {
+                                    IconButton(onClick = { manualGradeDropdownExpanded = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDropDown,
+                                            contentDescription = null
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().clickable { manualGradeDropdownExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = manualGradeDropdownExpanded,
+                                onDismissRequest = { manualGradeDropdownExpanded = false }
+                            ) {
+                                listOf("三年级", "四年级", "五年级", "六年级").forEach { grade ->
+                                    DropdownMenuItem(
+                                        text = { Text(grade, fontSize = 14.sp) },
+                                        onClick = {
+                                            newClassGradeInput = grade
+                                            manualGradeDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = newClassDescInput,
+                        onValueChange = { newClassDescInput = it },
+                        label = { Text("班级专属 AI 参数描述及教学锁", fontSize = 12.sp) },
+                        placeholder = { Text("如：本班AI辅导锁三年级复杂度，单日创意向限5次...", fontSize = 12.sp) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        // 1. 手动建档
+                        Button(
+                            onClick = {
+                                if (newClassNameInput.isBlank()) {
+                                    Toast.makeText(context, "请输入班级名称！", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                viewModel.createNewClassByTeacher(
+                                    newClassNameInput,
+                                    newClassGradeInput,
+                                    newClassDescInput
+                                ) { msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    newClassNameInput = ""
+                                    newClassDescInput = ""
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("手动建档此班", fontSize = 11.sp, color = Color.White)
+                        }
+
+                        // 2. 批量生成 1-6 班
+                        Button(
+                            onClick = {
+                                viewModel.batchCreateClassesByTeacher(newClassGradeInput) { msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(44.dp)
+                        ) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("一键全装1-6班 ✨", fontSize = 11.sp, color = Color.White)
+                        }
+                    }
+                }
+            }
+        }
+
+        // 班级卡片展示列表标签
+        item {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(vertical = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Groups,
+                    contentDescription = null,
+                    tint = Color(0xFF455A64),
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "📋 当前负责的教学班级档案 (${classes.size} 个)",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF37474F)
+                )
+            }
+        }
+
+        if (classes.isEmpty()) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.FolderOpen,
+                                contentDescription = null,
+                                tint = Color.LightGray,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "王老师，您还没有创建班级哦！\n请在上方输入班级名字或点「一键生成」快速创建。",
+                                color = Color.Gray,
+                                fontSize = 13.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            items(classes) { classEntity ->
+                // 获取此班内注册的学生
+                val classStudents = students.filter { it.classId == classEntity.classId }
+                val classDesc = viewModel.getClassDescription(classEntity.classId)
+
+                // 异步获取此班级产生的累计 AI 辅助计数
+                var aiPointsCount by remember { mutableStateOf<Int?>(null) }
+                LaunchedEffect(classEntity.classId) {
+                    aiPointsCount = viewModel.getClassAiAssistCount(classEntity.classId)
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(2.dp),
+                    border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFE3F2FD))
+                                    ) {
+                                        Text(
+                                            text = classEntity.grade,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF0D47A1),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = classEntity.className,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF212121)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val parsedDesc = if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
+                                    try {
+                                        val json = org.json.JSONObject(classDesc)
+                                        val lvl = json.optString("level", "基础班")
+                                        val lim = json.optInt("dailyLimit", 10)
+                                        val gc = if (json.optBoolean("grammarCorrect", true)) "开" else "关"
+                                        val cg = if (json.optBoolean("creativeGuide", true)) "开" else "关"
+                                        val ke = if (json.optBoolean("knowledgeExplain", true)) "开" else "关"
+                                        val cd = if (json.optBoolean("codeGenerate", false)) "开" else "关"
+                                        "难度【$lvl】| 限额值【${lim}次/天】| 权限【纠错:$gc, 创意:$cg, 讲解:$ke, 代码:$cd】"
+                                    } catch (e: Exception) {
+                                        classDesc
+                                    }
+                                } else {
+                                    classDesc
+                                }
+                                Text(
+                                    text = if (parsedDesc.isNotBlank()) "💡 AI锁配: $parsedDesc" else "💡 AI锁配: 暂无特定说明 (锁定默认难度)",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            }
+
+                            // 操作区域：编辑与删除
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                IconButton(
+                                    onClick = {
+                                        activeClassToEdit = classEntity
+                                        editClassName = classEntity.className
+                                        editClassGrade = classEntity.grade
+                                        editClassDesc = classDesc
+                                        showEditClassDialog = true
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "修改班级",
+                                        tint = Color(0xFF1976D2),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = {
+                                        activeClassToDelete = classEntity
+                                        showDeleteClassConfirm = true
+                                    },
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "删除班级",
+                                        tint = Color(0xFFE53935),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Divider(color = Color(0xFFF5F5F5))
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // AI 指导消耗量
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color(0xFF8E24AA),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "本班级学生累计索取 AI 智能辅导：",
+                                    fontSize = 11.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFF3E5F5))
+                            ) {
+                                Text(
+                                    text = "${aiPointsCount ?: 0} 次指导",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF7B1FA2),
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        // 学生花名册展示
+                        Text(
+                            text = "👥 学生花名册 (${classStudents.size} 人注册)：",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF37474F)
+                        )
+
+                        if (classStudents.isEmpty()) {
+                            Text(
+                                text = "暂无学生。请使用下方按钮开始建档或者一键导入！",
+                                fontSize = 11.sp,
+                                color = Color.Gray,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        } else {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                classStudents.forEach { student ->
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ) {
+                                        Column(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                                            Text(
+                                                text = student.name,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Color(0xFF263238),
+                                                textAlign = TextAlign.Center
+                                            )
+                                            Text(
+                                                text = student.studentNumber,
+                                                fontSize = 9.sp,
+                                                color = Color.LightGray,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // 单个建档
+                            OutlinedButton(
+                                onClick = {
+                                    targetClassForStudent = classEntity
+                                    newStudentNum = ""
+                                    newStudentName = ""
+                                    newStudentPass = "123456"
+                                    showAddStudentDialog = true
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color(0xFF2196F3)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF1976D2))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("手工注册学生", fontSize = 10.sp, color = Color(0xFF1976D2))
+                            }
+
+                            // 批量快捷导入
+                            OutlinedButton(
+                                onClick = {
+                                    targetClassForBatch = classEntity
+                                    batchNamesInput = ""
+                                    showBatchImportDialog = true
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                border = BorderStroke(1.dp, Color(0xFF4CAF50)),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(38.dp),
+                                contentPadding = PaddingValues(0.dp)
+                            ) {
+                                Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF388E3C))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("批量秒速导入", fontSize = 10.sp, color = Color(0xFF388E3C))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 1. 修改班级弹窗
+    if (showEditClassDialog && activeClassToEdit != null) {
+        val selClass = activeClassToEdit!!
+        val dialogScrollState = rememberScrollState()
+        AlertDialog(
+            onDismissRequest = { showEditClassDialog = false },
+            title = { Text("✏️ 修改班级与 AI 参数配置", fontSize = 16.sp, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(dialogScrollState),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = editClassName,
+                        onValueChange = { editClassName = it },
+                        label = { Text("班级名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editClassGrade,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("对应年级") },
+                            trailingIcon = {
+                                IconButton(onClick = { editGradeDropdownExpanded = true }) {
+                                    Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().clickable { editGradeDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = editGradeDropdownExpanded,
+                            onDismissRequest = { editGradeDropdownExpanded = false }
+                        ) {
+                            listOf("三年级", "四年级", "五年级", "六年级").forEach { grade ->
+                                DropdownMenuItem(
+                                    text = { Text(grade, fontSize = 14.sp) },
+                                    onClick = {
+                                        editClassGrade = grade
+                                        editGradeDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    Text("💡 AI 指导参数与安全规范配置", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E88E5), modifier = Modifier.padding(top = 8.dp))
+
+                    // 1. 难度登记
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editClassLevel,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("AI 阶梯指导难度（难度控制）") },
+                            trailingIcon = {
+                                IconButton(onClick = { editClassLevelDropdownExpanded = true }) {
+                                    Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().clickable { editClassLevelDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = editClassLevelDropdownExpanded,
+                            onDismissRequest = { editClassLevelDropdownExpanded = false }
+                        ) {
+                            listOf("三年级", "四年级", "五年级", "六年级").forEach { lv ->
+                                DropdownMenuItem(
+                                    text = { Text(lv, fontSize = 14.sp) },
+                                    onClick = {
+                                        editClassLevel = lv
+                                        editClassLevelDropdownExpanded = false
+                                    }
+                               )
+                            }
+                        }
+                    }
+
+                    // 2. 风格限制风格下拉选择
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = editClassStyle,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("AI 辅导提示词语调语气风格") },
+                            trailingIcon = {
+                                IconButton(onClick = { editClassStyleDropdownExpanded = true }) {
+                                    Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth().clickable { editClassStyleDropdownExpanded = true }
+                        )
+                        DropdownMenu(
+                            expanded = editClassStyleDropdownExpanded,
+                            onDismissRequest = { editClassStyleDropdownExpanded = false }
+                        ) {
+                            listOf("趣味活泼", "通俗易懂", "专业严谨").forEach { style ->
+                                DropdownMenuItem(
+                                    text = { Text(style, fontSize = 14.sp) },
+                                    onClick = {
+                                        editClassStyle = style
+                                        editClassStyleDropdownExpanded = false
+                                    }
+                               )
+                            }
+                        }
+                    }
+
+                    // 3. 创意引导单日上限
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(BorderStroke(1.dp, Color.LightGray), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("创意引导单日上限", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                            Text("学生每日可用限额 (1~20次)", fontSize = 10.sp, color = Color.Gray)
+                        }
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = { if (editClassDailyLimit > 1) editClassDailyLimit-- },
+                                enabled = editClassDailyLimit > 1,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Text("-", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = if (editClassDailyLimit > 1) Color.Black else Color.LightGray)
+                            }
+                            Text(
+                                text = editClassDailyLimit.toString(),
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            )
+                            IconButton(
+                                onClick = { if (editClassDailyLimit < 20) editClassDailyLimit++ },
+                                enabled = editClassDailyLimit < 20,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Text("+", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = if (editClassDailyLimit < 20) Color.Black else Color.LightGray)
+                            }
+                        }
+                    }
+
+                    // 4. 雷达维度权重配置
+                    Text("📊 雷达评测维度权重配置 (0% - 100%)", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
+                    
+                    listOf(
+                        "语法规范权重" to editClassWeightGrammar to { v: Int -> editClassWeightGrammar = v },
+                        "逻辑思维权重" to editClassWeightLogic to { v: Int -> editClassWeightLogic = v },
+                        "任务匹配权重" to editClassWeightTask to { v: Int -> editClassWeightTask = v },
+                        "创意想象权重" to editClassWeightCreative to { v: Int -> editClassWeightCreative = v }
+                    ).forEach { pair ->
+                        val label = pair.first.first
+                        val weight = pair.first.second
+                        val setter = pair.second
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(BorderStroke(1.dp, Color(0xFFE0E0E0)), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 12.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(label, fontSize = 12.sp)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(
+                                    onClick = { if (weight >= 5) setter(weight - 5) },
+                                    enabled = weight >= 5,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Text("-", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Text(
+                                    text = "$weight%",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.width(36.dp),
+                                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                )
+                                IconButton(
+                                    onClick = { if (weight <= 95) setter(weight + 5) },
+                                    enabled = weight <= 95,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Text("+", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+
+                    // 5. 4个功能开关
+                    Text("⚙️ 智能助理功能权限控制", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color.Gray)
+                    
+                    listOf(
+                        Triple("语法纠错", "帮助学生快速定位拼搭中的块语法和运行逻辑错误", editClassGrammarCorrect) to { v: Boolean -> editClassGrammarCorrect = v },
+                        Triple("创意引导", "允许学生通过输入主题定制获取趣味拼搭创意引导", editClassCreativeGuide) to { v: Boolean -> editClassCreativeGuide = v },
+                        Triple("知识点讲解", "针对循环、变量、克隆等核心要点进行深度辅导", editClassKnowledgeExplain) to { v: Boolean -> editClassKnowledgeExplain = v },
+                        Triple("完整代码生成", "允许AI返回完整积木代码（默认低度提示，防止抄袭）", editClassCodeGenerate) to { v: Boolean -> editClassCodeGenerate = v }
+                    ).forEach { (info, setter) ->
+                        val (title, detail, checked) = info
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color(0xFFF5F5F5), RoundedCornerShape(6.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(title, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.Black)
+                                Text(detail, fontSize = 10.sp, color = Color.Gray, lineHeight = 13.sp)
+                            }
+                            androidx.compose.material3.Switch(
+                                checked = checked,
+                                onCheckedChange = setter,
+                                colors = androidx.compose.material3.SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = Color(0xFF1E88E5)
+                                )
+                            )
+                        }
+                    }
+
+                    // 6. 教学锁设置
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFFFF3E0), RoundedCornerShape(6.dp))
+                            .border(BorderStroke(1.dp, Color(0xFFFFB74D)), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("🔒 开启一键教学锁 (Teaching Lock)", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100))
+                            Text("锁定后，学生端AI将严格执行上述限制且隐藏不相关开关", fontSize = 10.sp, color = Color(0xFFEF6C00), lineHeight = 13.sp)
+                        }
+                        androidx.compose.material3.Switch(
+                            checked = editClassTeachingLock,
+                            onCheckedChange = { editClassTeachingLock = it },
+                            colors = androidx.compose.material3.SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFFEF6C00)
+                            )
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = editClassRemark,
+                        onValueChange = { editClassRemark = it },
+                        label = { Text("班级备注信息") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editClassName.isBlank()) {
+                            Toast.makeText(context, "班级名不能为空！", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        
+                        // Serialize to JSON string
+                        val json = org.json.JSONObject().apply {
+                            put("level", editClassLevel)
+                            put("dailyLimit", editClassDailyLimit)
+                            put("grammarCorrect", editClassGrammarCorrect)
+                            put("creativeGuide", editClassCreativeGuide)
+                            put("knowledgeExplain", editClassKnowledgeExplain)
+                            put("codeGenerate", editClassCodeGenerate)
+                            put("style", editClassStyle)
+                            put("weightGrammar", editClassWeightGrammar)
+                            put("weightLogic", editClassWeightLogic)
+                            put("weightTask", editClassWeightTask)
+                            put("weightCreative", editClassWeightCreative)
+                            put("teachingLock", editClassTeachingLock)
+                            put("remark", editClassRemark)
+                        }
+                        val serializedJson = json.toString()
+
+                        viewModel.updateClassByTeacher(
+                            classId = selClass.classId,
+                            className = editClassName,
+                            grade = editClassGrade,
+                            description = serializedJson
+                        ) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            showEditClassDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
+                ) {
+                    Text("保存更新")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditClassDialog = false }) {
+                    Text("取消", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // 2. 删除班级警示弹窗
+    if (showDeleteClassConfirm && activeClassToDelete != null) {
+        val selClass = activeClassToDelete!!
+        AlertDialog(
+            onDismissRequest = { showDeleteClassConfirm = false },
+            title = { Text("💥 安全级联删除警示", color = Color.Red, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    text = "您当前正在申请删除教学班级：【${selClass.className}】。\n该业务将连带强制清空该班级档案下注册的全部学生绑定信息及成果足迹等！此行为不可挽回！\n请确认无误后小心点击！",
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteClassByTeacher(selClass.classId) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            showDeleteClassConfirm = false
+                            activeClassToDelete = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
+                ) {
+                    Text("执意强制删除", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteClassConfirm = false }) {
+                    Text("安全退出取消", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // 3. 手工注册单个学生弹窗
+    if (showAddStudentDialog && targetClassForStudent != null) {
+        val selClass = targetClassForStudent!!
+        AlertDialog(
+            onDismissRequest = { showAddStudentDialog = false },
+            title = {
+                Text(
+                    text = "👤 将学生手动追加至【${selClass.className}】",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(
+                        value = newStudentNum,
+                        onValueChange = { newStudentNum = it },
+                        label = { Text("学号 (登录唯一标识)") },
+                        placeholder = { Text("如：20260301") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = newStudentName,
+                        onValueChange = { newStudentName = it },
+                        label = { Text("姓名") },
+                        placeholder = { Text("如：张小华") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = newStudentPass,
+                        onValueChange = { newStudentPass = it },
+                        label = { Text("初始密码") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (newStudentNum.isBlank() || newStudentName.isBlank() || newStudentPass.isBlank()) {
+                            Toast.makeText(context, "所有字段均必填！", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        viewModel.registerStudentByTeacher(
+                            studentNumber = newStudentNum,
+                            name = newStudentName,
+                            pass = newStudentPass,
+                            classId = selClass.classId
+                        ) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            if (msg.contains("成功") || msg.contains("完成")) {
+                                showAddStudentDialog = false
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32))
+                ) {
+                    Text("立即手动注册并建档")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddStudentDialog = false }) {
+                    Text("取消", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // 4. 批量导入学生弹窗
+    if (showBatchImportDialog && targetClassForBatch != null) {
+        val selClass = targetClassForBatch!!
+        AlertDialog(
+            onDismissRequest = { showBatchImportDialog = false },
+            title = {
+                Text(
+                    text = "📥 批量录入学生至【${selClass.className}】",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "本班会将指定的多名新学生合并成生册，支持通过中文逗号、英文逗号或空格、换行进行拆分。系统将自动批量注册并生成默认初始密码 123456 的学生账号，方便老师一次性全搞定！",
+                        fontSize = 12.sp,
+                        color = Color.Gray,
+                        lineHeight = 16.sp
+                    )
+
+                    OutlinedTextField(
+                        value = batchNamesInput,
+                        onValueChange = { batchNamesInput = it },
+                        label = { Text("学生姓名列表") },
+                        placeholder = { Text("如：张小明, 李小红、王五, 赵六\n支持直接从记事本/表格拷贝粘贴...") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 4
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (batchNamesInput.isBlank()) {
+                            Toast.makeText(context, "请输入学生姓名！", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        viewModel.batchImportStudentsByTeacher(
+                            namesStr = batchNamesInput,
+                            classId = selClass.classId
+                        ) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            showBatchImportDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF388E3C))
+                ) {
+                    Text("立即一键合规导入 🚀")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchImportDialog = false }) {
+                    Text("取消", color = Color.Gray)
+                }
+            }
+        )
+    }
+}
+
+fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: android.content.Context) {
+    if (webView == null) {
+        Toast.makeText(context, "⚠️ 编程空间未就绪，请稍后", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    // Determine the correct Scratch 3.0 official opcode
+    val opcode = when {
+        blockText.contains("移动") -> "motion_movesteps"
+        blockText.contains("右转") -> "motion_turnright"
+        blockText.contains("左转") -> "motion_turnleft"
+        blockText.contains("移到") && blockText.contains("x:") -> "motion_gotoxy"
+        blockText.contains("反弹") -> "motion_ifonedgebounce"
+        blockText.contains("面向") -> "motion_pointindirection"
+        
+        blockText.contains("说") -> "looks_sayforsecs"
+        blockText.contains("显示") -> "looks_show"
+        blockText.contains("隐藏") -> "looks_hide"
+        blockText.contains("下一个造型") -> "looks_nextcostume"
+        blockText.contains("造型") -> "looks_switchcostumeto"
+        blockText.contains("大小增加") || blockText.contains("将大小") -> "looks_changesizeby"
+        
+        blockText.contains("直到结束") -> "sound_playuntildone"
+        blockText.contains("播放") || blockText.contains("声音") -> "sound_play"
+        blockText.contains("所有声音") -> "sound_stopallloops"
+        
+        blockText.contains("绿旗") -> "event_whenflagclicked"
+        blockText.contains("空格") -> "event_whenkeypressed"
+        blockText.contains("角色") && blockText.contains("点击") -> "event_whenthisspriteclicked"
+        blockText.contains("接收到") || blockText.contains("消息") -> "event_whenbroadcastreceived"
+        
+        blockText.contains("次") -> "control_repeat"
+        blockText.contains("永远") || blockText.contains("永远") -> "control_forever"
+        blockText.contains("如果") -> "control_if"
+        blockText.contains("等待") && blockText.contains("秒") -> "control_wait"
+        blockText.contains("停止") -> "control_stop"
+        
+        blockText.contains("碰到颜色") -> "sensing_touchingcolor"
+        blockText.contains("碰到") -> "sensing_touchingobject"
+        blockText.contains("x坐标") || blockText.contains("鼠标") -> "sensing_mousex"
+        blockText.contains("询问") -> "sensing_askandwait"
+        
+        blockText.contains("+") -> "operator_add"
+        blockText.contains(">") -> "operator_gt"
+        blockText.contains("<") -> "operator_lt"
+        blockText.contains("随机数") -> "operator_random"
+        blockText.contains("连接") -> "operator_join"
+        
+        blockText.contains("设为0") || blockText.contains("设为") -> "data_setvariableto"
+        blockText.contains("增加") || blockText.contains("增加1") -> "data_changevariableby"
+        
+        else -> "motion_movesteps"
+    }
+
+    val js = """
+        (function() {
+            try {
+                var targetVm = typeof vm !== 'undefined' ? vm : (window.vm || window.ScratchVM || (window.editor && window.editor.vm));
+                if (!targetVm) {
+                    var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
+                    if (el) {
+                        var keys = Object.keys(el);
+                        var key = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
+                        if (key) {
+                            var fiber = el[key];
+                            while (fiber) {
+                                if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
+                                    targetVm = fiber.stateNode.props.vm;
+                                    break;
+                                }
+                                fiber = fiber.return;
+                            }
+                        }
+                    }
+                }
+                if (!targetVm) {
+                    var frames = document.querySelectorAll('iframe');
+                    for (var i = 0; i < frames.length; i++) {
+                        if (frames[i].contentWindow) {
+                            var sw = frames[i].contentWindow;
+                            if (sw.vm || sw.ScratchVM || (sw.editor && sw.editor.vm)) {
+                                targetVm = sw.vm || sw.ScratchVM || (sw.editor && sw.editor.vm);
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (!targetVm) {
+                    return "VM_NOT_READY";
+                }
+                
+                var targetId = targetVm.editingTarget ? targetVm.editingTarget.id : null;
+                if (!targetId) {
+                    return "NO_TARGET_SELECTED";
+                }
+                
+                var blockX = Math.random() * 200 + 50;
+                var blockY = Math.random() * 200 + 50;
+                try {
+                    var targetWorkspace = window.Blockly || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.Blockly);
+                    if (!targetWorkspace) {
+                        var fs = document.querySelectorAll('iframe');
+                        for (var j = 0; j < fs.length; j++) {
+                            if (fs[j].contentWindow && fs[j].contentWindow.Blockly) {
+                                targetWorkspace = fs[j].contentWindow.Blockly;
+                                break;
+                            }
+                        }
+                    }
+                    if (targetWorkspace && targetWorkspace.getMainWorkspace()) {
+                        var ws = targetWorkspace.getMainWorkspace();
+                        var metrics = ws.getMetrics();
+                        if (metrics) {
+                            blockX = Math.round((-ws.scrollX + metrics.viewWidth / 2) / ws.scale) + (Math.random() * 40 - 20);
+                            blockY = Math.round((-ws.scrollY + metrics.viewHeight / 2) / ws.scale) + (Math.random() * 40 - 20);
+                        }
+                    }
+                } catch (e) {}
+
+                var blockId = targetVm.runtime.addBlock({
+                    opcode: '$opcode',
+                    targetId: targetId,
+                    fields: {},
+                    inputs: {},
+                    x: blockX,
+                    y: blockY
+                });
+                
+                if (targetVm.selectBlock) {
+                    targetVm.selectBlock(blockId);
+                }
+                if (targetVm.emitWorkspaceUpdate) {
+                    targetVm.emitWorkspaceUpdate();
+                }
+                return "success";
+            } catch (e) {
+                return "error: " + e.message;
+            }
+        })();
+    """.trimIndent()
+
+    webView.evaluateJavascript(js) { result ->
+        if (result != null && result.contains("success")) {
+            Toast.makeText(context, "魔法积木已成功插入！", Toast.LENGTH_SHORT).show()
+        } else {
+            try {
+                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val blockJson = """{
+  "opcode": "$opcode",
+  "fields": {},
+  "inputs": {},
+  "x": 100,
+  "y": 100
+}"""
+                val clip = android.content.ClipData.newPlainText("Scratch Block JSON", blockJson)
+                clipboard.setPrimaryClip(clip)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            Toast.makeText(context, "自动插入失败，积木代码已复制到剪贴板，请在编辑器中粘贴", Toast.LENGTH_LONG).show()
+        }
+    }
+}
+
+fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.content.Context) {
+    if (webView == null) return
+    val cleanJson = pJson.replace("'", "\\'").replace("\n", " ").replace("\r", " ")
+    val js = """
+        (function() {
+            try {
+                var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
+                if (!targetVm) {
+                    var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
+                    if (el) {
+                        var keys = Object.keys(el);
+                        var key = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
+                        if (key) {
+                            var fiber = el[key];
+                            while (fiber) {
+                                if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
+                                    targetVm = fiber.stateNode.props.vm;
+                                    break;
+                                }
+                                fiber = fiber.return;
+                            }
+                        }
+                    }
+                }
+                
+                if (!targetVm) {
+                    var frames = document.querySelectorAll('iframe');
+                    for (var i = 0; i < frames.length; i++) {
+                        var sw = frames[i].contentWindow;
+                        if (sw && sw.vm) {
+                            targetVm = sw.vm;
+                            break;
+                        }
+                    }
+                }
+                
+                if (targetVm) {
+                    targetVm.loadProject('$cleanJson').then(function() {
+                        console.log("Success");
+                    });
+                    return "Injected project loading";
+                }
+                return "VM not found";
+            } catch(e) {
+                return "Error: " + e.message;
+            }
+        })();
+    """.trimIndent()
+    webView.evaluateJavascript(js) { res ->
+        android.util.Log.d("ScratchLoader", "Result: $res")
+    }
+}
+
+fun getXmlForBlockText(blockText: String): String {
+    return when {
+        blockText.contains("移动") -> "<block type=\"motion_movesteps\"><value name=\"STEPS\"><shadow type=\"math_number\"><field name=\"NUM\">10</field></shadow></value></block>"
+        blockText.contains("右转") -> "<block type=\"motion_turnright\"><value name=\"DEGREES\"><shadow type=\"math_number\"><field name=\"NUM\">15</field></shadow></value></block>"
+        blockText.contains("左转") -> "<block type=\"motion_turnleft\"><value name=\"DEGREES\"><shadow type=\"math_number\"><field name=\"NUM\">15</field></shadow></value></block>"
+        blockText.contains("随机位置") && blockText.contains("移到") -> "<block type=\"motion_goto_menu\"></block>"
+        blockText.contains("x:") && blockText.contains("y:") -> "<block type=\"motion_gotoxy\"><value name=\"X\"><shadow type=\"math_number\"><field name=\"NUM\">0</field></shadow></value><value name=\"Y\"><shadow type=\"math_number\"><field name=\"NUM\">0</field></shadow></value></block>"
+        blockText.contains("滑行") -> "<block type=\"motion_glideto\"><value name=\"SECS\"><shadow type=\"math_number\"><field name=\"NUM\">1</field></shadow></value></block>"
+        blockText.contains("面向") -> "<block type=\"motion_pointindirection\"><value name=\"DIRECTION\"><shadow type=\"math_angle\"><field name=\"NUM\">90</field></shadow></value></block>"
+        blockText.contains("反弹") -> "<block type=\"motion_ifonedgebounce\"></block>"
+        
+        blockText.contains("说") -> "<block type=\"looks_sayforsecs\"><value name=\"MESSAGE\"><shadow type=\"text\"><field name=\"TEXT\">你好！</field></shadow></value><value name=\"SECS\"><shadow type=\"math_number\"><field name=\"NUM\">2</field></shadow></value></block>"
+        blockText.contains("思考") -> "<block type=\"looks_thinkforsecs\"><value name=\"MESSAGE\"><shadow type=\"text\"><field name=\"TEXT\">嗯...</field></shadow></value><value name=\"SECS\"><shadow type=\"math_number\"><field name=\"NUM\">2</field></shadow></value></block>"
+        blockText.contains("下一个造型") -> "<block type=\"looks_nextcostume\"></block>"
+        blockText.contains("造型") -> "<block type=\"looks_switchcostumeto\"></block>"
+        blockText.contains("背景") -> "<block type=\"looks_switchbackdropto\"></block>"
+        blockText.contains("增加大小") -> "<block type=\"looks_changesizeby\"><value name=\"SIZE\"><shadow type=\"math_number\"><field name=\"NUM\">10</field></shadow></value></block>"
+        blockText.contains("大小设为") -> "<block type=\"looks_setsizeto\"><value name=\"SIZE\"><shadow type=\"math_number\"><field name=\"NUM\">100</field></shadow></value></block>"
+        blockText.contains("显示") -> "<block type=\"looks_show\"></block>"
+        blockText.contains("隐藏") -> "<block type=\"looks_hide\"></block>"
+        
+        blockText.contains("等待播完") -> "<block type=\"sound_playuntildone\"><value name=\"SOUND_MENU\"><shadow type=\"sound_menu\"><field name=\"SOUND_MENU\">喵</field></shadow></value></block>"
+        blockText.contains("播放声音") -> "<block type=\"sound_play\"><value name=\"SOUND_MENU\"><shadow type=\"sound_menu\"><field name=\"SOUND_MENU\">喵</field></shadow></value></block>"
+        blockText.contains("所有声音") -> "<block type=\"sound_stopallloops\"></block>"
+        blockText.contains("音量增加") -> "<block type=\"sound_changevolumeby\"><value name=\"VOLUME\"><shadow type=\"math_number\"><field name=\"NUM\">-10</field></shadow></value></block>"
+        blockText.contains("音量设为") -> "<block type=\"sound_setvolumeto\"><value name=\"VOLUME\"><shadow type=\"math_number\"><field name=\"NUM\">100</field></shadow></value></block>"
+
+        blockText.contains("当 🟢 被点击") || blockText.contains("🟢") -> "<block type=\"event_whenflagclicked\"></block>"
+        blockText.contains("按下") -> "<block type=\"event_whenkeypressed\"><field name=\"KEY_OPTION\">space</field></block>"
+        blockText.contains("被点击") -> "<block type=\"event_whenthisspriteclicked\"></block>"
+        blockText.contains("背景换成") -> "<block type=\"event_whenbackdropswitchesto\"></block>"
+        blockText.contains("接收到广播") -> "<block type=\"event_whenbroadcastreceived\"></block>"
+        blockText.contains("广播") -> "<block type=\"event_broadcast\"></block>"
+
+        blockText.contains("等待") && blockText.contains("秒") -> "<block type=\"control_wait\"><value name=\"DURATION\"><shadow type=\"math_positive_number\"><field name=\"NUM\">1</field></shadow></value></block>"
+        blockText.contains("重复执行") && blockText.contains("次") -> "<block type=\"control_repeat\"><value name=\"TIMES\"><shadow type=\"math_whole_number\"><field name=\"NUM\">10</field></shadow></value></block>"
+        blockText.contains("重复执行") -> "<block type=\"control_forever\"></block>"
+        blockText.contains("如果") && blockText.contains("那么") && blockText.contains("否则") -> "<block type=\"control_if_else\"></block>"
+        blockText.contains("如果") && blockText.contains("那么") -> "<block type=\"control_if\"></block>"
+        blockText.contains("一直等待") -> "<block type=\"control_wait_until\"></block>"
+        blockText.contains("克隆") && blockText.contains("自己") -> "<block type=\"control_create_clone_of\"><value name=\"CLONE_OPTION\"><shadow type=\"control_create_clone_of_menu\"><field name=\"CLONE_OPTION\">_myself_</field></shadow></value></block>"
+        blockText.contains("作为克隆体") -> "<block type=\"control_start_as_clone\"></block>"
+
+        blockText.contains("碰到") && blockText.contains("?") -> "<block type=\"sensing_touchingobject\"><value name=\"TOUCHINGOBJECTMENU\"><shadow type=\"sensing_touchingobjectmenu\"><field name=\"TOUCHINGOBJECTMENU\">_mouse_</field></shadow></value></block>"
+        blockText.contains("碰到颜色") -> "<block type=\"sensing_touchingcolor\"></block>"
+        blockText.contains("询问") -> "<block type=\"sensing_askandwait\"></block>"
+        blockText.contains("键是否按下") -> "<block type=\"sensing_keypressed\"><field name=\"KEY_OPTION\">space</field></block>"
+        blockText.contains("鼠标的 x") -> "<block type=\"sensing_mousex\"></block>"
+        blockText.contains("鼠标的 y") -> "<block type=\"sensing_mousey\"></block>"
+        blockText.contains("计时器") -> "<block type=\"sensing_timer\"></block>"
+
+        blockText.contains("+") -> "<block type=\"operator_add\"></block>"
+        blockText.contains("-") -> "<block type=\"operator_subtract\"></block>"
+        blockText.contains("随机数") -> "<block type=\"operator_random\"><value name=\"FROM\"><shadow type=\"math_number\"><field name=\"FROM\">1</field></shadow></value><value name=\"TO\"><shadow type=\"math_number\"><field name=\"TO\">10</field></shadow></value></block>"
+        blockText.contains(">") -> "<block type=\"operator_gt\"></block>"
+        blockText.contains("=") -> "<block type=\"operator_equals\"></block>"
+        blockText.contains("与") -> "<block type=\"operator_and\"></block>"
+        blockText.contains("或") -> "<block type=\"operator_or\"></block>"
+        blockText.contains("连接") -> "<block type=\"operator_join\"></block>"
+
+        blockText.contains("建立一个变量") -> "<block type=\"data_variable\"></block>"
+        blockText.contains("设为") -> "<block type=\"data_setvariableto\"></block>"
+        blockText.contains("增加") -> "<block type=\"data_changevariableby\"></block>"
+        blockText.contains("显示变量") -> "<block type=\"data_showvariable\"></block>"
+        blockText.contains("隐藏变量") -> "<block type=\"data_hidevariable\"></block>"
+        
+        else -> "<block type=\"motion_movesteps\"><value name=\"STEPS\"><shadow type=\"math_number\"><field name=\"NUM\">10</field></shadow></value></block>"
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AiAssistPanel(
+    viewModel: MainViewModel,
+    onClose: () -> Unit
+) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val panelWidth = (configuration.screenWidthDp / 3).dp
+    val context = androidx.compose.ui.platform.LocalContext.current
+    
+    val aiLoading by viewModel.aiLoading.collectAsState()
+    val aiResult by viewModel.aiResult.collectAsState()
+    val aiResultType by viewModel.aiResultType.collectAsState()
+    
+    var creativePromptInput by remember { mutableStateOf("") }
+    var kbPromptInput by remember { mutableStateOf("") }
+    var customQuestionInput by remember { mutableStateOf("") }
+    
+    val chatHistory = remember { mutableStateListOf<Pair<String, Boolean>>(
+        Pair("哈喽！我是你的智能精灵姐姐，今天想和我一起探索什么神奇的 Scratch 编程魔法呢？✨", false)
+    ) }
+
+    val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
+
+    val classId by viewModel.currentClassId.collectAsState()
+    val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
+    var grammarCorrect = true
+    var creativeGuide = true
+    var knowledgeExplain = true
+    var codeGenerate = false
+    var teachingLock = false
+    
+    if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
+        try {
+            val json = org.json.JSONObject(classDesc)
+            grammarCorrect = json.optBoolean("grammarCorrect", true)
+            creativeGuide = json.optBoolean("creativeGuide", true)
+            knowledgeExplain = json.optBoolean("knowledgeExplain", true)
+            codeGenerate = json.optBoolean("codeGenerate", false)
+            teachingLock = json.optBoolean("teachingLock", false)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(panelWidth),
+        shape = androidx.compose.ui.graphics.RectangleShape,
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFCE4EC)),
+        border = BorderStroke(1.dp, Color(0xFFF06292))
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFC2185B))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("智能精灵姐姐 👩‍💻", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                }
+                IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
+                    Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            LazyColumn(
+                state = lazyListState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                item {
+                    Text(
+                        text = "🌟 选择你需要的功能小锦囊：",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF880E4F),
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
+
+                item {
+                    val statusText = if (teachingLock) "🔒 教学锁已开启 (部分功能被教师锁定)" else "🔓 自主辅助模式 (包含完整功能)"
+                    val statusColor = if (teachingLock) Color(0xFFEF6C00) else Color(0xFF00796B)
+                    val statusBg = if (teachingLock) Color(0xFFFFF3E0) else Color(0xFFE0F2F1)
+                    Text(
+                        text = statusText,
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = statusColor,
+                        modifier = Modifier
+                            .background(statusBg, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (grammarCorrect || codeGenerate) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                if (grammarCorrect) {
+                                    Button(
+                                        onClick = { 
+                                            viewModel.callAiAssistant("语法纠错")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f).height(32.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("🛑 语法纠错", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                if (codeGenerate) {
+                                    Button(
+                                        onClick = { 
+                                            viewModel.callAiAssistant("代码优化建议")
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.weight(1f).height(32.dp),
+                                        contentPadding = PaddingValues(0.dp)
+                                    ) {
+                                        Text("⚡ 代码优化建议", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+                        }
+
+                        if (creativeGuide) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Color(0xFFF48FB1)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp)) {
+                                    Text("💡 创意主题定制：", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        androidx.compose.foundation.text.BasicTextField(
+                                            value = creativePromptInput,
+                                            onValueChange = { creativePromptInput = it },
+                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.Black),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .background(Color(0xFFF5F5F5), RoundedCornerShape(4.dp))
+                                                .padding(6.dp),
+                                            decorationBox = { innerTextField ->
+                                                if (creativePromptInput.isEmpty()) {
+                                                    Text("输入创作主题（如: 太空飞行、打地鼠）...", fontSize = 9.sp, color = Color.Gray)
+                                                }
+                                                innerTextField()
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Button(
+                                            onClick = {
+                                                if (creativePromptInput.isNotBlank()) {
+                                                    viewModel.currentDraftName.value = creativePromptInput
+                                                }
+                                                viewModel.callAiAssistant("创意引导")
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD81B60)),
+                                            contentPadding = PaddingValues(horizontal = 6.dp),
+                                            modifier = Modifier.height(28.dp),
+                                            shape = RoundedCornerShape(4.dp)
+                                        ) {
+                                            Text("创意引导", fontSize = 9.sp)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (knowledgeExplain) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                border = BorderStroke(1.dp, Color(0xFFF48FB1)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(6.dp)) {
+                                    Text("🎓 知识点答疑：", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
+                                    
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
+                                    ) {
+                                        listOf("循环", "变量", "广播", "坐标").forEach { chip ->
+                                            Text(
+                                                text = "🏷️ $chip",
+                                                fontSize = 8.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFC2185B),
+                                                modifier = Modifier
+                                                    .background(Color(0xFFFFEEF0), RoundedCornerShape(10.dp))
+                                                    .clickable { kbPromptInput = chip }
+                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        androidx.compose.foundation.text.BasicTextField(
+                                            value = kbPromptInput,
+                                            onValueChange = { kbPromptInput = it },
+                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.Black),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .background(Color(0xFFF5F5F5), RoundedCornerShape(4.dp))
+                                                .padding(6.dp),
+                                            decorationBox = { innerTextField ->
+                                                if (kbPromptInput.isEmpty()) {
+                                                    Text("选择或输入知识点...", fontSize = 9.sp, color = Color.Gray)
+                                                }
+                                                innerTextField()
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Button(
+                                            onClick = {
+                                                if (kbPromptInput.isNotBlank()) {
+                                                    viewModel.callAiAssistant("知识点讲解")
+                                                } else {
+                                                    Toast.makeText(context, "请先输入或选择要讲解的知识点！", Toast.LENGTH_SHORT).show()
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF009688)),
+                                        contentPadding = PaddingValues(horizontal = 6.dp),
+                                        modifier = Modifier.height(28.dp),
+                                        shape = RoundedCornerShape(4.dp)
+                                    ) {
+                                        Text("考点讲解", fontSize = 9.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+                item {
+                    Text(
+                        text = "💬 诊断与辅导面板：",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF880E4F),
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+
+                item {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 100.dp, max = 220.dp)
+                                .padding(10.dp)
+                        ) {
+                            if (aiLoading) {
+                                Column(
+                                    modifier = Modifier.align(Alignment.Center),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(color = Color(0xFFE91E63), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text("精灵姐姐正在全力思索中...", fontSize = 9.sp, color = Color.Gray)
+                                }
+                            } else {
+                                val displayResult = aiResult
+                                val displayType = aiResultType
+                                if (displayResult != null) {
+                                    Column {
+                                        Text(text = "【$displayType】精灵解答：", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = displayResult,
+                                            fontSize = 9.5.sp,
+                                            lineHeight = 14.sp,
+                                            color = Color.Black,
+                                            modifier = Modifier.verticalScroll(rememberScrollState())
+                                        )
+                                    }
+                                } else {
+                                    Text(
+                                        text = "点击上面功能按钮，或者在下方输入框中直接提问，精灵姐姐会立即在屏幕前全力为你贴心解答噢！🌈",
+                                        fontSize = 9.5.sp,
+                                        lineHeight = 14.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Text(
+                        text = "🐾 对话历史记录：",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF880E4F)
+                    )
+                }
+
+                items(chatHistory.size) { index ->
+                    val msg = chatHistory[index]
+                    val isUser = msg.second
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+                    ) {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isUser) Color(0xFFFF8A80) else Color(0xFFF3E5F5)
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.widthIn(max = (configuration.screenWidthDp / 4).dp)
+                        ) {
+                            Column(modifier = Modifier.padding(6.dp)) {
+                                Text(
+                                    text = if (isUser) "👦 我的提问：" else "🧚 精灵姐姐：",
+                                    fontSize = 8.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isUser) Color.White else Color(0xFF7B1FA2)
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(text = msg.first, fontSize = 9.sp, color = if (isUser) Color.White else Color.Black)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFF8BBD0))
+                    .padding(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                androidx.compose.foundation.text.BasicTextField(
+                    value = customQuestionInput,
+                    onValueChange = { customQuestionInput = it },
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.Black),
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(Color.White, RoundedCornerShape(8.dp))
+                        .padding(8.dp),
+                    decorationBox = { innerTextField ->
+                        if (customQuestionInput.isEmpty()) {
+                            Text("直接在这里输入问题向姐姐提问吧...", fontSize = 9.sp, color = Color.Gray)
+                        }
+                        innerTextField()
+                    }
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Button(
+                    onClick = {
+                        if (customQuestionInput.isNotBlank()) {
+                            val userQ = customQuestionInput
+                            chatHistory.add(Pair(userQ, true))
+                            customQuestionInput = ""
+                            coroutineScope.launch {
+                                try {
+                                    lazyListState.animateScrollToItem(chatHistory.size)
+                                } catch(e: Exception) {}
+                            }
+                            
+                            viewModel.callAiCustomQuestion(userQ) { response ->
+                                chatHistory.add(Pair(response, false))
+                                coroutineScope.launch {
+                                    try {
+                                        lazyListState.animateScrollToItem(chatHistory.size)
+                                    } catch(e: Exception) {}
+                                }
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.height(32.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp)
+                ) {
+                    Text("发送 🚀", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }

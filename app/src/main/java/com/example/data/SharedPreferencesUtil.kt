@@ -62,4 +62,12 @@ object SharedPreferencesUtil {
     fun clearSession(context: Context) {
         getPrefs(context).edit().clear().apply()
     }
+
+    fun saveClassDescription(context: Context, classId: Int, description: String) {
+        getPrefs(context).edit().putString("class_desc_$classId", description).apply()
+    }
+
+    fun getClassDescription(context: Context, classId: Int): String {
+        return getPrefs(context).getString("class_desc_$classId", "暂无描述") ?: "暂无描述"
+    }
 }
