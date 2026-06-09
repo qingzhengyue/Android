@@ -45,6 +45,8 @@ import androidx.compose.ui.geometry.Offset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import com.example.data.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -1372,6 +1374,48 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var snappedSide by remember { mutableStateOf("right") }
     var hasInitializedPosition by remember { mutableStateOf(false) }
 
+    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
+    var realTimeCheckEnabled by remember { mutableStateOf(false) }
+    var scratchChangeCounter by remember { mutableStateOf(0) }
+
+    fun getLiveCodeAndCall(funcType: String) {
+        val webView = webViewInstance
+        if (webView != null) {
+            webView.evaluateJavascript(
+                "(function() { " +
+                "  try { " +
+                "    if (window.vm) { return JSON.stringify(window.vm.toJSON()); } " +
+                "    else if (window.scratch && window.scratch.vm) { return JSON.stringify(window.scratch.vm.toJSON()); } " +
+                "    else if (typeof Blockly !== 'undefined') { " +
+                "         var xml = Blockly.Xml.workspaceToDom(Blockly.mainWorkspace); " +
+                "         return Blockly.Xml.domToText(xml); " +
+                "    } " +
+                "  } catch(e) {} " +
+                "  return ''; " +
+                "})()"
+            ) { result: String? ->
+                val cleaned = if (result != null && result != "null" && result != "\"\"") {
+                    var s = result.trim()
+                    if (s.startsWith("\"") && s.endsWith("\"") && s.length >= 2) {
+                        s = s.substring(1, s.length - 1)
+                        s = s.replace("\\\"", "\"").replace("\\\\", "\\")
+                    }
+                    s
+                } else ""
+                viewModel.callAiAssistant(funcType, if (cleaned.isNotBlank()) cleaned else null)
+            }
+        } else {
+            viewModel.callAiAssistant(funcType)
+        }
+    }
+
+    LaunchedEffect(scratchChangeCounter) {
+        if (realTimeCheckEnabled && scratchChangeCounter > 0) {
+            delay(300)
+            getLiveCodeAndCall("语法纠错")
+        }
+    }
+
     var showMagicBoxDrawer by remember { mutableStateOf(false) }
 
     var localInputName by remember { mutableStateOf(draftName) }
@@ -1399,7 +1443,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     }
     var currentMirrorIndex by remember { mutableStateOf(0) }
     var scratchUrl by remember { mutableStateOf(mirrors[0]) }
-    var webViewInstance by remember { mutableStateOf<WebView?>(null) }
     
     var isPageLoading by remember { mutableStateOf(true) }
     var isAllFailed by remember { mutableStateOf(false) }
@@ -1619,6 +1662,43 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                                         existingViewports.forEach(function(el) { el.remove(); });
                                         head.appendChild(meta);
                                     }
+                                    
+                                    function tryAttach() {
+                                        var ws = null;
+                                        if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
+                                            ws = Blockly.getMainWorkspace();
+                                        } else if (typeof Blockly !== 'undefined' && Blockly.mainWorkspace) {
+                                            ws = Blockly.mainWorkspace;
+                                        }
+                                        if (ws) {
+                                            ws.addChangeListener(function(event) {
+                                                if (event.type === 'move' || event.type === 'create' || event.type === 'delete' || event.type === 'change') {
+                                                    if (window.AndroidWorkspace) {
+                                                        window.AndroidWorkspace.onCodeChanged();
+                                                    }
+                                                }
+                                            });
+                                            return true;
+                                        }
+                                        var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
+                                        if (targetVm) {
+                                            targetVm.on('workspaceUpdate', function() {
+                                                if (window.AndroidWorkspace) {
+                                                    window.AndroidWorkspace.onCodeChanged();
+                                                }
+                                            });
+                                            return true;
+                                        }
+                                        return false;
+                                    }
+                                    var attached = tryAttach();
+                                    if (!attached) {
+                                        var interval = setInterval(function() {
+                                            if (tryAttach()) {
+                                                clearInterval(interval);
+                                            }
+                                        }, 1000);
+                                    }
                                 })();
                             """.trimIndent()
                             view?.evaluateJavascript(viewportJs, null)
@@ -1721,6 +1801,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         false
                     }
                     
+                    addJavascriptInterface(ScratchJsInterface {
+                        scratchChangeCounter++
+                    }, "AndroidWorkspace")
+                    
                     webViewInstance = this
                     loadUrl(scratchUrl)
                 }
@@ -1812,6 +1896,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 AiAssistPanel(
                     webView = webViewInstance,
                     viewModel = viewModel,
+                    realTimeCheckEnabled = realTimeCheckEnabled,
+                    onRealTimeCheckChange = { realTimeCheckEnabled = it },
+                    getLiveCodeAndCall = { getLiveCodeAndCall(it) },
                     onClose = { showAiAssistSheet = false }
                 )
             }
@@ -5200,46 +5287,59 @@ fun getXmlForBlockText(blockText: String): String {
     }
 }
 
+class ScratchJsInterface(private val onChanged: () -> Unit) {
+    @android.webkit.JavascriptInterface
+    fun onCodeChanged() {
+        onChanged()
+    }
+}
+
+// Helper composable for red/green styling of grammar diagnosis
+@Composable
+fun StyledAiResult(text: String) {
+    val lines = text.split("\n")
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        lines.forEach { line ->
+            val color = when {
+                line.contains("【错误提示】") || line.contains("错误提示") || line.contains("❌") -> Color(0xFFD32F2F) // Red
+                line.contains("【修正建议】") || line.contains("修正建议") || line.contains("✅") || line.contains("✔️") -> Color(0xFF388E3C) // Green
+                else -> Color.Unspecified
+            }
+            val fontWeight = if (line.contains("【错误提示】") || line.contains("【修正建议】") || line.startsWith("错误") || line.startsWith("修正")) FontWeight.Bold else FontWeight.Normal
+            Text(
+                text = line,
+                color = color,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+                fontWeight = fontWeight
+            )
+        }
+    }
+}
+
+// Data class representation for history records
+data class DialogueHistoryItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val title: String,
+    val question: String,
+    val answer: String,
+    val timestamp: String,
+    val isExpanded: Boolean = false
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiAssistPanel(
     webView: WebView?,
     viewModel: MainViewModel,
+    realTimeCheckEnabled: Boolean,
+    onRealTimeCheckChange: (Boolean) -> Unit,
+    getLiveCodeAndCall: (String) -> Unit,
     onClose: () -> Unit
 ) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val panelWidth = (configuration.screenWidthDp / 3).dp
     val context = androidx.compose.ui.platform.LocalContext.current
-    
-    fun getLiveCodeAndCall(funcType: String) {
-        if (webView != null) {
-            webView.evaluateJavascript(
-                "(function() { " +
-                "  try { " +
-                "    if (window.vm) { return JSON.stringify(window.vm.toJSON()); } " +
-                "    else if (window.scratch && window.scratch.vm) { return JSON.stringify(window.scratch.vm.toJSON()); } " +
-                "    else if (typeof Blockly !== 'undefined') { " +
-                "         var xml = Blockly.Xml.workspaceToDom(Blockly.mainWorkspace); " +
-                "         return Blockly.Xml.domToText(xml); " +
-                "    } " +
-                "  } catch(e) {} " +
-                "  return ''; " +
-                "})()"
-            ) { result ->
-                val cleaned = if (result != null && result != "null" && result != "\"\"") {
-                    var s = result.trim()
-                    if (s.startsWith("\"") && s.endsWith("\"") && s.length >= 2) {
-                        s = s.substring(1, s.length - 1)
-                        s = s.replace("\\\"", "\"").replace("\\\\", "\\")
-                    }
-                    s
-                } else ""
-                viewModel.callAiAssistant(funcType, if (cleaned.isNotBlank()) cleaned else null)
-            }
-        } else {
-            viewModel.callAiAssistant(funcType)
-        }
-    }
     
     val aiLoading by viewModel.aiLoading.collectAsState()
     val aiResult by viewModel.aiResult.collectAsState()
@@ -5249,31 +5349,46 @@ fun AiAssistPanel(
     var kbPromptInput by remember { mutableStateOf("") }
     var customQuestionInput by remember { mutableStateOf("") }
     
-    val chatHistory = remember { mutableStateListOf<Pair<String, Boolean>>(
-        Pair("哈喽！我是你的智能精灵姐姐，今天想和我一起探索什么神奇的 Scratch 编程魔法呢？✨", false)
-    ) }
+    // Default active tab to "语法纠错"
+    var activeTab by remember { mutableStateOf("语法纠错") }
 
-    val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
+    // Dialogue history list
+    val dialogueHistory = remember { mutableStateListOf<DialogueHistoryItem>() }
 
-    val classId by viewModel.currentClassId.collectAsState()
-    val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
-    var grammarCorrect = true
-    var creativeGuide = true
-    var knowledgeExplain = true
-    var codeGenerate = false
-    var teachingLock = false
-    
-    if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
-        try {
-            val json = org.json.JSONObject(classDesc)
-            grammarCorrect = json.optBoolean("grammarCorrect", true)
-            creativeGuide = json.optBoolean("creativeGuide", true)
-            knowledgeExplain = json.optBoolean("knowledgeExplain", true)
-            codeGenerate = json.optBoolean("codeGenerate", false)
-            teachingLock = json.optBoolean("teachingLock", false)
-        } catch (e: Exception) {
-            e.printStackTrace()
+    // Initial greeting load
+    LaunchedEffect(Unit) {
+        if (dialogueHistory.isEmpty()) {
+            dialogueHistory.add(
+                DialogueHistoryItem(
+                    title = "【精灵姐姐】",
+                    question = "开始我们今天的编程冒险吧！",
+                    answer = "哈喽！我是你的智能精灵姐姐，今天想和我一起探索什么神奇的 Scratch 编程魔法呢？✨",
+                    timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                )
+            )
+        }
+    }
+
+    // Capture and automatically append new AI replies into dialogue history
+    LaunchedEffect(aiResult) {
+        val res = aiResult
+        val type = aiResultType
+        if (!res.isNullOrBlank()) {
+            if (dialogueHistory.none { it.answer == res }) {
+                val q = when (type) {
+                    "创意引导" -> if (creativePromptInput.isNotBlank()) "主题: $creativePromptInput" else "自由扩展与创意优化"
+                    "知识点讲解" -> if (kbPromptInput.isNotBlank()) "知识点: $kbPromptInput" else "知识考点"
+                    "语法纠错" -> "语法与逻辑检测"
+                    else -> "诊断检测"
+                }
+                val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                dialogueHistory.add(0, DialogueHistoryItem(
+                    title = "【$type】",
+                    question = q,
+                    answer = res,
+                    timestamp = timeStr
+                ))
+            }
         }
     }
 
@@ -5286,11 +5401,12 @@ fun AiAssistPanel(
         border = BorderStroke(1.dp, Color(0xFFF06292))
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            // Header
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFFC2185B))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -5304,345 +5420,394 @@ fun AiAssistPanel(
                 }
             }
 
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                item {
-                    Text(
-                        text = "🌟 选择你需要的功能小锦囊：",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF880E4F),
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                }
-
-                item {
-                    val statusText = if (teachingLock) "🔒 教学锁已开启 (部分功能被教师锁定)" else "🔓 自主辅助模式 (包含完整功能)"
-                    val statusColor = if (teachingLock) Color(0xFFEF6C00) else Color(0xFF00796B)
-                    val statusBg = if (teachingLock) Color(0xFFFFF3E0) else Color(0xFFE0F2F1)
-                    Text(
-                        text = statusText,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = statusColor,
-                        modifier = Modifier
-                            .background(statusBg, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
-
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (grammarCorrect || codeGenerate) {
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                if (grammarCorrect) {
-                                    Button(
-                                        onClick = { 
-                                            getLiveCodeAndCall("语法纠错")
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f).height(32.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text("🛑 语法纠错", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-
-                                if (codeGenerate) {
-                                    Button(
-                                        onClick = { 
-                                            getLiveCodeAndCall("代码优化建议")
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA)),
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.weight(1f).height(32.dp),
-                                        contentPadding = PaddingValues(0.dp)
-                                    ) {
-                                        Text("⚡ 代码优化建议", fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-                        }
-
-                        if (creativeGuide) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                border = BorderStroke(1.dp, Color(0xFFF48FB1)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(6.dp)) {
-                                    Text("💡 创意主题定制：", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        androidx.compose.foundation.text.BasicTextField(
-                                            value = creativePromptInput,
-                                            onValueChange = { creativePromptInput = it },
-                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.Black),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .background(Color(0xFFF5F5F5), RoundedCornerShape(4.dp))
-                                                .padding(6.dp),
-                                            decorationBox = { innerTextField ->
-                                                if (creativePromptInput.isEmpty()) {
-                                                    Text("输入创作主题（如: 太空飞行、打地鼠）...", fontSize = 9.sp, color = Color.Gray)
-                                                }
-                                                innerTextField()
-                                            }
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Button(
-                                            onClick = {
-                                                if (creativePromptInput.isNotBlank()) {
-                                                    viewModel.currentDraftName.value = creativePromptInput
-                                                }
-                                                getLiveCodeAndCall("创意引导")
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD81B60)),
-                                            contentPadding = PaddingValues(horizontal = 6.dp),
-                                            modifier = Modifier.height(28.dp),
-                                            shape = RoundedCornerShape(4.dp)
-                                        ) {
-                                            Text("创意引导", fontSize = 9.sp)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (knowledgeExplain) {
-                            Card(
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
-                                border = BorderStroke(1.dp, Color(0xFFF48FB1)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(6.dp)) {
-                                    Text("🎓 知识点答疑：", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.Gray)
-                                    
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
-                                    ) {
-                                        listOf("循环", "变量", "广播", "坐标").forEach { chip ->
-                                            Text(
-                                                text = "🏷️ $chip",
-                                                fontSize = 8.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFFC2185B),
-                                                modifier = Modifier
-                                                    .background(Color(0xFFFFEEF0), RoundedCornerShape(10.dp))
-                                                    .clickable { kbPromptInput = chip }
-                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                            )
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        androidx.compose.foundation.text.BasicTextField(
-                                            value = kbPromptInput,
-                                            onValueChange = { kbPromptInput = it },
-                                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.Black),
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .background(Color(0xFFF5F5F5), RoundedCornerShape(4.dp))
-                                                .padding(6.dp),
-                                            decorationBox = { innerTextField ->
-                                                if (kbPromptInput.isEmpty()) {
-                                                    Text("选择或输入知识点...", fontSize = 9.sp, color = Color.Gray)
-                                                }
-                                                innerTextField()
-                                            }
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Button(
-                                            onClick = {
-                                                if (kbPromptInput.isNotBlank()) {
-                                                    getLiveCodeAndCall("知识点讲解")
-                                                } else {
-                                                    Toast.makeText(context, "请先输入或选择要讲解的知识点！", Toast.LENGTH_SHORT).show()
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF009688)),
-                                        contentPadding = PaddingValues(horizontal = 6.dp),
-                                        modifier = Modifier.height(28.dp),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Text("考点讲解", fontSize = 9.sp)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-                item {
-                    Text(
-                        text = "💬 诊断与辅导面板：",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF880E4F),
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                }
-
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 100.dp, max = 220.dp)
-                                .padding(10.dp)
-                        ) {
-                            if (aiLoading) {
-                                Column(
-                                    modifier = Modifier.align(Alignment.Center),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    CircularProgressIndicator(color = Color(0xFFE91E63), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    val loadingMsg = if (aiResultType == "创意引导") {
-                                        "正在分析你的代码，请稍候..."
-                                    } else {
-                                        "精灵姐姐正在全力思索中..."
-                                    }
-                                    Text(loadingMsg, fontSize = 9.sp, color = Color.Gray)
-                                }
-                            } else {
-                                val displayResult = aiResult
-                                val displayType = aiResultType
-                                if (displayResult != null) {
-                                    Column {
-                                        Text(text = "【$displayType】精灵解答：", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = displayResult,
-                                            fontSize = 9.5.sp,
-                                            lineHeight = 14.sp,
-                                            color = Color.Black,
-                                            modifier = Modifier.verticalScroll(rememberScrollState())
-                                        )
-                                    }
-                                } else {
-                                    Text(
-                                        text = "点击上面功能按钮，或者在下方输入框中直接提问，精灵姐姐会立即在屏幕前全力为你贴心解答噢！🌈",
-                                        fontSize = 9.5.sp,
-                                        lineHeight = 14.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                item {
-                    Text(
-                        text = "🐾 对话历史记录：",
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF880E4F)
-                    )
-                }
-
-                items(chatHistory.size) { index ->
-                    val msg = chatHistory[index]
-                    val isUser = msg.second
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
-                    ) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isUser) Color(0xFFFF8A80) else Color(0xFFF3E5F5)
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.widthIn(max = (configuration.screenWidthDp / 4).dp)
-                        ) {
-                            Column(modifier = Modifier.padding(6.dp)) {
-                                Text(
-                                    text = if (isUser) "👦 我的提问：" else "🧚 精灵姐姐：",
-                                    fontSize = 8.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isUser) Color.White else Color(0xFF7B1FA2)
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(text = msg.first, fontSize = 9.sp, color = if (isUser) Color.White else Color.Black)
-                            }
-                        }
-                    }
-                }
-            }
-
+            // Area 1: 顶部功能标签区 (Height 48dp, 16dp spacing, underline indicator)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Color(0xFFF8BBD0))
-                    .padding(8.dp),
+                    .background(Color.White)
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                androidx.compose.foundation.text.BasicTextField(
-                    value = customQuestionInput,
-                    onValueChange = { customQuestionInput = it },
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp, color = Color.Black),
+                listOf("语法纠错", "创意引导", "考点讲解").forEach { tab ->
+                    val isSelected = activeTab == tab
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { activeTab = tab }
+                            .padding(vertical = 12.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = tab,
+                                color = if (isSelected) Color(0xFFC2185B) else Color.Gray,
+                                fontSize = 14.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(36.dp)
+                                    .height(2.dp)
+                                    .background(if (isSelected) Color(0xFFC2185B) else Color.Transparent)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Area 2: 中间内容展示区 (占 70% 比例、支持完整滚动及点击历史记录展开)
+            LazyColumn(
+                modifier = Modifier
+                    .weight(0.7f)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Section: Specific Controls depending on selected tab
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        when (activeTab) {
+                            "语法纠错" -> {
+                                // Switch for Real-time detection in Optimization 1
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.White, RoundedCornerShape(8.dp))
+                                        .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFFC2185B), modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text("开启实时代码检测", fontSize = 12.sp, color = Color.Black, fontWeight = FontWeight.Medium)
+                                    }
+                                    Switch(
+                                        checked = realTimeCheckEnabled,
+                                        onCheckedChange = { onRealTimeCheckChange(it) },
+                                        colors = SwitchDefaults.colors(
+                                            checkedThumbColor = Color.White,
+                                            checkedTrackColor = Color(0xFFC2185B),
+                                            uncheckedThumbColor = Color.LightGray,
+                                            uncheckedTrackColor = Color.White
+                                        ),
+                                        modifier = Modifier.scale(0.8f)
+                                    )
+                                }
+
+                                // Interactive manually trigger button preserved
+                                Button(
+                                    onClick = { getLiveCodeAndCall("语法纠错") },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth().height(36.dp)
+                                ) {
+                                    Text("🛑 立即手动语法检测", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            "创意引导" -> {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text("💡 创意灵感库介绍", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "不知道怎么搭积木了？没关系！在下方输入一个你喜欢的主题（如“走迷宫”、“极速赛车”），点击发送，精灵姐姐就会利用魔法，根据你目前的进度送给你三大创意巧思哦！✨",
+                                            fontSize = 11.sp,
+                                            lineHeight = 15.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                            }
+                            "考点讲解" -> {
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                                    border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text("🎓 知识点小锦囊 (快速点击选择)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            listOf("循环", "变量", "广播", "坐标").forEach { chip ->
+                                                Text(
+                                                    text = "🏷️ $chip",
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFFC2185B),
+                                                    modifier = Modifier
+                                                        .background(Color(0xFFFFEEF0), RoundedCornerShape(12.dp))
+                                                        .clickable { 
+                                                            kbPromptInput = chip
+                                                        }
+                                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Current diagnostics AI result & loader
+                item {
+                    val currentTypeShow = when (activeTab) {
+                        "语法纠错" -> "语法纠错"
+                        "创意引导" -> "创意引导"
+                        else -> "知识点讲解"
+                    }
+                    if (aiLoading && aiResultType == currentTypeShow) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                CircularProgressIndicator(color = Color(0xFFC2185B), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val loadingMsg = if (aiResultType == "创意引导") {
+                                    "正在分析你的代码，请稍候..."
+                                } else {
+                                    "精灵姐姐正在全力思索中..."
+                                }
+                                Text(loadingMsg, fontSize = 12.sp, color = Color.Gray)
+                            }
+                        }
+                    } else if (aiResult != null && aiResultType == currentTypeShow) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(text = "✨ 当前分析回复：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                                Spacer(modifier = Modifier.height(6.dp))
+                                StyledAiResult(aiResult ?: "")
+                            }
+                        }
+                    }
+                }
+
+                // Dialogue history section header
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFFC2185B), modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "对话历史记录 (随时点击展开/收起)",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF880E4F)
+                        )
+                    }
+                }
+
+                // Interactive Expandable Dialogue history items list (Optimization 4)
+                items(dialogueHistory.size) { index ->
+                    val item = dialogueHistory[index]
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                dialogueHistory[index] = item.copy(isExpanded = !item.isExpanded)
+                            }
+                            .background(Color.White, RoundedCornerShape(8.dp))
+                            .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "${item.title} ${item.question}",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFC2185B),
+                                    maxLines = if (item.isExpanded) Int.MAX_VALUE else 1,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "历史时间: ${item.timestamp}",
+                                    fontSize = 10.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Icon(
+                                imageVector = if (item.isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                contentDescription = null,
+                                tint = Color(0xFFC2185B),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        if (item.isExpanded) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(Color(0xFFFCE4EC))
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
+                            Text(
+                                text = "提问或检测背景：",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray
+                            )
+                            Text(
+                                text = item.question,
+                                fontSize = 12.sp,
+                                color = Color.Black,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            
+                            Text(
+                                text = "最佳辅助回复方案：",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFFC2185B)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            StyledAiResult(item.answer)
+                        }
+                    }
+                }
+            }
+
+            // Area 3: 固定底部输入区 (Spacing of 16dp, Outlined input box 48dp height with automatic context-aware placeholders in Optimization 3)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFFCE4EC))
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                var isInputFocused by remember { mutableStateOf(false) }
+                val currentInputValue = when (activeTab) {
+                    "语法纠错" -> customQuestionInput
+                    "创意引导" -> creativePromptInput
+                    else -> kbPromptInput
+                }
+                
+                val currentHintText = when (activeTab) {
+                    "语法纠错" -> "直接在这里输入问题或跟精灵姐姐聊天吧..."
+                    "创意引导" -> "输入创作主题(如:太空飞行、打地鼠)..."
+                    else -> "选择或输入知识点..."
+                }
+
+                Box(
                     modifier = Modifier
                         .weight(1f)
+                        .height(48.dp)
+                        .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
                         .background(Color.White, RoundedCornerShape(8.dp))
-                        .padding(8.dp),
-                    decorationBox = { innerTextField ->
-                        if (customQuestionInput.isEmpty()) {
-                            Text("直接在这里输入问题向姐姐提问吧...", fontSize = 9.sp, color = Color.Gray)
-                        }
-                        innerTextField()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = currentInputValue,
+                        onValueChange = { newValue ->
+                            when (activeTab) {
+                                "语法纠错" -> customQuestionInput = newValue
+                                "创意引导" -> creativePromptInput = newValue
+                                else -> kbPromptInput = newValue
+                            }
+                        },
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = Color.Black),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { focusState ->
+                                isInputFocused = focusState.isFocused
+                            }
+                    )
+                    
+                    // Standard Android Hint logic matching Optimization 3
+                    val showHint = !isInputFocused && currentInputValue.isEmpty()
+                    if (showHint) {
+                        Text(
+                            text = currentHintText,
+                            fontSize = 12.sp,
+                            color = Color(0xFF999999) // Light grey placeholder
+                        )
                     }
-                )
-                Spacer(modifier = Modifier.width(6.dp))
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
                 Button(
                     onClick = {
-                        if (customQuestionInput.isNotBlank()) {
-                            val userQ = customQuestionInput
-                            chatHistory.add(Pair(userQ, true))
-                            customQuestionInput = ""
-                            coroutineScope.launch {
-                                try {
-                                    lazyListState.animateScrollToItem(chatHistory.size)
-                                } catch(e: Exception) {}
-                            }
-                            
-                            viewModel.callAiCustomQuestion(userQ) { response ->
-                                chatHistory.add(Pair(response, false))
-                                coroutineScope.launch {
-                                    try {
-                                        lazyListState.animateScrollToItem(chatHistory.size)
-                                    } catch(e: Exception) {}
+                        if (currentInputValue.isNotBlank()) {
+                            when (activeTab) {
+                                "语法纠错" -> {
+                                    val userQ = customQuestionInput
+                                    customQuestionInput = ""
+                                    val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                                    
+                                    // Add to history list immediately
+                                    dialogueHistory.add(0, DialogueHistoryItem(
+                                        title = "【自定义提问】",
+                                        question = userQ,
+                                        answer = "正在全力思索中...",
+                                        timestamp = timeStr
+                                    ))
+                                    
+                                    viewModel.callAiCustomQuestion(userQ) { response ->
+                                        val idx = dialogueHistory.indexOfFirst { it.question == userQ && it.answer == "正在全力思索中..." }
+                                        if (idx != -1) {
+                                            dialogueHistory[idx] = dialogueHistory[idx].copy(answer = response)
+                                        }
+                                    }
+                                }
+                                "创意引导" -> {
+                                    val liveTheme = creativePromptInput
+                                    if (liveTheme.isNotBlank()) {
+                                        viewModel.currentDraftName.value = liveTheme
+                                    }
+                                    getLiveCodeAndCall("创意引导")
+                                }
+                                "考点讲解" -> {
+                                    getLiveCodeAndCall("知识点讲解")
                                 }
                             }
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B)),
                     shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.height(32.dp),
-                    contentPadding = PaddingValues(horizontal = 10.dp)
+                    modifier = Modifier.height(48.dp),
+                    contentPadding = PaddingValues(horizontal = 16.dp)
                 ) {
-                    Text("发送 🚀", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Text("发送 🚀", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
         }
