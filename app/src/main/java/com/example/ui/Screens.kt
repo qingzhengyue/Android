@@ -1704,6 +1704,14 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     // - 单指触屏时直接关闭 WebView 的 supportZoom 以免干扰 Scratch 积木正常拼搭
                     setOnTouchListener { v, event ->
                         v.parent?.requestDisallowInterceptTouchEvent(true)
+                        if (event.action == android.view.MotionEvent.ACTION_DOWN) {
+                            if (showAiAssistSheet) {
+                                showAiAssistSheet = false
+                            }
+                            if (showMagicBoxDrawer) {
+                                showMagicBoxDrawer = false
+                            }
+                        }
                         val pointerCount = event.pointerCount
                         if (pointerCount >= 2) {
                             settings.setSupportZoom(true)
@@ -1802,6 +1810,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 exit = slideOutHorizontally(animationSpec = androidx.compose.animation.core.tween(250)) { it } + fadeOut(animationSpec = androidx.compose.animation.core.tween(250))
             ) {
                 AiAssistPanel(
+                    webView = webViewInstance,
                     viewModel = viewModel,
                     onClose = { showAiAssistSheet = false }
                 )
@@ -1842,109 +1851,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         )
     }
 
-    // AI 辅助弹窗
-    if (showAiAssistSheet) {
-        AlertDialog(
-            onDismissRequest = { showAiAssistSheet = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Memory, contentDescription = null, tint = Color(0xFFFF9800))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("AI 少儿编程小搭档")
-                }
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text(
-                        text = "选择一个辅助小锦囊，AI 姐姐会根据本区积木帮分析哦：",
-                        fontSize = 13.sp,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { viewModel.callAiAssistant("语法纠错") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFF44336)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
-                            modifier = Modifier.weight(0.3f).widthIn(min = 120.dp)
-                        ) {
-                            Text("语法纠错", fontSize = 16.sp, maxLines = 1, softWrap = false)
-                        }
-                        Button(
-                            onClick = { viewModel.callAiAssistant("创意引导") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
-                            modifier = Modifier.weight(0.3f).widthIn(min = 120.dp)
-                        ) {
-                            Text("创意引导", fontSize = 16.sp, maxLines = 1, softWrap = false)
-                        }
-                        Button(
-                            onClick = { viewModel.callAiAssistant("知识点讲解") },
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF009688)),
-                            shape = RoundedCornerShape(8.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 16.dp),
-                            modifier = Modifier.weight(0.3f).widthIn(min = 120.dp)
-                        ) {
-                            Text("考点讲解", fontSize = 16.sp, maxLines = 1, softWrap = false)
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Text(
-                        text = aiResultType.ifEmpty { "诊断类型" } + " - 评析结果：",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = Color(0xFF333333)
-                    )
-
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = 120.dp, max = 220.dp)
-                                .padding(12.dp)
-                                .verticalScroll(rememberScrollState())
-                        ) {
-                            if (aiLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.align(Alignment.Center),
-                                    color = Color(0xFFFF9800)
-                                )
-                            } else {
-                                Text(
-                                    text = aiResult ?: "点击上方的引导按钮，立即获取 AI 智能纠错与指导思路吧！",
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp,
-                                    color = if (aiResult != null) Color.Black else Color.Gray
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(onClick = { showAiAssistSheet = false }) {
-                    Text("退出辅助")
-                }
-            }
-        )
-    }
 
     // 回溯本地草稿 Dialog
     if (showLoadDraftDialog) {
@@ -5296,12 +5203,43 @@ fun getXmlForBlockText(blockText: String): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiAssistPanel(
+    webView: WebView?,
     viewModel: MainViewModel,
     onClose: () -> Unit
 ) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val panelWidth = (configuration.screenWidthDp / 3).dp
     val context = androidx.compose.ui.platform.LocalContext.current
+    
+    fun getLiveCodeAndCall(funcType: String) {
+        if (webView != null) {
+            webView.evaluateJavascript(
+                "(function() { " +
+                "  try { " +
+                "    if (window.vm) { return JSON.stringify(window.vm.toJSON()); } " +
+                "    else if (window.scratch && window.scratch.vm) { return JSON.stringify(window.scratch.vm.toJSON()); } " +
+                "    else if (typeof Blockly !== 'undefined') { " +
+                "         var xml = Blockly.Xml.workspaceToDom(Blockly.mainWorkspace); " +
+                "         return Blockly.Xml.domToText(xml); " +
+                "    } " +
+                "  } catch(e) {} " +
+                "  return ''; " +
+                "})()"
+            ) { result ->
+                val cleaned = if (result != null && result != "null" && result != "\"\"") {
+                    var s = result.trim()
+                    if (s.startsWith("\"") && s.endsWith("\"") && s.length >= 2) {
+                        s = s.substring(1, s.length - 1)
+                        s = s.replace("\\\"", "\"").replace("\\\\", "\\")
+                    }
+                    s
+                } else ""
+                viewModel.callAiAssistant(funcType, if (cleaned.isNotBlank()) cleaned else null)
+            }
+        } else {
+            viewModel.callAiAssistant(funcType)
+        }
+    }
     
     val aiLoading by viewModel.aiLoading.collectAsState()
     val aiResult by viewModel.aiResult.collectAsState()
@@ -5359,7 +5297,7 @@ fun AiAssistPanel(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("智能精灵姐姐 👩‍💻", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text("AI少儿编程小搭档", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
                 IconButton(onClick = onClose, modifier = Modifier.size(24.dp)) {
                     Icon(Icons.Default.Close, contentDescription = "关闭", tint = Color.White, modifier = Modifier.size(16.dp))
@@ -5409,7 +5347,7 @@ fun AiAssistPanel(
                                 if (grammarCorrect) {
                                     Button(
                                         onClick = { 
-                                            viewModel.callAiAssistant("语法纠错")
+                                            getLiveCodeAndCall("语法纠错")
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE91E63)),
                                         shape = RoundedCornerShape(8.dp),
@@ -5423,7 +5361,7 @@ fun AiAssistPanel(
                                 if (codeGenerate) {
                                     Button(
                                         onClick = { 
-                                            viewModel.callAiAssistant("代码优化建议")
+                                            getLiveCodeAndCall("代码优化建议")
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF8E24AA)),
                                         shape = RoundedCornerShape(8.dp),
@@ -5469,7 +5407,7 @@ fun AiAssistPanel(
                                                 if (creativePromptInput.isNotBlank()) {
                                                     viewModel.currentDraftName.value = creativePromptInput
                                                 }
-                                                viewModel.callAiAssistant("创意引导")
+                                                getLiveCodeAndCall("创意引导")
                                             },
                                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD81B60)),
                                             contentPadding = PaddingValues(horizontal = 6.dp),
@@ -5533,7 +5471,7 @@ fun AiAssistPanel(
                                         Button(
                                             onClick = {
                                                 if (kbPromptInput.isNotBlank()) {
-                                                    viewModel.callAiAssistant("知识点讲解")
+                                                    getLiveCodeAndCall("知识点讲解")
                                                 } else {
                                                     Toast.makeText(context, "请先输入或选择要讲解的知识点！", Toast.LENGTH_SHORT).show()
                                                 }
@@ -5581,7 +5519,12 @@ fun AiAssistPanel(
                                 ) {
                                     CircularProgressIndicator(color = Color(0xFFE91E63), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
                                     Spacer(modifier = Modifier.height(6.dp))
-                                    Text("精灵姐姐正在全力思索中...", fontSize = 9.sp, color = Color.Gray)
+                                    val loadingMsg = if (aiResultType == "创意引导") {
+                                        "正在分析你的代码，请稍候..."
+                                    } else {
+                                        "精灵姐姐正在全力思索中..."
+                                    }
+                                    Text(loadingMsg, fontSize = 9.sp, color = Color.Gray)
                                 }
                             } else {
                                 val displayResult = aiResult

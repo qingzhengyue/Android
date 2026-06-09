@@ -482,7 +482,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- AI 实时辅助功能 ---
-    fun callAiAssistant(funcType: String) {
+    fun callAiAssistant(funcType: String, currentCodeInjected: String? = null) {
         viewModelScope.launch {
             val studentId = _currentUserId.value
             val classId = _currentClassId.value
@@ -561,7 +561,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 6. $levelInstruction
             """.trimIndent()
 
-            val code = currentDraftCode.value
+            val code = currentCodeInjected ?: currentDraftCode.value
             val prompt = when (funcType) {
                 "语法纠错" -> """
                     $systemInstruction
@@ -569,22 +569,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     我的 Scratch 积木代码是：$code
                     请用最有爱心、最具体的口吻帮我看看：
                     1. 先热烈夸奖我今天努力编程的尝试！
-                    2. 帮我挑出有没有悬空无用的积木、或者积木没拼对顺序的“小逻辑冲突（小迷糊）”。
+                    2. 帮我挑出有没有悬空无用的积木、或者积木没拼对顺序 of “小逻辑冲突（小迷糊）”。
                     3. 给出特别可执行的、①②③步极简拼搭改错步骤，告诉我在哪个积木分区，找什么积木，换到哪一步拼好。
                 """.trimIndent()
                 
                 "创意引导" -> """
-                    $systemInstruction
+                    你是一位耐心的少儿编程老师，请分析以下学生正在编写的Scratch项目代码，结合学生当前的编程进度和已有积木，给出3个具体、可操作的创意优化建议。
+                    要求：
+                    1.  必须基于学生已有的代码进行扩展，不能凭空给出完全无关的建议
+                    2.  建议要具体到使用哪些积木块，实现什么效果
+                    3.  语言要通俗易懂，适合小学3-6年级学生理解
+                    4.  语气要鼓励性，多用"你可以试试..."、"太棒了！你还可以..."这样的表达
                     
-                    我的作品主题是【${currentDraftName.value}】。我现在的积木块是：$code
-                    请给我 2个 简单、好玩并且小孩子很容易做出来的进阶创意点子，能让我的作品变得好玩10倍！
-                    对于每个点子，请给出极度具体的、小学生一二三拼搭步骤指南，格式如下：
-                    🎈 创意亮点：...
-                    💡 好玩在什么地方：...
-                    🐾 推荐拼插魔法步骤：
-                    ① 点击左边【什么颜色分类】...
-                    ② 拖出【什么名字积木】...
-                    ③ 拼在【什么积木】下面...
+                    学生当前项目代码：$code
+                    学生的问题/需求：${currentDraftName.value.ifEmpty { "自由拓展与创意优化" }}
                 """.trimIndent()
                 
                 "知识点讲解" -> """
