@@ -29,54 +29,100 @@ object GeminiClient {
                     "\n\n1. 已经为您保存了最新草稿！\n2. 积木块逻辑分析说明：重复漫步需要结合‘碰到边缘反弹’积木才不会走丢。请重试拼装。"
         }
 
-        try {
-            // 构建标准的 Gemini API 请求 JSON 体
-            val requestBodyJson = JSONObject()
-            val contentsArray = JSONArray()
-            val contentObj = JSONObject()
-            val partsArray = JSONArray()
-            val partObj = JSONObject()
+        var attempts = 0
+        val maxAttempts = 3
+        var lastErrCode = 0
+        var lastErrMsg = ""
 
-            partObj.put("text", prompt)
-            partsArray.put(partObj)
-            contentObj.put("parts", partsArray)
-            contentsArray.put(contentObj)
-            requestBodyJson.put("contents", contentsArray)
+        while (attempts <= maxAttempts) {
+            try {
+                // 构建标准的 Gemini API 请求 JSON 体
+                val requestBodyJson = JSONObject()
+                val contentsArray = JSONArray()
+                val contentObj = JSONObject()
+                val partsArray = JSONArray()
+                val partObj = JSONObject()
 
-            // 配置降低随机度以提供针对编程领域的准确评价
-            val generationConfig = JSONObject()
-            generationConfig.put("temperature", 0.2)
-            requestBodyJson.put("generationConfig", generationConfig)
+                partObj.put("text", prompt)
+                partsArray.put(partObj)
+                contentObj.put("parts", partsArray)
+                contentsArray.put(contentObj)
+                requestBodyJson.put("contents", contentsArray)
 
-            val request = Request.Builder()
-                .url("$BASE_URL?key=$apiKey")
-                .post(requestBodyJson.toString().toRequestBody(mediaType))
-                .build()
+                // 配置降低随机度以提供针对编程领域的准确评价
+                val generationConfig = JSONObject()
+                generationConfig.put("temperature", 0.2)
+                requestBodyJson.put("generationConfig", generationConfig)
 
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    val errorMsg = response.body?.string() ?: ""
-                    return@withContext "AI 发生网络错误 (网络代码 ${response.code}): $errorMsg"
-                }
+                val request = Request.Builder()
+                    .url("$BASE_URL?key=$apiKey")
+                    .post(requestBodyJson.toString().toRequestBody(mediaType))
+                    .build()
 
-                val responseBody = response.body?.string() ?: return@withContext "无返回结果"
-                val responseJson = JSONObject(responseBody)
-                val candidates = responseJson.optJSONArray("candidates")
-                if (candidates != null && candidates.length() > 0) {
-                    val firstCandidate = candidates.getJSONObject(0)
-                    val content = firstCandidate.optJSONObject("content")
-                    if (content != null) {
-                        val parts = content.optJSONArray("parts")
-                        if (parts != null && parts.length() > 0) {
-                            return@withContext parts.getJSONObject(0).optString("text")
+                client.newCall(request).execute().use { response ->
+                    val code = response.code
+                    if (response.isSuccessful) {
+                        val responseBody = response.body?.string() ?: return@withContext "无返回结果"
+                        val responseJson = JSONObject(responseBody)
+                        val candidates = responseJson.optJSONArray("candidates")
+                        if (candidates != null && candidates.length() > 0) {
+                            val firstCandidate = candidates.getJSONObject(0)
+                            val content = firstCandidate.optJSONObject("content")
+                            if (content != null) {
+                                val parts = content.optJSONArray("parts")
+                                if (parts != null && parts.length() > 0) {
+                                    return@withContext parts.getJSONObject(0).optString("text")
+                                }
+                            }
+                        }
+                        return@withContext "AI 返回了空的信息，请稍后重试。"
+                    } else {
+                        val errorMsg = response.body?.string() ?: ""
+                        lastErrCode = code
+                        lastErrMsg = errorMsg
+
+                        // If it's a server error (503, 500, 502), we retry
+                        if (code == 503 || code == 500 || code == 502) {
+                            if (attempts < maxAttempts) {
+                                attempts++
+                                val delayTime = when (attempts) {
+                                    1 -> 1000L
+                                    2 -> 2000L
+                                    else -> 4000L
+                                }
+                                kotlinx.coroutines.delay(delayTime)
+                                continue
+                            }
+                        }
+                        
+                        // Non-retryable error, or exceeded retries
+                        if (code == 503) {
+                            return@withContext "AI老师正在忙，请稍后再试"
+                        } else {
+                            return@withContext "网络连接异常，请检查您的网络"
                         }
                     }
                 }
-                "AI 返回了空的信息，请稍后重试。"
+            } catch (e: Exception) {
+                e.printStackTrace()
+                if (attempts < maxAttempts) {
+                    attempts++
+                    val delayTime = when (attempts) {
+                        1 -> 1000L
+                        2 -> 2000L
+                        else -> 4000L
+                    }
+                    try { kotlinx.coroutines.delay(delayTime) } catch(ie: Exception){}
+                    continue
+                }
+                return@withContext "网络连接异常，请检查您的网络"
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            "AI 助手请求异常: ${e.message ?: "未知错误"}"
+        }
+
+        if (lastErrCode == 503) {
+            "AI老师正在忙，请稍后再试"
+        } else {
+            "网络连接异常，请检查您的网络"
         }
     }
 

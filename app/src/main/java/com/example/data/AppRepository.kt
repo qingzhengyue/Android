@@ -123,6 +123,15 @@ class AppRepository(private val context: Context) {
 
     fun getAssistRecordsByStudent(studentId: Int): Flow<List<AiAssistRecord>> = dao.getAssistRecordsByStudentFlow(studentId)
 
+    fun getAssistRecordsByStudentAndType(studentId: Int, type: Int): Flow<List<AiAssistRecord>> =
+        dao.getAssistRecordsByStudentAndTypeFlow(studentId, type)
+
+    suspend fun deleteTaskWithSubmissions(taskId: Int) = withContext(Dispatchers.IO) {
+        dao.deleteAiReportsByTaskId(taskId)
+        dao.deleteWorksByTaskId(taskId)
+        dao.deleteTaskById(taskId)
+    }
+
     suspend fun checkDailyAssistOk(studentId: Int, classId: Int): Boolean = withContext(Dispatchers.IO) {
         // 今日起始结束时间
         val calendar = java.util.Calendar.getInstance()

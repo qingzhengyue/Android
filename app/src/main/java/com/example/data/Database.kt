@@ -78,6 +78,7 @@ data class AiAssistRecord(
     @ColumnInfo(name = "studentId") val studentId: Int, // 调用学生ID
     @ColumnInfo(name = "classId") val classId: Int, // 所属班级ID
     @ColumnInfo(name = "assistType") val assistType: String, // 辅助功能类型: "语法纠错", "创意引导", "知识点讲解"
+    @ColumnInfo(name = "assist_type", defaultValue = "1") val assistTypeInt: Int = 1, // 1=语法纠错，2=创意引导，3=考点讲解
     @ColumnInfo(name = "callTime") val callTime: Long = System.currentTimeMillis(), // 调用时间
     @ColumnInfo(name = "requestContent") val requestContent: String, // 学生请求内容（或输入的问题 / 积木代码段说明）
     @ColumnInfo(name = "aiResult") val aiResult: String, // AI返回结果
@@ -212,11 +213,23 @@ interface AppDao {
     @Query("SELECT * FROM ai_assist_record WHERE studentId = :studentId ORDER BY callTime DESC")
     fun getAssistRecordsByStudentFlow(studentId: Int): Flow<List<AiAssistRecord>>
 
+    @Query("SELECT * FROM ai_assist_record WHERE studentId = :studentId AND assist_type = :type ORDER BY callTime DESC")
+    fun getAssistRecordsByStudentAndTypeFlow(studentId: Int, type: Int): Flow<List<AiAssistRecord>>
+
     @Query("SELECT COUNT(*) FROM ai_assist_record WHERE studentId = :studentId AND callTime >= :startOfDay AND callTime <= :endOfDay")
     suspend fun getDailyAssistCount(studentId: Int, startOfDay: Long, endOfDay: Long): Int
 
     @Query("SELECT COUNT(*) FROM ai_assist_record WHERE classId = :classId")
     suspend fun getAiAssistCountByClass(classId: Int): Int
+
+    @Query("DELETE FROM work_ai_report WHERE workId IN (SELECT workId FROM scratch_work WHERE taskId = :taskId)")
+    suspend fun deleteAiReportsByTaskId(taskId: Int)
+
+    @Query("DELETE FROM scratch_work WHERE taskId = :taskId")
+    suspend fun deleteWorksByTaskId(taskId: Int)
+
+    @Query("DELETE FROM learning_task WHERE taskId = :taskId")
+    suspend fun deleteTaskById(taskId: Int)
 
     // --- 作品提交 ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -272,7 +285,7 @@ interface AppDao {
         ScratchWork::class,
         WorkAiReport::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
