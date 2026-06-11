@@ -193,6 +193,9 @@ interface AppDao {
     @Query("UPDATE learning_task SET status = :status WHERE taskId = :taskId")
     suspend fun updateTaskStatus(taskId: Int, status: String)
 
+    @Query("UPDATE learning_task SET taskName = :name, taskDetail = :detail, grade = :grade, deadline = :deadline, deadlineTime = :deadlineTime WHERE taskId = :taskId")
+    suspend fun updateTaskDetails(taskId: Int, name: String, detail: String, grade: String, deadline: String, deadlineTime: Long)
+
     // --- 草稿操作 ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDraft(draft: ScratchDraft): Long

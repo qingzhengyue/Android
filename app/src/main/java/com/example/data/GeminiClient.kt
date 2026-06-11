@@ -22,7 +22,11 @@ object GeminiClient {
 
     private val mediaType = "application/json; charset=utf-8".toMediaType()
 
-    suspend fun generateContent(prompt: String): String = withContext(Dispatchers.IO) {
+    suspend fun generateContent(prompt: String, hasNetwork: Boolean = true): String = withContext(Dispatchers.IO) {
+        if (!hasNetwork) {
+            return@withContext "网络连接异常，请检查您的网络"
+        }
+
         val apiKey = BuildConfig.GEMINI_API_KEY
         if (apiKey == "MY_GEMINI_API_KEY" || apiKey.isEmpty()) {
             return@withContext "【API 密钥未配置】请在 AI Studio 的 Secrets 面板中配置您的 GEMINI_API_KEY 密码。当前展示本地仿真响应：" +
@@ -98,8 +102,12 @@ object GeminiClient {
                         // Non-retryable error, or exceeded retries
                         if (code == 503) {
                             return@withContext "AI老师正在忙，请稍后再试"
+                        } else if (code == 500 || code == 502) {
+                            return@withContext "AI老师暂时无法回答，请稍后再试"
+                        } else if (code == 401 || code == 403) {
+                            return@withContext "授权失败，请重新登录"
                         } else {
-                            return@withContext "网络连接异常，请检查您的网络"
+                            return@withContext "AI老师暂时无法回答，请稍后再试"
                         }
                     }
                 }
@@ -115,14 +123,21 @@ object GeminiClient {
                     try { kotlinx.coroutines.delay(delayTime) } catch(ie: Exception){}
                     continue
                 }
-                return@withContext "网络连接异常，请检查您的网络"
+                if (e is java.net.SocketTimeoutException) {
+                    return@withContext "请求超时，请检查网络后重试"
+                }
+                return@withContext "AI老师暂时无法回答，请稍后再试"
             }
         }
 
         if (lastErrCode == 503) {
             "AI老师正在忙，请稍后再试"
+        } else if (lastErrCode == 500 || lastErrCode == 502) {
+            "AI老师暂时无法回答，请稍后再试"
+        } else if (lastErrCode == 401 || lastErrCode == 403) {
+            "授权失败，请重新登录"
         } else {
-            "网络连接异常，请检查您的网络"
+            "AI老师暂时无法回答，请稍后再试"
         }
     }
 

@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -41,7 +42,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val classesList: StateFlow<List<ClassEntity>> = _classesList.asStateFlow()
 
     // --- 当前编程草稿工作区状态 ---
-    val currentDraftCode = MutableStateFlow(getTemplateCode(1)) // 默认加载猫咪模板
+    val currentDraftCode = MutableStateFlow(staticGetTemplateCode(1)) // 默认加载猫咪模板
     val currentDraftName = MutableStateFlow("我的太空漫步草稿")
     val currentTaskId = MutableStateFlow<Int?>(null)
     val currentTaskName = MutableStateFlow<String?>(null)
@@ -485,13 +486,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val studentId = _currentUserId.value
             val classId = _currentClassId.value
-            private var realTimeCheckJob: Job? = null
+            if (studentId == -1) {
+                onResult("错误：请先登录")
+                return@launch
+            }
+            _currentBtnLoading.value = true
+            try {
+                val work = ScratchWork(
+                    studentId = studentId,
+                    classId = classId,
+                    taskId = currentTaskId.value ?: 0,
+                    submitCount = 1,
+                    workName = currentDraftName.value,
+                    workCode = currentDraftCode.value,
+                    submitTime = System.currentTimeMillis(),
+                    reviewStatus = "已评测"
+                )
+                val report = repository.submitWorkAndEvaluate(work)
+                onResult("作品提报并评测成功！综合评分：${report.averageScore} 分，精细诊断细节已产生 ~")
+                onUserLoggedIn() // refresh lists
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult("作答提交异常或网络超时，请重载或向老师反馈")
+            } finally {
+                _currentBtnLoading.value = false
+            }
+        }
+    }
+
+    private var realTimeCheckJob: kotlinx.coroutines.Job? = null
     private var lastAiCallTime = 0L
 
     // --- AI 实时辅助功能 ---
     fun callAiAssistant(funcType: String, currentCodeInjected: String? = null) {
         if (funcType == "语法纠错") {
-            realTimeCheckJob?.cancel()
+            realTimeCheckJob?.let { it.cancel() }
         }
         val job = viewModelScope.launch {
             if (funcType == "语法纠错") {
@@ -566,16 +595,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律 and 实际能力。"
 
             val systemInstruction = """
-                你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程(Scratch 3.0)“编程精灵姐姐”。
-                因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
+                你是一个超级有爱心、说话极其温柔和蔼、充满童趣 of 少儿编程(Scratch 3.0)“编程精灵姐姐”。
+                因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合 their 认知规律 and 心理特点：
                 1. 【态度特别温柔、热情】：千万不能用成年人冰冷严肃的书面式文字！多用鼓励性话语（如“宝贝真棒！”、“这个创意妙极了！”、“来，精灵姐姐教你一个新魔法！”），并多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
                 2. 【绝对要具体、提供一步步可跟着做的动作指南】：绝对不要讲抽象概念（诸如“在适当的生命周期回调中加入循环”、“保证边界校验完整”等）。必须具体到：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字的积木】并用手指拖拽出来；第三步，把它粘在【什么积木】的下面。
                 3. 【一定要用有趣好玩的比喻解说术语】：
                    - 【变量】比作“用来收纳玩具的魔法彩色小盒子”。
                    - 【循环/重复执行】比作“小猫坐上了永远停不下来的欢快旋转木马”。
                    - 【条件判断/如果..那么】比作“天气预报小哨兵”，只在符合条件时才吹哨放行。
-                   - 【坐标(X, Y)】比作“小猫站在一排横座位和一排纵座位交叉的方格教室里”。
-                4. 【视觉分段排版】：句子短小，多用 ①、②、③ 标清动手步骤，重点积木和参数名字用中括号【】和粗体加亮以便小学生看清。
+                   - 【坐标(X, Y)】比作“小猫站在一排横座位 and 一排纵座位交叉的方格教室里”。
+                4. 【视觉分段排版】：句子短小，多用 ①、②、③ 标清动手步骤，重点积木 and 参数名字用中括号【】和粗体加亮以便小学生看清。
                 5. $styleInstruction
                 6. $levelInstruction
             """.trimIndent()
@@ -589,31 +618,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     请帮我分析这份代码，找出其中的语法错误、逻辑冲突或没对齐没拼好的地方，并按以下标准格式给出诊断指导：
                     
                     每个发现的问题，必须以两个核心标签起头输出：
-                    【错误提示】: (说明在积木何处出现了什么原因的逻辑小迷糊/错误)
+                    【错误提示】: (说明在积木何处出现了什么原因 of 逻辑小迷糊/错误)
                     【修正建议】: (教导孩子应该如何拼搭、拖动、或者如何改好积木)
                     
-                    即使在开头热烈表扬和夸奖学生，也必须在正文中针对检测到的语法和逻辑错误严格使用上述两个标记标签！
+                    即使在开头热烈表扬和夸奖学生，也必须在正文中针对检测到的语法 and 逻辑错误严格使用上述两个标记标签！
                 """.trimIndent()
                 
                 "创意引导" -> """
-                    你是一位耐心的少儿编程老师，请分析以下学生正在编写的Scratch项目代码，结合学生当前的编程进度和已有积木，给出3个具体、可操作的创意优化建议。
-                    要求：
-                    1.  必须基于学生已有的代码进行扩展，不能凭空给出完全无关的建议
-                    2.  建议要具体到使用哪些积木块，实现效果是什么
-                    3.  语言要通俗易懂，适合小学3-6年级学生理解
-                    4.  语气要鼓励性，多用"你可以试试..."、"太棒了！你还可以..."这样的表达
-                    
-                    学生当前项目代码：$code
-                    学生的问题/需求：${currentDraftName.value.ifEmpty { "自由拓展与创意优化" }}
-                """.trimIndent()
-                
-                "知识点讲解" -> """
                     $systemInstruction
                     
-                    请帮我讲讲我现在做出来的这个 Scratch 积木代码：$code
-                    1. 用崇拜和赞美的语气告诉我这里面用到的最酷的“编程魔法知识点”是什么。
-                    2. 面向小学生，用生动形象的比喻（例如玩具盒、旋转木马、小哨兵）解释这个知识点的妙用。
-                    3. 告诉我这个魔法在别的小游戏（例如打地鼠、接水果等）里面可以怎么用来创造乐趣。
+                    我想在这个作品的基础上进行一些好玩的创意延展。
+                    我的 Scratch 积木代码目前是：$code
+                    请给我 2-3 个好玩有趣的、可以让作品画面更动感/更有趣/更好玩的小魔法（创意点子）！
+                    每一个小魔法，必须先用一个有趣的名字包装，然后写出具体的积木拼法：
+                    - 分步骤①、②、③说明怎么拖拽哪类积木，把它拼插在哪里，参数改成什么。
+                    - 每个小点子最后，加上一小句甜甜的鼓励，说明这个魔法在别的小游戏（例如打地鼠、接水果等）里面可以怎么用来创造乐趣。
                 """.trimIndent()
                 
                 "代码优化建议" -> """
@@ -622,7 +641,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     我的 Scratch 积木代码是：$code
                     请以极其温柔、富有童趣的口吻，帮我看看这个代码有没有可以精简或者优化的地方：
                     1. 热烈赞赏我当前的编写，指出写得棒的地方！
-                    2. 告诉我有没有重复拼搭或者可以更巧妙用“重复执行”或“变量”来减少多余积木的思路。
+                    2. 告诉我有没有重复拼搭或者可以更巧妙用“重复执行”或者“变量”来减少多余积木的思路。
                     3. 给出幽默而通俗的比喻，并说明一二三步具体的优化教程。
                 """.trimIndent()
                 
@@ -630,7 +649,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             // 3. 异步获取 Gemini 响应并填充记录
-            val aiResponse = GeminiClient.generateContent(prompt)
+            val aiResponse = try {
+                GeminiClient.generateContent(prompt)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                "AI老师正在忙，请稍后再试"
+            }
             _aiResult.value = aiResponse
 
             val isFailed = aiResponse == "AI老师正在忙，请稍后再试" || aiResponse == "网络连接异常，请检查您的网络"
@@ -708,19 +732,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律和实际能力。"
 
             val systemInstruction = """
-                你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程(Scratch 3.0)“编程精灵姐姐”。
+                你是一个超级有爱心、说话极其温柔和蔼、充满童趣 of 少儿编程(Scratch 3.0)“编程精灵姐姐”。
                 因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
                 1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
                 2. 【绝对要具体、提供一步步可跟着做的动作指南】。
-                例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字的积木】并用手指拖拽出来；第三步，把它贴在组件下方。
+                例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字 of 积木】并用手指拖拽出来；第三步，把它贴在组件下方。
                 3. $styleInstruction
                 4. $levelInstruction
-                现有 Scratch 代码如下：
+                现有 Scratch 代码如下:
                 $code
             """.trimIndent()
 
             val prompt = "$systemInstruction\n\n小朋友问：“$question”"
-            val response = GeminiClient.generateContent(prompt)
+            val response = try {
+                GeminiClient.generateContent(prompt)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                "AI老师正在忙，请稍后再试"
+            }
             onResponse(response)
 
             val isFailed = response == "AI老师正在忙，请稍后再试" || response == "网络连接异常，请检查您的网络"
@@ -743,105 +772,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     classId = classId,
                     assistType = "在线对答",
                     assistTypeInt = 1, // On-line dialog under grammar correctness tab
-                    requestContent = question,
-                    aiResult = response,
-                    draftId = null
-                )
-            )
-            _aiLoading.value = false
-        }
-    }�法在别的小游戏（例如打地鼠、接水果等）里面可以怎么用来创造乐趣。
-                """.trimIndent()
-                
-                "代码优化建议" -> """
-                    $systemInstruction
-                    
-                    我的 Scratch 积木代码是：$code
-                    请以极其温柔、富有童趣的口吻，帮我看看这个代码有没有可以精简或者优化的地方：
-                    1. 热烈赞赏我当前的编写，指出写得棒的地方！
-                    2. 告诉我有没有重复拼搭或者可以更巧妙用“重复执行”或“变量”来减少多余积木的思路。
-                    3. 给出幽默而通俗的比喻，并说明一二三步具体的优化教程。
-                """.trimIndent()
-                
-                else -> "$systemInstruction\n请分析以下Scratch积木代码并给出温暖有爱的具体拼搭指引：$code"
-            }
-
-            // 3. 异步获取 Gemini 响应并填充记录
-            val aiResponse = GeminiClient.generateContent(prompt)
-            _aiResult.value = aiResponse
-
-            // 4. 写回本地调用日志供记录审计
-            repository.saveAssistRecord(
-                AiAssistRecord(
-                    studentId = studentId,
-                    classId = classId,
-                    assistType = funcType,
-                    requestContent = "对应草稿: ${currentDraftName.value}",
-                    aiResult = aiResponse,
-                    draftId = null
-                )
-            )
-            _aiLoading.value = false
-        }
-    }
-
-    fun callAiCustomQuestion(question: String, onResponse: (String) -> Unit) {
-        viewModelScope.launch {
-            val studentId = _currentUserId.value
-            val classId = _currentClassId.value
-            if (studentId == -1) return@launch
-
-            _aiLoading.value = true
-            _aiDailyLimitReached.value = false
-
-            // 1. 验证调用额度限制
-            val countOk = repository.checkDailyAssistOk(studentId, classId)
-            if (!countOk) {
-                _aiDailyLimitReached.value = true
-                onResponse("【调用超额】你今天调用 AI 实时辅助的资助限额已经用完啦！请向王老师申请解除上限，或者明天再来向 AI 姐姐提问哦！")
-                _aiLoading.value = false
-                return@launch
-            }
-
-            val code = currentDraftCode.value
-            val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
-            var level = "三年级"
-            var style = "趣味活泼"
-            if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
-                try {
-                    val json = org.json.JSONObject(classDesc)
-                    level = json.optString("level", "三年级")
-                    style = json.optString("style", "趣味活泼")
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-
-            val styleInstruction = "【语调特色】：特别注意，你现在说话的辅导语调语气必须表现出【$style】的提示词特色风格。"
-            val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律和实际能力。"
-
-            val systemInstruction = """
-                你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程(Scratch 3.0)“编程精灵姐姐”。
-                因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
-                1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
-                2. 【绝对要具体、提供一步步可跟着做的动作指南】。
-                例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字的积木】并用手指拖拽出来；第三步，把它贴在组件下方。
-                3. $styleInstruction
-                4. $levelInstruction
-                现有 Scratch 代码如下：
-                $code
-            """.trimIndent()
-
-            val prompt = "$systemInstruction\n\n小朋友问：“$question”"
-            val response = GeminiClient.generateContent(prompt)
-            onResponse(response)
-
-            // 写回本地调用日志
-            repository.saveAssistRecord(
-                AiAssistRecord(
-                    studentId = studentId,
-                    classId = classId,
-                    assistType = "在线对答",
                     requestContent = question,
                     aiResult = response,
                     draftId = null
@@ -1134,10 +1064,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- 静态获取 Scratch 练习模板代码 ---
+    // --- 获取 Scratch 练习模板代码 ---
     fun getTemplateCode(id: Int): String {
-        return when (id) {
-            1 -> """{
+        return staticGetTemplateCode(id)
+    }
+}
+
+// --- 静态外置获取 Scratch 练习模板代码，用于在 ViewModel 初始化时提供初始值 ---
+fun staticGetTemplateCode(id: Int): String {
+    return when (id) {
+        1 -> """{
   "targets": [
     {
       "isStage": false,
@@ -1152,7 +1088,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
   ]
 }"""
-            2 -> """{
+        2 -> """{
   "targets": [
     { "isStage": true, "name": "核心舞台", "variables": { "v_score": ["得分", 0] } },
     {
@@ -1168,7 +1104,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
   ]
 }"""
-            3 -> """{
+        3 -> """{
   "targets": [
     {
       "isStage": false,
@@ -1181,7 +1117,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
   ]
 }"""
-            else -> "{}"
-        }
+        else -> "{}"
     }
 }

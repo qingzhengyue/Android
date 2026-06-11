@@ -267,4 +267,18 @@ class AppRepository(private val context: Context) {
     suspend fun updateWorkReview(workId: Int, status: String, score: Int?, comment: String?) = withContext(Dispatchers.IO) {
         dao.updateWorkReview(workId, status, score, comment, System.currentTimeMillis())
     }
+
+    suspend fun updateTaskDetails(taskId: Int, name: String, detail: String, grade: String, deadline: String, deadlineTime: Long) = withContext(Dispatchers.IO) {
+        dao.updateTaskDetails(taskId, name, detail, grade, deadline, deadlineTime)
+    }
+
+    suspend fun updateTaskStatus(taskId: Int, status: String) = withContext(Dispatchers.IO) {
+        dao.updateTaskStatus(taskId, status)
+    }
+
+    suspend fun deleteTask(taskId: Int) = withContext(Dispatchers.IO) {
+        dao.deleteAiReportsByTaskId(taskId)
+        dao.deleteWorksByTaskId(taskId)
+        dao.deleteTaskById(taskId)
+    }
 }

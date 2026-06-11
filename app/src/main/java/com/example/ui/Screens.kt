@@ -1375,7 +1375,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var hasInitializedPosition by remember { mutableStateOf(false) }
 
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
-    var realTimeCheckEnabled by remember { mutableStateOf(false) }
+    val realTimeCheckEnabled by viewModel.realTimeStateEnabled.collectAsState()
     var scratchChangeCounter by remember { mutableStateOf(0) }
 
     fun getLiveCodeAndCall(funcType: String) {
@@ -1897,7 +1897,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     webView = webViewInstance,
                     viewModel = viewModel,
                     realTimeCheckEnabled = realTimeCheckEnabled,
-                    onRealTimeCheckChange = { realTimeCheckEnabled = it },
+                    onRealTimeCheckChange = { viewModel.setRealTimeStateEnabled(it) },
                     getLiveCodeAndCall = { getLiveCodeAndCall(it) },
                     onClose = { showAiAssistSheet = false }
                 )
@@ -3026,6 +3026,19 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
 
     var selectedTask by remember { mutableStateOf<LearningTask?>(null) }
     
+    // Task Management States
+    var activeMenuTaskId by remember { mutableStateOf<Int?>(null) }
+    var showEditTaskDialog by remember { mutableStateOf<LearningTask?>(null) }
+    var showExtendDeadlineDialog by remember { mutableStateOf<LearningTask?>(null) }
+    var showDeleteConfirmDialog by remember { mutableStateOf<LearningTask?>(null) }
+
+    var editName by remember { mutableStateOf("") }
+    var editDetail by remember { mutableStateOf("") }
+    var editGrade by remember { mutableStateOf("") }
+    var editDeadline by remember { mutableStateOf("") }
+
+    var extendDeadlineInput by remember { mutableStateOf("") }
+    
     // 批改用临时状态
     var reviewingWork by remember { mutableStateOf<ScratchWork?>(null) }
     var scoreInput by remember { mutableStateOf("90") }
@@ -3105,20 +3118,105 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                     Text(
                                         text = t.taskName,
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 16.sp,
-                                        color = Color.DarkGray
+                                        fontSize = 15.sp,
+                                        color = Color.DarkGray,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                    Card(
-                                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
-                                        shape = RoundedCornerShape(6.dp)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
-                                        Text(
-                                            text = "🏫 $className",
-                                            fontSize = 10.sp,
-                                            color = Color(0xFFE65100),
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                text = "🏫 $className",
+                                                fontSize = 10.sp,
+                                                color = Color(0xFFE65100),
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        
+                                        // 任务状态
+                                        val statusColor = if (t.status == "进行中" || t.status == null) Color(0xFF4CAF50) else Color(0xFFF44336)
+                                        val statusBgColor = if (t.status == "进行中" || t.status == null) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = statusBgColor),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Text(
+                                                text = t.status ?: "进行中",
+                                                fontSize = 10.sp,
+                                                color = statusColor,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+
+                                        Box {
+                                            IconButton(
+                                                onClick = { activeMenuTaskId = if (activeMenuTaskId == t.taskId) null else t.taskId },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.MoreVert,
+                                                    contentDescription = "更多选项",
+                                                    tint = Color.Gray,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                            
+                                            DropdownMenu(
+                                                expanded = activeMenuTaskId == t.taskId,
+                                                onDismissRequest = { activeMenuTaskId = null }
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("编辑任务", fontSize = 13.sp) },
+                                                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                                    onClick = {
+                                                        activeMenuTaskId = null
+                                                        showEditTaskDialog = t
+                                                        editName = t.taskName
+                                                        editDetail = t.taskDetail
+                                                        editGrade = t.grade ?: "三年级"
+                                                        editDeadline = t.deadline
+                                                    }
+                                                )
+                                                DropdownMenuItem(
+                                                    text = { Text("延迟截止时间", fontSize = 13.sp) },
+                                                    leadingIcon = { Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                                    onClick = {
+                                                        activeMenuTaskId = null
+                                                        showExtendDeadlineDialog = t
+                                                        extendDeadlineInput = t.deadline
+                                                    }
+                                                )
+                                                val nextStatus = if (t.status == "已撤销") "进行中" else "已撤销"
+                                                val statusText = if (t.status == "已撤销") "恢复下发" else "撤销下发"
+                                                val statusIcon = if (t.status == "已撤销") Icons.Default.Publish else Icons.Default.Cancel
+                                                DropdownMenuItem(
+                                                    text = { Text(statusText, fontSize = 13.sp) },
+                                                    leadingIcon = { Icon(statusIcon, contentDescription = null, modifier = Modifier.size(16.dp)) },
+                                                    onClick = {
+                                                        activeMenuTaskId = null
+                                                        viewModel.updateTaskStatusByTeacher(t.taskId, nextStatus) { msg ->
+                                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                                        }
+                                                    }
+                                                )
+                                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                                DropdownMenuItem(
+                                                    text = { Text("删除任务", color = Color.Red, fontSize = 13.sp) },
+                                                    leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red, modifier = Modifier.size(16.dp)) },
+                                                    onClick = {
+                                                        activeMenuTaskId = null
+                                                        showDeleteConfirmDialog = t
+                                                    }
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                                 
@@ -3519,6 +3617,153 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
             dismissButton = {
                 TextButton(onClick = { reviewingWork = null }) {
                     Text("取消", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // --- Task Edit Dialog (Requirement 3 CRUD) ---
+    showEditTaskDialog?.let { task ->
+        AlertDialog(
+            onDismissRequest = { showEditTaskDialog = null },
+            title = { Text("✏️ 编辑学习任务", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1565C0)) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = { Text("任务标题") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = editDetail,
+                        onValueChange = { editDetail = it },
+                        label = { Text("任务详情（练习要求及说明）") },
+                        modifier = Modifier.fillMaxWidth(),
+                        minLines = 3
+                    )
+                    OutlinedTextField(
+                        value = editDeadline,
+                        onValueChange = { editDeadline = it },
+                        label = { Text("截止期限 (格式: yyyy-MM-dd)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (editName.isBlank() || editDetail.isBlank() || editDeadline.isBlank()) {
+                            Toast.makeText(context, "所有文本字段都不能为空哦", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        viewModel.editTaskByTeacher(
+                            taskId = task.taskId,
+                            name = editName,
+                            detail = editDetail,
+                            grade = editGrade,
+                            deadlineStr = editDeadline
+                        ) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            showEditTaskDialog = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
+                ) {
+                    Text("确认保存")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditTaskDialog = null }) {
+                    Text("取消", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // --- Task Extend Deadline Dialog (Requirement 3 CRUD) ---
+    showExtendDeadlineDialog?.let { task ->
+        AlertDialog(
+            onDismissRequest = { showExtendDeadlineDialog = null },
+            title = { Text("⏰ 延长或更改截止期限", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100)) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("请输入新的截止日期，保持格式 yyyy-MM-dd 比如 2026-07-15：", fontSize = 12.sp, color = Color.Gray)
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = extendDeadlineInput,
+                        onValueChange = { extendDeadlineInput = it },
+                        label = { Text("截止时间 (yyyy-MM-dd)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (extendDeadlineInput.isBlank()) {
+                            Toast.makeText(context, "日期格式或文本不能为空哦", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        viewModel.editTaskByTeacher(
+                            taskId = task.taskId,
+                            name = task.taskName,
+                            detail = task.taskDetail,
+                            grade = task.grade ?: "三年级",
+                            deadlineStr = extendDeadlineInput
+                        ) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            showExtendDeadlineDialog = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
+                ) {
+                    Text("立即延期")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExtendDeadlineDialog = null }) {
+                    Text("取消", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // --- Task Delete Confirm Dialog (Requirement 3 CRUD) ---
+    showDeleteConfirmDialog?.let { task ->
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmDialog = null },
+            title = { Text("🚨 警告：彻底删除该任务吗？", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F)) },
+            text = {
+                Text(
+                    text = "您正尝试删除 Scratch 学习任务【${task.taskName}】。该操作将一并清理：\n\n" +
+                            "1. 该任务所分派班级内所有学生的 Scratch 编程进度。\n" +
+                            "2. 所有的 AI 多维度对答初评细节。\n" +
+                            "3. 班级已批完打分与成长评论数据。\n\n" +
+                            "⚠️ 注意：删除后该大纲下数据将永不恢复，确定要彻底抹去吗？",
+                    fontSize = 13.sp,
+                    color = Color.DarkGray
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteTaskByTeacher(task.taskId) { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            showDeleteConfirmDialog = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("彻底永久删除", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteConfirmDialog = null }) {
+                    Text("容我再想一下", color = Color.Gray)
                 }
             }
         )
