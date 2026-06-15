@@ -106,6 +106,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _aiClassConfig = MutableStateFlow<AiTeachingConfig?>(null)
     val aiClassConfig: StateFlow<AiTeachingConfig?> = _aiClassConfig.asStateFlow()
 
+    private val _realTimeStateEnabled = MutableStateFlow(false)
+    val realTimeStateEnabled: StateFlow<Boolean> = _realTimeStateEnabled.asStateFlow()
+
+    fun setRealTimeStateEnabled(enabled: Boolean) {
+        _realTimeStateEnabled.value = enabled
+    }
+
     init {
         viewModelScope.launch {
             repository.initializeDatabase()
@@ -225,8 +232,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (role == "student") {
             // 获取本班任务
             viewModelScope.launch {
-                repository.getTasksByClass(classId).collect {
-                    _tasksList.value = it
+                repository.getTasksByClass(classId).collect { list ->
+                    _tasksList.value = list.filter { it.status != "已撤销" }
                 }
             }
             // 获取个人草稿
@@ -517,6 +524,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private var realTimeCheckJob: kotlinx.coroutines.Job? = null
     private var lastAiCallTime = 0L
 
+    private fun isNetworkAvailable(): Boolean {
+        return try {
+            val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val activeNetwork = cm?.activeNetwork ?: return false
+            val capabilities = cm.getNetworkCapabilities(activeNetwork) ?: return false
+            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+        } catch (e: Exception) {
+            true
+        }
+    }
+
     // --- AI 实时辅助功能 ---
     fun callAiAssistant(funcType: String, currentCodeInjected: String? = null) {
         if (funcType == "语法纠错") {
@@ -650,18 +670,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // 3. 异步获取 Gemini 响应并填充记录
             val aiResponse = try {
-                GeminiClient.generateContent(prompt)
+                GeminiClient.generateContent(prompt, isNetworkAvailable())
             } catch (e: Exception) {
                 e.printStackTrace()
                 "AI老师正在忙，请稍后再试"
             }
             _aiResult.value = aiResponse
 
-            val isFailed = aiResponse == "AI老师正在忙，请稍后再试" || aiResponse == "网络连接异常，请检查您的网络"
+            val isFailed = aiResponse == "网络连接异常，请检查您的网络" ||
+                    aiResponse == "AI老师正在忙，请稍后再试" ||
+                    aiResponse == "AI老师暂时无法回答，请稍后再试" ||
+                    aiResponse == "授权失效，请重新登录" ||
+                    aiResponse == "请求超时，请检查网络后重试"
+
             if (isFailed) {
                 _aiConsecutiveFailures.value += 1
                 if (_aiConsecutiveFailures.value >= 3) {
                     _aiServiceStatus.value = "已降级 (连续3次请求失败，实时检测已自动关闭)"
+                    _realTimeStateEnabled.value = false
                 } else {
                     _aiServiceStatus.value = "服务异常 (重试中...)"
                 }
@@ -745,18 +771,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val prompt = "$systemInstruction\n\n小朋友问：“$question”"
             val response = try {
-                GeminiClient.generateContent(prompt)
+                GeminiClient.generateContent(prompt, isNetworkAvailable())
             } catch (e: Exception) {
                 e.printStackTrace()
                 "AI老师正在忙，请稍后再试"
             }
             onResponse(response)
 
-            val isFailed = response == "AI老师正在忙，请稍后再试" || response == "网络连接异常，请检查您的网络"
+            val isFailed = response == "网络连接异常，请检查您的网络" ||
+                    response == "AI老师正在忙，请稍后再试" ||
+                    response == "AI老师暂时无法回答，请稍后再试" ||
+                    response == "授权失效，请重新登录" ||
+                    response == "请求超时，请检查网络后重试"
+
             if (isFailed) {
                 _aiConsecutiveFailures.value += 1
                 if (_aiConsecutiveFailures.value >= 3) {
                     _aiServiceStatus.value = "已降级 (连续3次请求失败，实时检测已自动关闭)"
+                    _realTimeStateEnabled.value = false
                 } else {
                     _aiServiceStatus.value = "服务异常 (重试中...)"
                 }
@@ -825,6 +857,52 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onUserLoggedIn()
             } else {
                 onResult("发布任务失败，请检查数据库配置。")
+            }
+        }
+    }
+
+    // --- 教师端更新/修改/删除任务 ---
+    fun updateTaskStatusByTeacher(taskId: Int, status: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.updateTaskStatus(taskId, status)
+                onResult("任务状态已成功更新为：$status！")
+                onUserLoggedIn()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult("更新任务状态失败: ${e.message}")
+            }
+        }
+    }
+
+    fun editTaskByTeacher(taskId: Int, name: String, detail: String, grade: String, deadlineStr: String, classId: Int, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val df = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                val deadlineTime = try {
+                    df.parse(deadlineStr)?.time ?: (System.currentTimeMillis() + 7 * 24 * 3600 * 1000L)
+                } catch (e: Exception) {
+                    System.currentTimeMillis() + 7 * 24 * 3600 * 1000L
+                }
+                repository.updateTaskDetails(taskId, name, detail, grade, deadlineStr, deadlineTime, classId)
+                onResult("任务修改成功，信息已保存！")
+                onUserLoggedIn()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult("修改任务失败: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteTaskByTeacher(taskId: Int, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.deleteTask(taskId)
+                onResult("任务已彻底安全删除！")
+                onUserLoggedIn()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult("删除任务失败: ${e.message}")
             }
         }
     }

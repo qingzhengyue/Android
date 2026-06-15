@@ -105,7 +105,7 @@ object GeminiClient {
                         } else if (code == 500 || code == 502) {
                             return@withContext "AI老师暂时无法回答，请稍后再试"
                         } else if (code == 401 || code == 403) {
-                            return@withContext "授权失败，请重新登录"
+                            return@withContext "授权失效，请重新登录"
                         } else {
                             return@withContext "AI老师暂时无法回答，请稍后再试"
                         }
@@ -135,7 +135,7 @@ object GeminiClient {
         } else if (lastErrCode == 500 || lastErrCode == 502) {
             "AI老师暂时无法回答，请稍后再试"
         } else if (lastErrCode == 401 || lastErrCode == 403) {
-            "授权失败，请重新登录"
+            "授权失效，请重新登录"
         } else {
             "AI老师暂时无法回答，请稍后再试"
         }

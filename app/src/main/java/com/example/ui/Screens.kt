@@ -47,6 +47,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import com.example.data.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -3031,11 +3034,13 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
     var showEditTaskDialog by remember { mutableStateOf<LearningTask?>(null) }
     var showExtendDeadlineDialog by remember { mutableStateOf<LearningTask?>(null) }
     var showDeleteConfirmDialog by remember { mutableStateOf<LearningTask?>(null) }
+    var showRevokeConfirmDialog by remember { mutableStateOf<LearningTask?>(null) }
 
     var editName by remember { mutableStateOf("") }
     var editDetail by remember { mutableStateOf("") }
     var editGrade by remember { mutableStateOf("") }
     var editDeadline by remember { mutableStateOf("") }
+    var editClassId by remember { mutableStateOf(-1) }
 
     var extendDeadlineInput by remember { mutableStateOf("") }
     
@@ -3100,14 +3105,18 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                         
                         // 统计提交人数
                         val subCount = allWorks.filter { it.taskId == t.taskId }.size
+                        val isCancelled = t.status == "已撤销"
 
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .then(if (isCancelled) Modifier.alpha(0.6f) else Modifier)
                                 .clickable { selectedTask = t },
                             shape = RoundedCornerShape(12.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFEEEEEE))
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isCancelled) Color(0xFFF5F5F5) else Color.White
+                            ),
+                            border = BorderStroke(1.dp, if (isCancelled) Color(0xFFE0E0E0) else Color(0xFFEEEEEE))
                         ) {
                             Column(modifier = Modifier.padding(14.dp)) {
                                 Row(
@@ -3119,7 +3128,7 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                         text = t.taskName,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 15.sp,
-                                        color = Color.DarkGray,
+                                        color = if (isCancelled) Color.Gray else Color.DarkGray,
                                         modifier = Modifier.weight(1f)
                                     )
                                     Row(
@@ -3127,21 +3136,31 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Card(
-                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isCancelled) Color(0xFFE0E0E0) else Color(0xFFFFF3E0)
+                                            ),
                                             shape = RoundedCornerShape(6.dp)
                                         ) {
                                             Text(
                                                 text = "🏫 $className",
                                                 fontSize = 10.sp,
-                                                color = Color(0xFFE65100),
+                                                color = if (isCancelled) Color.Gray else Color(0xFFE65100),
                                                 fontWeight = FontWeight.Bold,
                                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                             )
                                         }
                                         
                                         // 任务状态
-                                        val statusColor = if (t.status == "进行中" || t.status == null) Color(0xFF4CAF50) else Color(0xFFF44336)
-                                        val statusBgColor = if (t.status == "进行中" || t.status == null) Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+                                        val statusColor = when (t.status) {
+                                            "已撤销" -> Color(0xFF757575)
+                                            "进行中", null -> Color(0xFF4CAF50)
+                                            else -> Color(0xFFF44336)
+                                        }
+                                        val statusBgColor = when (t.status) {
+                                            "已撤销" -> Color(0xFFE0E0E0)
+                                            "进行中", null -> Color(0xFFE8F5E9)
+                                            else -> Color(0xFFFFEBEE)
+                                        }
                                         Card(
                                             colors = CardDefaults.cardColors(containerColor = statusBgColor),
                                             shape = RoundedCornerShape(6.dp)
@@ -3182,6 +3201,7 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                                         editDetail = t.taskDetail
                                                         editGrade = t.grade ?: "三年级"
                                                         editDeadline = t.deadline
+                                                        editClassId = t.classId
                                                     }
                                                 )
                                                 DropdownMenuItem(
@@ -3201,8 +3221,12 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                                     leadingIcon = { Icon(statusIcon, contentDescription = null, modifier = Modifier.size(16.dp)) },
                                                     onClick = {
                                                         activeMenuTaskId = null
-                                                        viewModel.updateTaskStatusByTeacher(t.taskId, nextStatus) { msg ->
-                                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                                        if (nextStatus == "已撤销") {
+                                                            showRevokeConfirmDialog = t
+                                                        } else {
+                                                            viewModel.updateTaskStatusByTeacher(t.taskId, nextStatus) { msg ->
+                                                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                                            }
                                                         }
                                                     }
                                                 )
@@ -3651,6 +3675,80 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                         label = { Text("截止期限 (格式: yyyy-MM-dd)") },
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    // Grade & Class dropdowns in Edit Task Dialog to support full CRUD modification
+                    var editGradeDropdownExpanded by remember { mutableStateOf(false) }
+                    var editClassDropdownExpanded by remember { mutableStateOf(false) }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            OutlinedTextField(
+                                value = editGrade.ifEmpty { "三年级" },
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("面向年级") },
+                                trailingIcon = {
+                                    IconButton(onClick = { editGradeDropdownExpanded = true }) {
+                                        Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().clickable { editGradeDropdownExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = editGradeDropdownExpanded,
+                                onDismissRequest = { editGradeDropdownExpanded = false }
+                            ) {
+                                listOf("三年级", "四年级", "五年级", "六年级").forEach { g ->
+                                    DropdownMenuItem(
+                                        text = { Text(g) },
+                                        onClick = {
+                                            editGrade = g
+                                            editGradeDropdownExpanded = false
+                                            val filtered = classes.filter { it.grade == g }
+                                            if (filtered.isNotEmpty()) {
+                                                editClassId = filtered[0].classId
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        Box(modifier = Modifier.weight(1f)) {
+                            val currentClass = classes.find { it.classId == editClassId }
+                            val currentClassName = currentClass?.className ?: "请选择班级"
+
+                            OutlinedTextField(
+                                value = currentClassName,
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("目标班级") },
+                                trailingIcon = {
+                                    IconButton(onClick = { editClassDropdownExpanded = true }) {
+                                        Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth().clickable { editClassDropdownExpanded = true }
+                            )
+                            DropdownMenu(
+                                expanded = editClassDropdownExpanded,
+                                onDismissRequest = { editClassDropdownExpanded = false }
+                            ) {
+                                classes.filter { it.grade == editGrade }.forEach { c ->
+                                    DropdownMenuItem(
+                                        text = { Text(c.className) },
+                                        onClick = {
+                                            editClassId = c.classId
+                                            editClassDropdownExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             },
             confirmButton = {
@@ -3660,12 +3758,17 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                             Toast.makeText(context, "所有文本字段都不能为空哦", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
+                        if (editClassId == -1) {
+                            Toast.makeText(context, "请先选择一个目标班级哦", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
                         viewModel.editTaskByTeacher(
                             taskId = task.taskId,
                             name = editName,
                             detail = editDetail,
                             grade = editGrade,
-                            deadlineStr = editDeadline
+                            deadlineStr = editDeadline,
+                            classId = editClassId
                         ) { msg ->
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                             showEditTaskDialog = null
@@ -3686,50 +3789,38 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
 
     // --- Task Extend Deadline Dialog (Requirement 3 CRUD) ---
     showExtendDeadlineDialog?.let { task ->
-        AlertDialog(
-            onDismissRequest = { showExtendDeadlineDialog = null },
-            title = { Text("⏰ 延长或更改截止期限", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color(0xFFE65100)) },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text("请输入新的截止日期，保持格式 yyyy-MM-dd 比如 2026-07-15：", fontSize = 12.sp, color = Color.Gray)
-                    Spacer(modifier = Modifier.height(10.dp))
-                    OutlinedTextField(
-                        value = extendDeadlineInput,
-                        onValueChange = { extendDeadlineInput = it },
-                        label = { Text("截止时间 (yyyy-MM-dd)") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+        // Native Android DatePickerDialog trigger
+        val currentParts = task.deadline.split("-")
+        val defYear = currentParts.getOrNull(0)?.toIntOrNull() ?: 2026
+        val defMonth = (currentParts.getOrNull(1)?.toIntOrNull() ?: 6) - 1
+        val defDay = currentParts.getOrNull(2)?.toIntOrNull() ?: 15
+        
+        LaunchedEffect(task.taskId) {
+            android.app.DatePickerDialog(
+                context,
+                { _, year, monthOfYear, dayOfMonth ->
+                    val selectedDateFormatted = String.format("%04d-%02d-%02d", year, monthOfYear + 1, dayOfMonth)
+                    viewModel.editTaskByTeacher(
+                        taskId = task.taskId,
+                        name = task.taskName,
+                        detail = task.taskDetail,
+                        grade = task.grade ?: "三年级",
+                        deadlineStr = selectedDateFormatted,
+                        classId = task.classId
+                    ) { msg ->
+                        Toast.makeText(context, "截止日期已成功延长！且全班学生端立即同步通知！", Toast.LENGTH_SHORT).show()
+                        showExtendDeadlineDialog = null
+                    }
+                },
+                defYear,
+                defMonth,
+                defDay
+            ).apply {
+                setOnCancelListener {
+                    showExtendDeadlineDialog = null
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (extendDeadlineInput.isBlank()) {
-                            Toast.makeText(context, "日期格式或文本不能为空哦", Toast.LENGTH_SHORT).show()
-                            return@Button
-                        }
-                        viewModel.editTaskByTeacher(
-                            taskId = task.taskId,
-                            name = task.taskName,
-                            detail = task.taskDetail,
-                            grade = task.grade ?: "三年级",
-                            deadlineStr = extendDeadlineInput
-                        ) { msg ->
-                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                            showExtendDeadlineDialog = null
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE65100))
-                ) {
-                    Text("立即延期")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExtendDeadlineDialog = null }) {
-                    Text("取消", color = Color.Gray)
-                }
-            }
-        )
+            }.show()
+        }
     }
 
     // --- Task Delete Confirm Dialog (Requirement 3 CRUD) ---
@@ -3764,6 +3855,35 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirmDialog = null }) {
                     Text("容我再想一下", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+    // --- Task Revoke Confirm Dialog ---
+    showRevokeConfirmDialog?.let { task ->
+        AlertDialog(
+            onDismissRequest = { showRevokeConfirmDialog = null },
+            title = { Text("⚠️ 确定撤销此任务吗？", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD32F2F)) },
+            text = {
+                Text("确定撤销此任务吗？撤销后学生将无法查看和提交该编程任务【${task.taskName}】。您依然可以随时点击“恢复下发”重新分派该任务给班级。", fontSize = 14.sp)
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.updateTaskStatusByTeacher(task.taskId, "已撤销") { msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            showRevokeConfirmDialog = null
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD32F2F))
+                ) {
+                    Text("确认撤销", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRevokeConfirmDialog = null }) {
+                    Text("再想想", color = Color.Gray)
                 }
             }
         )
@@ -5971,42 +6091,45 @@ fun AiAssistPanel(
                     else -> "选择或输入知识点..."
                 }
 
-                Box(
+                OutlinedTextField(
+                    value = currentInputValue,
+                    onValueChange = { newValue ->
+                        when (activeTab) {
+                            "语法纠错" -> customQuestionInput = newValue
+                            "创意引导" -> creativePromptInput = newValue
+                            else -> kbPromptInput = newValue
+                        }
+                    },
                     modifier = Modifier
                         .weight(1f)
-                        .height(48.dp)
+                        .heightIn(min = 48.dp)
                         .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
-                        .background(Color.White, RoundedCornerShape(8.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.CenterStart
-                ) {
-                    androidx.compose.foundation.text.BasicTextField(
-                        value = currentInputValue,
-                        onValueChange = { newValue ->
-                            when (activeTab) {
-                                "语法纠错" -> customQuestionInput = newValue
-                                "创意引导" -> creativePromptInput = newValue
-                                else -> kbPromptInput = newValue
-                            }
-                        },
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = Color.Black),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { focusState ->
-                                isInputFocused = focusState.isFocused
-                            }
-                    )
-                    
-                    // Standard Android Hint logic matching Optimization 3
-                    val showHint = !isInputFocused && currentInputValue.isEmpty()
-                    if (showHint) {
+                        .background(Color.White, RoundedCornerShape(8.dp)),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = Color.Black),
+                    placeholder = {
                         Text(
                             text = currentHintText,
                             fontSize = 12.sp,
-                            color = Color(0xFF999999) // Light grey placeholder
+                            color = Color(0xFF999999)
                         )
-                    }
-                }
+                    },
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Color.Transparent,
+                        unfocusedBorderColor = Color.Transparent,
+                        disabledBorderColor = Color.Transparent,
+                        errorBorderColor = Color.Transparent,
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent,
+                        cursorColor = Color(0xFFC2185B)
+                    ),
+                    keyboardOptions = KeyboardOptions.Default.copy(
+                        imeAction = ImeAction.Default,
+                        keyboardType = KeyboardType.Text
+                    ),
+                    maxLines = 5,
+                    singleLine = false,
+                    shape = RoundedCornerShape(8.dp)
+                )
 
                 Spacer(modifier = Modifier.width(8.dp))
 
