@@ -990,7 +990,7 @@ fun TopBarActionButton(
             Spacer(modifier = Modifier.width(4.dp))
             Text(
                 text = text,
-                fontSize = 11.sp,
+                fontSize = 12.sp,
                 color = Color.White,
                 fontWeight = FontWeight.Bold
             )
@@ -1521,78 +1521,92 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 1. Return Button
+            // Left container: Return Button + Title with limited weight to avoid taking up too much space
             Row(
                 modifier = Modifier
-                    .clickable { onBackToHall() }
-                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                    .weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.ArrowBack,
-                    contentDescription = "返回",
-                    tint = Color.White,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
+                // 1. Return Button
+                Row(
+                    modifier = Modifier
+                        .clickable { onBackToHall() }
+                        .padding(vertical = 4.dp, horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "返回",
+                        tint = Color.White,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (taskName.isNullOrBlank()) "返回创意空间" else "返回学习任务大厅",
+                        color = Color.White,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                // 2. Draft & Task Information
+                val displayTaskInfo = if (taskName.isNullOrBlank()) "自由创作" else "学习任务: $taskName"
                 Text(
-                    text = if (taskName.isNullOrBlank()) "返回创意空间" else "返回学习任务大厅",
+                    text = "📦 $draftName [$displayTaskInfo]",
                     color = Color.White,
                     fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
             }
 
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-            // 2. Draft & Task Information
-            val displayTaskInfo = if (taskName.isNullOrBlank()) "自由创作" else "学习任务: $taskName"
-            Text(
-                text = "📦 $draftName [$displayTaskInfo]",
-                color = Color.White,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold
-            )
+            // Right container: Buttons with explicit gap and no weight, ensuring enough space for all 3 buttons
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // 3. 编程魔法盒 Button
+                TopBarActionButton(
+                    onClick = { showMagicBoxDrawer = !showMagicBoxDrawer },
+                    icon = Icons.Default.Widgets,
+                    text = "编程魔法盒 🎒",
+                    containerColor = Color(0xFFF57C00) // Deep warm amber
+                )
 
-            Spacer(modifier = Modifier.weight(1f))
+                // 4. Manual Fallback Switch Mirror
+                TopBarActionButton(
+                    onClick = {
+                        if (currentMirrorIndex < mirrors.size - 1) {
+                            currentMirrorIndex++
+                        } else {
+                            currentMirrorIndex = 0
+                        }
+                        scratchUrl = mirrors[currentMirrorIndex]
+                        android.widget.Toast.makeText(context, "已手动切换到第 ${currentMirrorIndex + 1} 个极速镜像 ⚡", android.widget.Toast.LENGTH_SHORT).show()
+                    },
+                    icon = Icons.Default.Language,
+                    text = "手动换源 ⚡",
+                    containerColor = Color(0xFF2E7D32) // Soft forest green
+                )
 
-            // 3. 编程魔法盒 Button
-            TopBarActionButton(
-                onClick = { showMagicBoxDrawer = !showMagicBoxDrawer },
-                icon = Icons.Default.Widgets,
-                text = "编程魔法盒 🎒",
-                containerColor = Color(0xFFF57C00) // Deep warm amber
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // 4. Manual Fallback Switch Mirror
-            TopBarActionButton(
-                onClick = {
-                    if (currentMirrorIndex < mirrors.size - 1) {
-                        currentMirrorIndex++
-                    } else {
-                        currentMirrorIndex = 0
-                    }
-                    scratchUrl = mirrors[currentMirrorIndex]
-                    android.widget.Toast.makeText(context, "已手动切换到第 ${currentMirrorIndex + 1} 个极速镜像 ⚡", android.widget.Toast.LENGTH_SHORT).show()
-                },
-                icon = Icons.Default.Language,
-                text = "手动换源 ⚡",
-                containerColor = Color(0xFF2E7D32) // Soft forest green
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            // 5. 智能精灵姐姐 Button
-            TopBarActionButton(
-                onClick = {
-                    showAiAssistSheet = !showAiAssistSheet
-                },
-                icon = Icons.Default.AutoAwesome,
-                text = "智能精灵姐姐 👩‍💻",
-                containerColor = Color(0xFFC2185B) // Deep rose ruby
-            )
+                // 5. 智能精灵姐姐 Button
+                TopBarActionButton(
+                    onClick = {
+                        showAiAssistSheet = !showAiAssistSheet
+                    },
+                    icon = Icons.Default.AutoAwesome,
+                    text = "智能精灵姐姐 👩‍💻",
+                    containerColor = Color(0xFFC2185B) // Deep rose ruby
+                )
+            }
         }
 
         Row(
