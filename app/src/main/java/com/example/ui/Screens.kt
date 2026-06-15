@@ -13,6 +13,7 @@ import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -83,10 +84,10 @@ fun LoginScreen(viewModel: MainViewModel) {
     var selectedRoleTab by remember { mutableStateOf(0) } // 0: 学生登录, 1: 教师登录
 
     // 字段状态值
-    var studentNum by remember { mutableStateOf("") }
-    var teacherWorkId by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var studentName by remember { mutableStateOf("") }
+    var studentNum by remember { mutableStateOf(TextFieldValue("")) }
+    var teacherWorkId by remember { mutableStateOf(TextFieldValue("")) }
+    var password by remember { mutableStateOf(TextFieldValue("")) }
+    var studentName by remember { mutableStateOf(TextFieldValue("")) }
 
     // 注册选择班级
     var selectedClassIndex by remember { mutableStateOf(0) }
@@ -178,12 +179,12 @@ fun LoginScreen(viewModel: MainViewModel) {
                 ) {
                     Tab(
                         selected = selectedRoleTab == 0,
-                        onClick = { selectedRoleTab = 0; password = ""; isRegisterMode = false },
+                        onClick = { selectedRoleTab = 0; password = TextFieldValue(""); isRegisterMode = false },
                         text = { Text("👦 学生通道", fontWeight = FontWeight.Bold) }
                     )
                     Tab(
                         selected = selectedRoleTab == 1,
-                        onClick = { selectedRoleTab = 1; password = ""; isRegisterMode = false },
+                        onClick = { selectedRoleTab = 1; password = TextFieldValue(""); isRegisterMode = false },
                         text = { Text("👩‍🏫 教师通道", fontWeight = FontWeight.Bold) }
                     )
                 }
@@ -344,19 +345,19 @@ fun LoginScreen(viewModel: MainViewModel) {
                     Button(
                         onClick = {
                             if (selectedRoleTab == 0) {
-                                if (studentNum.isEmpty() || password.isEmpty()) {
+                                if (studentNum.text.isEmpty() || password.text.isEmpty()) {
                                     Toast.makeText(context, "请填入学号 and 密码！", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
-                                viewModel.studentLogin(studentNum, password) {
+                                viewModel.studentLogin(studentNum.text, password.text) {
                                     Toast.makeText(context, "学生登录成功！", Toast.LENGTH_SHORT).show()
                                 }
                             } else {
-                                if (teacherWorkId.isEmpty() || password.isEmpty()) {
+                                if (teacherWorkId.text.isEmpty() || password.text.isEmpty()) {
                                     Toast.makeText(context, "请填入教师工号和密码！", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
-                                viewModel.teacherLogin(teacherWorkId, password) {
+                                viewModel.teacherLogin(teacherWorkId.text, password.text) {
                                     Toast.makeText(context, "教师登录成功！", Toast.LENGTH_SHORT).show()
                                 }
                             }
@@ -378,7 +379,7 @@ fun LoginScreen(viewModel: MainViewModel) {
                     Spacer(modifier = Modifier.height(16.dp))
 
                     TextButton(
-                        onClick = { isRegisterMode = true; password = "" },
+                        onClick = { isRegisterMode = true; password = TextFieldValue("") },
                         modifier = Modifier.padding(vertical = 4.dp)
                     ) {
                         val registerLabel = if (selectedRoleTab == 0) "还没有学生账号？点击注册 👦" else "还没有教师账号？点击注册 👩‍🏫"
@@ -600,7 +601,7 @@ fun LoginScreen(viewModel: MainViewModel) {
 
                         Button(
                             onClick = {
-                                if (studentNum.isEmpty() || studentName.isEmpty() || password.isEmpty() || rFilteredClasses.isEmpty()) {
+                                if (studentNum.text.isEmpty() || studentName.text.isEmpty() || password.text.isEmpty() || rFilteredClasses.isEmpty()) {
                                     Toast.makeText(context, "请填齐所有的学生注册字段并选择班级！", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
@@ -610,9 +611,9 @@ fun LoginScreen(viewModel: MainViewModel) {
                                     return@Button
                                 }
                                 viewModel.studentRegister(
-                                    studentNum = studentNum,
-                                    name = studentName,
-                                    pass = password,
+                                    studentNum = studentNum.text,
+                                    name = studentName.text,
+                                    pass = password.text,
                                     classId = targetClass.classId
                                 ) {
                                     Toast.makeText(context, "学生注册并登录成功！", Toast.LENGTH_SHORT).show()
@@ -677,14 +678,14 @@ fun LoginScreen(viewModel: MainViewModel) {
 
                         Button(
                             onClick = {
-                                if (teacherWorkId.isEmpty() || studentName.isEmpty() || password.isEmpty()) {
+                                if (teacherWorkId.text.isEmpty() || studentName.text.isEmpty() || password.text.isEmpty()) {
                                     Toast.makeText(context, "请填齐所有的教师注册字段！", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 viewModel.teacherRegister(
-                                    workId = teacherWorkId,
-                                    name = studentName,
-                                    pass = password
+                                    workId = teacherWorkId.text,
+                                    name = studentName.text,
+                                    pass = password.text
                                 ) {
                                     Toast.makeText(context, "教师注册与登录成功！", Toast.LENGTH_SHORT).show()
                                 }
@@ -2759,8 +2760,8 @@ fun StudentAiAssistHistoricalHub(viewModel: MainViewModel) {
 fun TeacherTaskManagementScreen(viewModel: MainViewModel) {
     val classes by viewModel.classesList.collectAsState()
 
-    var taskNameInput by remember { mutableStateOf("") }
-    var taskDetailInput by remember { mutableStateOf("") }
+    var taskNameInput by remember { mutableStateOf(TextFieldValue("")) }
+    var taskDetailInput by remember { mutableStateOf(TextFieldValue("")) }
     var taskGradeInput by remember { mutableStateOf("三年级") }
     var taskDeadlineInput by remember { mutableStateOf("2026-06-30") }
 
@@ -2977,22 +2978,22 @@ fun TeacherTaskManagementScreen(viewModel: MainViewModel) {
                     // 6. 下发发布按钮 (56dp height, match_parent width, bold 16sp centered - 优化四)
                     Button(
                         onClick = {
-                            if (taskNameInput.isEmpty() || taskDetailInput.isEmpty() || filteredClasses.isEmpty()) {
+                            if (taskNameInput.text.isEmpty() || taskDetailInput.text.isEmpty() || filteredClasses.isEmpty()) {
                                 Toast.makeText(context, "请填齐基本字段，并确认当前所选年级已建班级！", Toast.LENGTH_SHORT).show()
                                 return@Button
                             }
                             val safeIndex = classSelectIndex.coerceIn(0, filteredClasses.size - 1)
                             val classId = filteredClasses[safeIndex].classId
                             viewModel.publishNewTaskByTeacher(
-                                name = taskNameInput,
-                                detail = taskDetailInput,
+                                name = taskNameInput.text,
+                                detail = taskDetailInput.text,
                                 grade = taskGradeInput,
                                 deadlineStr = taskDeadlineInput,
                                 classId = classId
                             ) { msg ->
                                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
-                                taskNameInput = ""
-                                taskDetailInput = ""
+                                taskNameInput = TextFieldValue("")
+                                taskDetailInput = TextFieldValue("")
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
@@ -3037,8 +3038,8 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
     var showDeleteConfirmDialog by remember { mutableStateOf<LearningTask?>(null) }
     var showRevokeConfirmDialog by remember { mutableStateOf<LearningTask?>(null) }
 
-    var editName by remember { mutableStateOf("") }
-    var editDetail by remember { mutableStateOf("") }
+    var editName by remember { mutableStateOf(TextFieldValue("")) }
+    var editDetail by remember { mutableStateOf(TextFieldValue("")) }
     var editGrade by remember { mutableStateOf("") }
     var editDeadline by remember { mutableStateOf("") }
     var editClassId by remember { mutableStateOf(-1) }
@@ -3198,8 +3199,8 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                                     onClick = {
                                                         activeMenuTaskId = null
                                                         showEditTaskDialog = t
-                                                        editName = t.taskName
-                                                        editDetail = t.taskDetail
+                                                        editName = TextFieldValue(t.taskName)
+                                                        editDetail = TextFieldValue(t.taskDetail)
                                                         editGrade = t.grade ?: "三年级"
                                                         editDeadline = t.deadline
                                                         editClassId = t.classId
@@ -3755,7 +3756,7 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
-                        if (editName.isBlank() || editDetail.isBlank() || editDeadline.isBlank()) {
+                        if (editName.text.isBlank() || editDetail.text.isBlank() || editDeadline.isBlank()) {
                             Toast.makeText(context, "所有文本字段都不能为空哦", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
@@ -3765,8 +3766,8 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                         }
                         viewModel.editTaskByTeacher(
                             taskId = task.taskId,
-                            name = editName,
-                            detail = editDetail,
+                            name = editName.text,
+                            detail = editDetail.text,
                             grade = editGrade,
                             deadlineStr = editDeadline,
                             classId = editClassId
@@ -4338,17 +4339,17 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
     val coroutineScope = rememberCoroutineScope()
 
     // 新班级添加表单输入状态
-    var newClassNameInput by remember { mutableStateOf("") }
-    var newClassGradeInput by remember { mutableStateOf("三年级") }
-    var newClassDescInput by remember { mutableStateOf("") }
+    var newClassNameInput by remember { mutableStateOf(TextFieldValue("")) }
+    var newClassGradeInput by remember { mutableStateOf(TextFieldValue("三年级")) }
+    var newClassDescInput by remember { mutableStateOf(TextFieldValue("")) }
     var manualGradeDropdownExpanded by remember { mutableStateOf(false) }
 
     // 各种弹窗管理
     var showEditClassDialog by remember { mutableStateOf(false) }
     var activeClassToEdit by remember { mutableStateOf<ClassEntity?>(null) }
-    var editClassName by remember { mutableStateOf("") }
-    var editClassGrade by remember { mutableStateOf("三年级") }
-    var editClassDesc by remember { mutableStateOf("") }
+    var editClassName by remember { mutableStateOf(TextFieldValue("")) }
+    var editClassGrade by remember { mutableStateOf(TextFieldValue("三年级")) }
+    var editClassDesc by remember { mutableStateOf(TextFieldValue("")) }
     var editGradeDropdownExpanded by remember { mutableStateOf(false) }
 
     var editClassLevel by remember { mutableStateOf("三年级") }
@@ -4363,14 +4364,14 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
     var editClassWeightTask by remember { mutableStateOf(25) }
     var editClassWeightCreative by remember { mutableStateOf(20) }
     var editClassTeachingLock by remember { mutableStateOf(false) }
-    var editClassRemark by remember { mutableStateOf("") }
+    var editClassRemark by remember { mutableStateOf(TextFieldValue("")) }
 
     var editClassLevelDropdownExpanded by remember { mutableStateOf(false) }
     var editClassStyleDropdownExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(showEditClassDialog, activeClassToEdit, editClassDesc) {
         if (showEditClassDialog && activeClassToEdit != null) {
-            val parsedResult = parseConfigFromDescription(editClassDesc)
+            val parsedResult = parseConfigFromDescription(editClassDesc.text)
             editClassLevel = parsedResult["level"] as? String ?: "三年级"
             editClassDailyLimit = parsedResult["dailyLimit"] as? Int ?: 10
             editClassGrammarCorrect = parsedResult["grammarCorrect"] as? Boolean ?: true
@@ -4383,7 +4384,7 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
             editClassWeightTask = parsedResult["weightTask"] as? Int ?: 25
             editClassWeightCreative = parsedResult["weightCreative"] as? Int ?: 20
             editClassTeachingLock = parsedResult["teachingLock"] as? Boolean ?: false
-            editClassRemark = parsedResult["remark"] as? String ?: ""
+            editClassRemark = TextFieldValue(parsedResult["remark"] as? String ?: "")
         }
     }
 
@@ -4512,7 +4513,7 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                                     DropdownMenuItem(
                                         text = { Text(grade, fontSize = 14.sp) },
                                         onClick = {
-                                            newClassGradeInput = grade
+                                            newClassGradeInput = TextFieldValue(grade)
                                             manualGradeDropdownExpanded = false
                                         }
                                     )
@@ -4541,18 +4542,18 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                         // 1. 手动建档
                         Button(
                             onClick = {
-                                if (newClassNameInput.isBlank()) {
+                                if (newClassNameInput.text.isBlank()) {
                                     Toast.makeText(context, "请输入班级名称！", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 viewModel.createNewClassByTeacher(
-                                    newClassNameInput,
-                                    newClassGradeInput,
-                                    newClassDescInput
+                                    newClassNameInput.text,
+                                    newClassGradeInput.text,
+                                    newClassDescInput.text
                                 ) { msg ->
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                    newClassNameInput = ""
-                                    newClassDescInput = ""
+                                    newClassNameInput = TextFieldValue("")
+                                    newClassDescInput = TextFieldValue("")
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2E7D32)),
@@ -4569,7 +4570,7 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                         // 2. 批量生成 1-6 班
                         Button(
                             onClick = {
-                                viewModel.batchCreateClassesByTeacher(newClassGradeInput) { msg ->
+                                viewModel.batchCreateClassesByTeacher(newClassGradeInput.text) { msg ->
                                     Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                                 }
                             },
@@ -4716,9 +4717,9 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                                 IconButton(
                                     onClick = {
                                         activeClassToEdit = classEntity
-                                        editClassName = classEntity.className
-                                        editClassGrade = classEntity.grade
-                                        editClassDesc = classDesc
+                                        editClassName = TextFieldValue(classEntity.className)
+                                        editClassGrade = TextFieldValue(classEntity.grade)
+                                        editClassDesc = TextFieldValue(classDesc)
                                         showEditClassDialog = true
                                     },
                                     modifier = Modifier.size(36.dp)
@@ -4928,7 +4929,7 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                                 DropdownMenuItem(
                                     text = { Text(grade, fontSize = 14.sp) },
                                     onClick = {
-                                        editClassGrade = grade
+                                        editClassGrade = TextFieldValue(grade)
                                         editGradeDropdownExpanded = false
                                     }
                                 )
@@ -5152,7 +5153,7 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
             confirmButton = {
                 Button(
                     onClick = {
-                        if (editClassName.isBlank()) {
+                        if (editClassName.text.isBlank()) {
                             Toast.makeText(context, "班级名不能为空！", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
@@ -5171,14 +5172,14 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                             put("weightTask", editClassWeightTask)
                             put("weightCreative", editClassWeightCreative)
                             put("teachingLock", editClassTeachingLock)
-                            put("remark", editClassRemark)
+                            put("remark", editClassRemark.text)
                         }
                         val serializedJson = json.toString()
 
                         viewModel.updateClassByTeacher(
                             classId = selClass.classId,
-                            className = editClassName,
-                            grade = editClassGrade,
+                            className = editClassName.text,
+                            grade = editClassGrade.text,
                             description = serializedJson
                         ) { msg ->
                             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -5711,9 +5712,9 @@ fun AiAssistPanel(
     val aiResult by viewModel.aiResult.collectAsState()
     val aiResultType by viewModel.aiResultType.collectAsState()
     
-    var creativePromptInput by remember { mutableStateOf("") }
-    var kbPromptInput by remember { mutableStateOf("") }
-    var customQuestionInput by remember { mutableStateOf("") }
+    var creativePromptInput by remember { mutableStateOf(TextFieldValue("")) }
+    var kbPromptInput by remember { mutableStateOf(TextFieldValue("")) }
+    var customQuestionInput by remember { mutableStateOf(TextFieldValue("")) }
     
     // Default active tab to "语法纠错"
     var activeTab by remember { mutableStateOf("语法纠错") }
@@ -5742,8 +5743,8 @@ fun AiAssistPanel(
         if (!res.isNullOrBlank()) {
             if (dialogueHistory.none { it.answer == res }) {
                 val q = when (type) {
-                    "创意引导" -> if (creativePromptInput.isNotBlank()) "主题: $creativePromptInput" else "自由扩展与创意优化"
-                    "知识点讲解" -> if (kbPromptInput.isNotBlank()) "知识点: $kbPromptInput" else "知识考点"
+                    "创意引导" -> if (creativePromptInput.text.isNotBlank()) "主题: ${creativePromptInput.text}" else "自由扩展与创意优化"
+                    "知识点讲解" -> if (kbPromptInput.text.isNotBlank()) "知识点: ${kbPromptInput.text}" else "知识考点"
                     "语法纠错" -> "语法与逻辑检测"
                     else -> "诊断检测"
                 }
@@ -5907,16 +5908,18 @@ fun AiAssistPanel(
                                         
                                         FlowRow(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             listOf("循环", "变量", "广播", "坐标").forEach { chip ->
                                                 Box(
                                                     modifier = Modifier
+                                                        .align(Alignment.CenterVertically)
                                                         .height(32.dp)
                                                         .background(Color(0xFFFFEEF0), RoundedCornerShape(12.dp))
                                                         .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(12.dp))
                                                         .clickable { 
-                                                            kbPromptInput = chip
+                                                            kbPromptInput = TextFieldValue(chip)
                                                         }
                                                         .padding(horizontal = 12.dp, vertical = 6.dp),
                                                     contentAlignment = Alignment.Center
@@ -6142,11 +6145,11 @@ fun AiAssistPanel(
 
                 Button(
                     onClick = {
-                        if (currentInputValue.isNotBlank()) {
+                        if (currentInputValue.text.isNotBlank()) {
                             when (activeTab) {
                                 "语法纠错" -> {
-                                    val userQ = customQuestionInput
-                                    customQuestionInput = ""
+                                    val userQ = customQuestionInput.text
+                                    customQuestionInput = TextFieldValue("")
                                     val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                                     
                                     // Add to history list immediately
@@ -6165,16 +6168,16 @@ fun AiAssistPanel(
                                     }
                                 }
                                 "创意引导" -> {
-                                    val liveTheme = creativePromptInput
+                                    val liveTheme = creativePromptInput.text
                                     if (liveTheme.isNotBlank()) {
                                         viewModel.currentDraftName.value = liveTheme
                                     }
                                     getLiveCodeAndCall("创意引导")
-                                    creativePromptInput = ""
+                                    creativePromptInput = TextFieldValue("")
                                 }
                                 "考点讲解" -> {
                                     getLiveCodeAndCall("知识点讲解")
-                                    kbPromptInput = ""
+                                    kbPromptInput = TextFieldValue("")
                                 }
                             }
                         }
