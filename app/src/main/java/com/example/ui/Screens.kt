@@ -12,6 +12,7 @@ import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -5692,7 +5693,7 @@ data class DialogueHistoryItem(
     val isExpanded: Boolean = false
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun AiAssistPanel(
     webView: WebView?,
@@ -5901,26 +5902,32 @@ fun AiAssistPanel(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("🎓 知识点小锦囊 (快速点击选择)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                                        Text("🎓 知识点锦囊 (快速点击选择)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
                                         Spacer(modifier = Modifier.height(8.dp))
                                         
-                                        Row(
+                                        FlowRow(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             modifier = Modifier.fillMaxWidth()
                                         ) {
                                             listOf("循环", "变量", "广播", "坐标").forEach { chip ->
-                                                Text(
-                                                    text = "🏷️ $chip",
-                                                    fontSize = 11.sp,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = Color(0xFFC2185B),
+                                                Box(
                                                     modifier = Modifier
+                                                        .height(32.dp)
                                                         .background(Color(0xFFFFEEF0), RoundedCornerShape(12.dp))
+                                                        .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(12.dp))
                                                         .clickable { 
                                                             kbPromptInput = chip
                                                         }
-                                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                                )
+                                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                                    contentAlignment = Alignment.Center
+                                                 ) {
+                                                     Text(
+                                                         text = "🏷️ $chip",
+                                                         fontSize = 12.sp,
+                                                         fontWeight = FontWeight.Bold,
+                                                         color = Color(0xFFC2185B)
+                                                     )
+                                                 }
                                             }
                                         }
                                     }
@@ -6105,7 +6112,7 @@ fun AiAssistPanel(
                         .heightIn(min = 48.dp)
                         .border(1.dp, Color.LightGray, RoundedCornerShape(8.dp))
                         .background(Color.White, RoundedCornerShape(8.dp)),
-                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp, color = Color.Black),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 14.sp, color = Color.Black),
                     placeholder = {
                         Text(
                             text = currentHintText,
@@ -6123,7 +6130,7 @@ fun AiAssistPanel(
                         cursorColor = Color(0xFFC2185B)
                     ),
                     keyboardOptions = KeyboardOptions.Default.copy(
-                        imeAction = ImeAction.Default,
+                        imeAction = ImeAction.Done,
                         keyboardType = KeyboardType.Text
                     ),
                     maxLines = 5,
@@ -6163,9 +6170,11 @@ fun AiAssistPanel(
                                         viewModel.currentDraftName.value = liveTheme
                                     }
                                     getLiveCodeAndCall("创意引导")
+                                    creativePromptInput = ""
                                 }
                                 "考点讲解" -> {
                                     getLiveCodeAndCall("知识点讲解")
+                                    kbPromptInput = ""
                                 }
                             }
                         }
