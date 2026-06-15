@@ -5716,32 +5716,17 @@ fun AiAssistPanel(
     var kbPromptInput by remember { mutableStateOf(TextFieldValue("")) }
     var customQuestionInput by remember { mutableStateOf(TextFieldValue("")) }
     
-    // Default active tab to "语法纠错"
-    var activeTab by remember { mutableStateOf("语法纠错") }
-
-    // Dialogue history list
-    val dialogueHistory = remember { mutableStateListOf<DialogueHistoryItem>() }
-
-    // Initial greeting load
-    LaunchedEffect(Unit) {
-        if (dialogueHistory.isEmpty()) {
-            dialogueHistory.add(
-                DialogueHistoryItem(
-                    title = "【精灵姐姐】",
-                    question = "开始我们今天的编程冒险吧！",
-                    answer = "哈喽！我是你的智能精灵姐姐，今天想和我一起探索什么神奇的 Scratch 编程魔法呢？✨",
-                    timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-                )
-            )
-        }
-    }
+    // Lifted active tab and dialogue history list states (修复1-3)
+    val activeTab by viewModel.aiActiveTab.collectAsState()
+    val dialogueHistory by viewModel.dialogueHistoryList.collectAsState()
 
     // Capture and automatically append new AI replies into dialogue history
     LaunchedEffect(aiResult) {
         val res = aiResult
         val type = aiResultType
         if (!res.isNullOrBlank()) {
-            if (dialogueHistory.none { it.answer == res }) {
+            val history = viewModel.dialogueHistoryList.value
+            if (history.none { it.answer == res }) {
                 val q = when (type) {
                     "创意引导" -> if (creativePromptInput.text.isNotBlank()) "主题: ${creativePromptInput.text}" else "自由扩展与创意优化"
                     "知识点讲解" -> if (kbPromptInput.text.isNotBlank()) "知识点: ${kbPromptInput.text}" else "知识考点"
@@ -5749,12 +5734,13 @@ fun AiAssistPanel(
                     else -> "诊断检测"
                 }
                 val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-                dialogueHistory.add(0, DialogueHistoryItem(
+                val newItem = DialogueHistoryItem(
                     title = "【$type】",
                     question = q,
                     answer = res,
                     timestamp = timeStr
-                ))
+                )
+                viewModel.dialogueHistoryList.value = listOf(newItem) + history
             }
         }
     }
@@ -5773,7 +5759,7 @@ fun AiAssistPanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(Color(0xFFC2185B))
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -5787,12 +5773,13 @@ fun AiAssistPanel(
                 }
             }
 
-            // Area 1: 顶部功能标签区 (Height 48dp, 16dp spacing, underline indicator)
+            // Area 1: 顶部功能标签区 (Height 48dp, 12dp spacing, underline indicator)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(48.dp)
                     .background(Color.White)
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -5801,18 +5788,19 @@ fun AiAssistPanel(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .clickable { activeTab = tab }
-                            .padding(vertical = 12.dp),
+                            .fillMaxHeight()
+                            .clickable { viewModel.aiActiveTab.value = tab }
+                            .padding(vertical = 4.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
                             Text(
                                 text = tab,
                                 color = if (isSelected) Color(0xFFC2185B) else Color.Gray,
-                                fontSize = 14.sp,
+                                fontSize = 13.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
-                            Spacer(modifier = Modifier.height(4.dp))
+                            Spacer(modifier = Modifier.height(2.dp))
                             Box(
                                 modifier = Modifier
                                     .width(36.dp)
@@ -5824,29 +5812,29 @@ fun AiAssistPanel(
                 }
             }
 
-            // Area 2: 中间内容展示区 (占 70% 比例、支持完整滚动及点击历史记录展开)
+            // Area 2: 中间内容展示区 (Modifier.weight(1f) 占满所有剩余空间、支持完整滚动及点击历史记录展开)
             LazyColumn(
                 modifier = Modifier
-                    .weight(0.7f)
+                    .weight(1f)
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Section: Specific Controls depending on selected tab
                 item {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         when (activeTab) {
                             "语法纠错" -> {
-                                // Switch for Real-time detection in Optimization 1
+                                // Switch for Real-time detection
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .background(Color.White, RoundedCornerShape(8.dp))
                                         .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
@@ -5884,7 +5872,7 @@ fun AiAssistPanel(
                                     border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
+                                    Column(modifier = Modifier.padding(10.dp)) {
                                         Text("💡 创意灵感库介绍", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
                                         Spacer(modifier = Modifier.height(4.dp))
                                         Text(
@@ -6009,7 +5997,10 @@ fun AiAssistPanel(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                dialogueHistory[index] = item.copy(isExpanded = !item.isExpanded)
+                                val updatedList = viewModel.dialogueHistoryList.value.map {
+                                    if (it.id == item.id) it.copy(isExpanded = !it.isExpanded) else it
+                                }
+                                viewModel.dialogueHistoryList.value = updatedList
                             }
                             .background(Color.White, RoundedCornerShape(8.dp))
                             .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
@@ -6152,19 +6143,23 @@ fun AiAssistPanel(
                                     customQuestionInput = TextFieldValue("")
                                     val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                                     
-                                    // Add to history list immediately
-                                    dialogueHistory.add(0, DialogueHistoryItem(
+                                    val newItem = DialogueHistoryItem(
                                         title = "【自定义提问】",
                                         question = userQ,
                                         answer = "正在全力思索中...",
                                         timestamp = timeStr
-                                    ))
+                                    )
+                                    viewModel.dialogueHistoryList.value = listOf(newItem) + viewModel.dialogueHistoryList.value
                                     
                                     viewModel.callAiCustomQuestion(userQ) { response ->
-                                        val idx = dialogueHistory.indexOfFirst { it.question == userQ && it.answer == "正在全力思索中..." }
-                                        if (idx != -1) {
-                                            dialogueHistory[idx] = dialogueHistory[idx].copy(answer = response)
+                                        val updatedHistory = viewModel.dialogueHistoryList.value.map {
+                                            if (it.question == userQ && it.answer == "正在全力思索中...") {
+                                                it.copy(answer = response)
+                                            } else {
+                                                it
+                                            }
                                         }
+                                        viewModel.dialogueHistoryList.value = updatedHistory
                                     }
                                 }
                                 "创意引导" -> {

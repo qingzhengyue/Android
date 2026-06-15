@@ -113,6 +113,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _realTimeStateEnabled.value = enabled
     }
 
+    // --- 智能精灵全局状态提升 (修复1-3) ---
+    val showAiAssistSheet = MutableStateFlow(false)
+    val aiActiveTab = MutableStateFlow("语法纠错")
+    val dialogueHistoryList = MutableStateFlow<List<DialogueHistoryItem>>(
+        listOf(
+            DialogueHistoryItem(
+                title = "【精灵姐姐】",
+                question = "开始我们今天的编程冒险吧！",
+                answer = "哈喽！我是你的智能精灵姐姐，今天想和我一起探索什么神奇的 Scratch 编程魔法呢？✨",
+                timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
+            )
+        )
+    )
+
     init {
         viewModelScope.launch {
             repository.initializeDatabase()
