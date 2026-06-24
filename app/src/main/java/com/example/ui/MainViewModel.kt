@@ -7,6 +7,8 @@ import com.example.data.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -106,6 +108,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _aiClassConfig = MutableStateFlow<AiTeachingConfig?>(null)
     val aiClassConfig: StateFlow<AiTeachingConfig?> = _aiClassConfig.asStateFlow()
 
+    private val _currentClass = MutableStateFlow<ClassEntity?>(null)
+    val currentClass: StateFlow<ClassEntity?> = _currentClass.asStateFlow()
+
+    private val _classConfigMap = MutableStateFlow<Map<String, Any>>(emptyMap())
+    val classConfigMap: StateFlow<Map<String, Any>> = _classConfigMap.asStateFlow()
+
     private val _realTimeStateEnabled = MutableStateFlow(false)
     val realTimeStateEnabled: StateFlow<Boolean> = _realTimeStateEnabled.asStateFlow()
 
@@ -127,12 +135,66 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     )
 
+    fun parseConfigFromDescription(desc: String): Map<String, Any> {
+        val result = mutableMapOf<String, Any>()
+        val trimmed = desc.trim()
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                val json = org.json.JSONObject(trimmed)
+                result["level"] = json.optString("level", "三年级")
+                result["dailyLimit"] = json.optInt("dailyLimit", 10)
+                result["grammarCorrect"] = json.optBoolean("grammarCorrect", true)
+                result["creativeGuide"] = json.optBoolean("creativeGuide", true)
+                result["knowledgeExplain"] = json.optBoolean("knowledgeExplain", true)
+                result["codeGenerate"] = json.optBoolean("codeGenerate", false)
+                result["style"] = json.optString("style", "趣味活泼")
+                result["remark"] = json.optString("remark", "")
+                return result
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        result["level"] = "三年级"
+        result["dailyLimit"] = 10
+        result["grammarCorrect"] = true
+        result["creativeGuide"] = true
+        result["knowledgeExplain"] = true
+        result["codeGenerate"] = false
+        result["style"] = "趣味活泼"
+        result["remark"] = ""
+        return result
+    }
+
+    fun syncClassConfig() {
+        val classId = _currentClassId.value
+        if (classId > 0) {
+            val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
+            _classConfigMap.value = parseConfigFromDescription(classDesc)
+        }
+    }
+
+    fun getStudentLearningHours(studentId: Int): Double {
+        val draftCount = _draftsList.value.size
+        val submissionCount = _worksList.value.size
+        val aiCount = _aiRecordHistory.value.size
+        
+        // 5 mins per draft, 15 mins per submission, 3 mins per AI help call
+        val totalMinutes = draftCount * 5.0 + submissionCount * 15.0 + aiCount * 3.0
+        val hours = totalMinutes / 60.0
+        return Math.round(hours * 10.0) / 10.0
+    }
+
     init {
         viewModelScope.launch {
             repository.initializeDatabase()
             loadClasses()
             if (_isLoggedIn.value) {
                 onUserLoggedIn()
+            }
+            // Start class config polling every 5 seconds to ensure instant sync
+            while (true) {
+                syncClassConfig()
+                delay(5000L)
             }
         }
     }
@@ -244,6 +306,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentUserId.value = studentId
 
         if (role == "student") {
+            viewModelScope.launch {
+                _currentClass.value = repository.getClassById(classId)
+            }
+            syncClassConfig()
             // 获取本班任务
             viewModelScope.launch {
                 repository.getTasksByClass(classId).collect { list ->
@@ -551,6 +617,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private suspend fun callGeminiWithTimeoutAndRetry(prompt: String): String {
+        var lastException: Throwable? = null
+        var currentDelay = 1000L
+        for (attempt in 0..2) {
+            try {
+                return kotlinx.coroutines.withTimeout(15000L) {
+                    GeminiClient.generateContent(prompt, isNetworkAvailable())
+                }
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                lastException = e
+            } catch (e: Exception) {
+                lastException = e
+            }
+            if (attempt < 2) {
+                delay(currentDelay)
+                currentDelay *= 2
+            }
+        }
+        if (lastException is kotlinx.coroutines.TimeoutCancellationException) {
+            throw lastException
+        } else {
+            throw lastException ?: Exception("Unknown error")
+        }
+    }
+
     // --- AI 实时辅助功能 ---
     fun callAiAssistant(funcType: String, currentCodeInjected: String? = null) {
         if (funcType == "语法纠错") {
@@ -599,22 +690,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     style = json.optString("style", "趣味活泼")
 
                     if (funcType == "语法纠错" && !grammarCorrect) {
-                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级参数中关闭了「语法纠错」功能噢。去尝试自己调试解决或者询问老师吧！"
+                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "老师暂未开启此功能噢，先自己开动脑筋想一想吧！", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                        _aiResult.value = "【老师限制了该功能】老师暂未开启此功能噢，先自己开动脑筋想一想吧！"
                         _aiLoading.value = false
                         return@launch
                     }
                     if (funcType == "创意引导" && !creativeGuide) {
-                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级配置中关闭了「创意引导」功能噢。"
+                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "老师暂未开启此功能噢，先自己开动脑筋想一想吧！", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                        _aiResult.value = "【老师限制了该功能】老师暂未开启此功能噢，先自己开动脑筋想一想吧！"
                         _aiLoading.value = false
                         return@launch
                     }
                     if ((funcType == "知识点讲解" || funcType == "考点讲解") && !knowledgeExplain) {
-                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级配置中关闭了「知识点讲解/考点讲解」功能噢。"
+                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "老师暂未开启此功能噢，先自己开动脑筋想一想吧！", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                        _aiResult.value = "【老师限制了该功能】老师暂未开启此功能噢，先自己开动脑筋想一想吧！"
                         _aiLoading.value = false
                         return@launch
                     }
                     if ((funcType == "代码优化建议" || funcType == "完整代码生成") && !codeGenerate) {
-                        _aiResult.value = "【老师限制了该功能】王老师现在已在班级配置中关闭了「完整代码生成/优化建议」功能噢。"
+                        withContext(kotlinx.coroutines.Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "老师暂未开启此功能噢，先自己开动脑筋想一想吧！", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                        _aiResult.value = "【老师限制了该功能】老师暂未开启此功能噢，先自己开动脑筋想一想吧！"
                         _aiLoading.value = false
                         return@launch
                     }
@@ -638,7 +741,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                    - 【循环/重复执行】比作“小猫坐上了永远停不下来的欢快旋转木马”。
                    - 【条件判断/如果..那么】比作“天气预报小哨兵”，只在符合条件时才吹哨放行。
                    - 【坐标(X, Y)】比作“小猫站在一排横座位 and 一排纵座位交叉的方格教室里”。
-                4. 【视觉分段排版】：句子短小，多用 ①、②、③ 标清动手步骤，重点积木 and 参数名字用中括号【】和粗体加亮以便小学生看清。
+                4. 【视觉分段排版】：句子短小，多用 ①、②、③ 标清动手步骤，重点积木 and 参数名字用中括号【】 and 粗体加亮以便小学生看清。
                 5. $styleInstruction
                 6. $levelInstruction
             """.trimIndent()
@@ -684,18 +787,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             // 3. 异步获取 Gemini 响应并填充记录
             val aiResponse = try {
-                GeminiClient.generateContent(prompt, isNetworkAvailable())
+                callGeminiWithTimeoutAndRetry(prompt)
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                "【连接超时啦 ⏰】精灵姐姐刚才可能开小差去采花了，没有在 15 秒内赶回来。别着急，我们可以【点击重试】或者重新发送一次哦！"
             } catch (e: Exception) {
                 e.printStackTrace()
-                "AI老师正在忙，请稍后再试"
+                "【服务器忙碌中 ☁️】太空信号有点不稳定，精灵姐姐暂时没有收到你的魔法代码。别着急，让网络飞一会儿，咱们过 10 秒钟再点一下重试吧！"
             }
             _aiResult.value = aiResponse
 
-            val isFailed = aiResponse == "网络连接异常，请检查您的网络" ||
-                    aiResponse == "AI老师正在忙，请稍后再试" ||
-                    aiResponse == "AI老师暂时无法回答，请稍后再试" ||
-                    aiResponse == "授权失效，请重新登录" ||
-                    aiResponse == "请求超时，请检查网络后重试"
+            val isFailed = aiResponse.startsWith("【连接超时") || aiResponse.startsWith("【服务器忙碌")
 
             if (isFailed) {
                 _aiConsecutiveFailures.value += 1
@@ -745,6 +846,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _aiLoading.value = true
             _aiDailyLimitReached.value = false
 
+            // 0. 安全过滤与输入验证
+            val trimmed = question.trim()
+            if (trimmed.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "提问不能空空如也哦，快写点什么吧！", android.widget.Toast.LENGTH_LONG).show()
+                }
+                onResponse("提问不能空空如也哦，快写点什么吧！")
+                _aiLoading.value = false
+                return@launch
+            }
+            // 包含中文字符校验
+            val hasChinese = trimmed.any { it in '\u4e00'..'\u9fa5' }
+            if (!hasChinese) {
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "提问最好包含中文字符噢，请写几句通俗的中文吧！", android.widget.Toast.LENGTH_LONG).show()
+                }
+                onResponse("提问最好包含中文字符噢，请写几句通俗的中文吧！")
+                _aiLoading.value = false
+                return@launch
+            }
+            // 纯特殊字符过滤（必须含有字母、数字或汉字）
+            val hasValidChar = trimmed.any { it.isLetterOrDigit() || it in '\u4e00'..'\u9fa5' }
+            if (!hasValidChar) {
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "精灵姐姐看不懂奇怪的符号噢，请说一句正常的中文吧！", android.widget.Toast.LENGTH_LONG).show()
+                }
+                onResponse("精灵姐姐看不懂奇怪的符号噢，请说一句正常的中文吧！")
+                _aiLoading.value = false
+                return@launch
+            }
+
             // 1. 验证调用额度限制
             val countOk = repository.checkDailyAssistOk(studentId, classId)
             if (!countOk) {
@@ -761,6 +893,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
                 try {
                     val json = org.json.JSONObject(classDesc)
+                    val grammarCorrect = json.optBoolean("grammarCorrect", true)
+                    if (!grammarCorrect) {
+                        withContext(Dispatchers.Main) {
+                            android.widget.Toast.makeText(context, "老师暂未开启此功能噢，先自己开动脑筋想一想吧！", android.widget.Toast.LENGTH_LONG).show()
+                        }
+                        onResponse("老师暂未开启此功能噢，先自己开动脑筋想一想吧！")
+                        _aiLoading.value = false
+                        return@launch
+                    }
                     level = json.optString("level", "三年级")
                     style = json.optString("style", "趣味活泼")
                 } catch (e: Exception) {
@@ -774,7 +915,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val systemInstruction = """
                 你是一个超级有爱心、说话极其温柔和蔼、充满童趣 of 少儿编程(Scratch 3.0)“编程精灵姐姐”。
                 因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
-                1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
+                1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通 and 水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
                 2. 【绝对要具体、提供一步步可跟着做的动作指南】。
                 例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字 of 积木】并用手指拖拽出来；第三步，把它贴在组件下方。
                 3. $styleInstruction
@@ -785,18 +926,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val prompt = "$systemInstruction\n\n小朋友问：“$question”"
             val response = try {
-                GeminiClient.generateContent(prompt, isNetworkAvailable())
+                callGeminiWithTimeoutAndRetry(prompt)
+            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                "【连接超时啦 ⏰】精灵姐姐刚才可能开小差去采花了，没有在 15 秒内赶回来。别着急，我们可以【点击重试】或者重新发送一次哦！"
             } catch (e: Exception) {
                 e.printStackTrace()
-                "AI老师正在忙，请稍后再试"
+                "【服务器忙碌中 ☁️】太空信号有点不稳定，精灵姐姐暂时没有收到你的魔法代码。别着急，让网络飞一会儿，咱们过 10 秒钟再点一下重试吧！"
             }
             onResponse(response)
 
-            val isFailed = response == "网络连接异常，请检查您的网络" ||
-                    response == "AI老师正在忙，请稍后再试" ||
-                    response == "AI老师暂时无法回答，请稍后再试" ||
-                    response == "授权失效，请重新登录" ||
-                    response == "请求超时，请检查网络后重试"
+            val isFailed = response.startsWith("【连接超时") || response.startsWith("【服务器忙碌")
 
             if (isFailed) {
                 _aiConsecutiveFailures.value += 1

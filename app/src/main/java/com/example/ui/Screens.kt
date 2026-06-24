@@ -1009,7 +1009,8 @@ fun MagicBoxDrawerPanel(
     webView: WebView?,
     viewModel: MainViewModel,
     onClose: () -> Unit,
-    onInsertText: (String) -> Unit
+    onInsertText: (String) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     var selectedCategory by remember { mutableStateOf("运动") }
     var showTemplateDialog by remember { mutableStateOf<TemplateItem?>(null) }
@@ -1087,9 +1088,7 @@ fun MagicBoxDrawerPanel(
 
     Surface(
         color = Color.White,
-        modifier = Modifier
-            .width(280.dp)
-            .fillMaxHeight(),
+        modifier = modifier,
         shadowElevation = 8.dp,
         border = BorderStroke(1.dp, Color(0xFFE0E0E0))
     ) {
@@ -1353,6 +1352,10 @@ fun MagicBoxDrawerPanel(
 
 @Composable
 fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: () -> Unit) {
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
+    val isTablet = configuration.screenWidthDp > 600
+    val drawerWidth = if (isTablet) 240.dp else configuration.screenWidthDp.dp
+
     val draftCode by viewModel.currentDraftCode.collectAsState()
     val draftName by viewModel.currentDraftName.collectAsState()
     val taskName by viewModel.currentTaskName.collectAsState()
@@ -1575,7 +1578,12 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             ) {
                 // 3. 编程魔法盒 Button
                 TopBarActionButton(
-                    onClick = { showMagicBoxDrawer = !showMagicBoxDrawer },
+                    onClick = {
+                        showMagicBoxDrawer = !showMagicBoxDrawer
+                        if (!isTablet && showMagicBoxDrawer) {
+                            showAiAssistSheet = false
+                        }
+                    },
                     icon = Icons.Default.Widgets,
                     text = "编程魔法盒 🎒",
                     containerColor = Color(0xFFF57C00) // Deep warm amber
@@ -1601,6 +1609,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 TopBarActionButton(
                     onClick = {
                         showAiAssistSheet = !showAiAssistSheet
+                        if (!isTablet && showAiAssistSheet) {
+                            showMagicBoxDrawer = false
+                        }
                     },
                     icon = Icons.Default.AutoAwesome,
                     text = "智能精灵姐姐 👩‍💻",
@@ -1626,13 +1637,15 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         val clip = android.content.ClipData.newPlainText("scratch", text)
                         clipboardManager.setPrimaryClip(clip)
                         android.widget.Toast.makeText(context, "星梭拼搭秘籍已写入剪贴板 ⚡！请进入网页编辑区并拼搭它们噢！✨", android.widget.Toast.LENGTH_LONG).show()
-                    }
+                    },
+                    modifier = Modifier.width(drawerWidth)
                 )
             }
 
             BoxWithConstraints(
                 modifier = Modifier
                     .weight(1f)
+                    .widthIn(min = 300.dp)
                     .background(Color(0xFFF5F5F5))
             ) {
         val density = androidx.compose.ui.platform.LocalDensity.current
@@ -1918,7 +1931,8 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     realTimeCheckEnabled = realTimeCheckEnabled,
                     onRealTimeCheckChange = { viewModel.setRealTimeStateEnabled(it) },
                     getLiveCodeAndCall = { getLiveCodeAndCall(it) },
-                    onClose = { showAiAssistSheet = false }
+                    onClose = { showAiAssistSheet = false },
+                    modifier = Modifier.width(drawerWidth)
                 )
             }
         } // Closes side-by-side Row
@@ -5716,7 +5730,8 @@ fun AiAssistPanel(
     realTimeCheckEnabled: Boolean,
     onRealTimeCheckChange: (Boolean) -> Unit,
     getLiveCodeAndCall: (String) -> Unit,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val panelWidth = (configuration.screenWidthDp / 3).dp
@@ -5760,9 +5775,7 @@ fun AiAssistPanel(
     }
 
     Card(
-        modifier = Modifier
-            .fillMaxHeight()
-            .width(panelWidth),
+        modifier = modifier,
         shape = androidx.compose.ui.graphics.RectangleShape,
         colors = CardDefaults.cardColors(containerColor = Color(0xFFFCE4EC)),
         border = BorderStroke(1.dp, Color(0xFFF06292))
