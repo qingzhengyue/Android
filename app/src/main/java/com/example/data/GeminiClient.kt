@@ -37,8 +37,8 @@ object GeminiClient {
             return@withContext "【API 密钥未配置】当前展示本地精灵姐姐解答：\n\n1. 已经为您保存了最新进度！\n2. 积木块逻辑：如果要重复动作，记得放入【重复执行】里面，并检查动作速度不要过快哦～"
         }
 
-        val isQwen = apiKey.startsWith("sk-")
         val isSparkMaaS = apiKey.startsWith("dae06") || apiKey.contains(":")
+        val isQwen = true // 强制统一使用通义千问 API
         var attempts = 0
         val maxAttempts = 3
         var lastErrCode = 0
