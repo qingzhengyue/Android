@@ -36,6 +36,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentUserId = MutableStateFlow(SharedPreferencesUtil.getUserId(context))
     val currentUserId: StateFlow<Int> = _currentUserId.asStateFlow()
 
+    val currentStudentDetails = MutableStateFlow<Student?>(null)
+    val currentStudentClass = MutableStateFlow<ClassEntity?>(null)
+
     private val _currentBtnLoading = MutableStateFlow(false)
     val currentBtnLoading: StateFlow<Boolean> = _currentBtnLoading.asStateFlow()
 
@@ -316,6 +319,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (role == "student") {
             viewModelScope.launch {
                 _currentClass.value = repository.getClassById(classId)
+                val student = repository.getStudentById(studentId)
+                currentStudentDetails.value = student
+                if (student != null) {
+                    currentStudentClass.value = repository.getClassById(student.classId)
+                }
             }
             syncClassConfig()
             // 获取本班任务
@@ -534,6 +542,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentUserId.value = -1
         _currentClassId.value = 0
         _currentIdentifier.value = ""
+        currentStudentDetails.value = null
+        currentStudentClass.value = null
     }
 
     // --- 在线编程、草稿及提交 ---
@@ -1340,6 +1350,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // --- 获取 Scratch 练习模板代码 ---
     fun getTemplateCode(id: Int): String {
         return staticGetTemplateCode(id)
+    }
+
+    fun enterTaskProgramming(taskId: Int, taskName: String, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            val studentId = _currentUserId.value
+            if (studentId != -1) {
+                val existingDraft = repository.getDraftsByStudentDirect(studentId).find { it.taskId == taskId }
+                if (existingDraft != null) {
+                    currentDraftCode.value = existingDraft.blockCode
+                    currentDraftName.value = existingDraft.draftName
+                    currentTaskId.value = taskId
+                    currentTaskName.value = taskName
+                    workspaceLoadEvent.value = existingDraft.blockCode
+                } else {
+                    val template = staticGetTemplateCode(taskId)
+                    val draftNameString = "$taskName - 草稿"
+                    val newDraft = ScratchDraft(
+                        studentId = studentId,
+                        taskId = taskId,
+                        draftName = draftNameString,
+                        blockCode = template
+                    )
+                    repository.saveDraft(newDraft)
+                    
+                    currentDraftCode.value = template
+                    currentDraftName.value = draftNameString
+                    currentTaskId.value = taskId
+                    currentTaskName.value = taskName
+                    workspaceLoadEvent.value = template
+                }
+            }
+            onComplete()
+        }
+    }
+
+    fun updateStudentPassword(newPass: String, onResult: (Boolean, String) -> Unit) {
+        val sId = _currentUserId.value
+        if (sId == -1) {
+            onResult(false, "错误：未登录")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                repository.updateStudentPassword(sId, newPass)
+                val updatedStudent = repository.getStudentById(sId)
+                currentStudentDetails.value = updatedStudent
+                onResult(true, "密码修改成功！新密码已生效。")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult(false, "密码修改失败，请重试。")
+            }
+        }
     }
 }
 

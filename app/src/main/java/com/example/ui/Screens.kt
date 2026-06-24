@@ -14,6 +14,8 @@ import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -878,6 +880,7 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                     1 -> StudentTasksScreen(viewModel = viewModel, onGoToCode = { selectedScreenIndex = 0 })
                     2 -> StudentWorksScreen(viewModel = viewModel)
                     3 -> StudentAiAssistHistoricalHub(viewModel = viewModel)
+                    4 -> StudentProfileScreen(viewModel = viewModel)
                 }
             } else {
                 if (teacherViewingWorkspace) {
@@ -914,7 +917,8 @@ fun StudentHorizontalTabBar(
                 "Scratch编程" to Icons.Default.Code,
                 "学习任务" to Icons.Default.Assignment,
                 "我的作品" to Icons.Default.Collections,
-                "AI 辅助" to Icons.Default.AutoAwesome
+                "AI 辅助" to Icons.Default.AutoAwesome,
+                "个人中心" to Icons.Default.Person
             )
             tabs.forEachIndexed { index, (title, icon) ->
                 val isSelected = selectedScreenIndex == index
@@ -1715,7 +1719,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             super.onPageFinished(view, url)
                             isPageLoading = false
                             
-                            // 优化二：注入口：通过给HTML注入自定义Viewport限制双指缩放范围 (0.5x 到 2.0x, 默认 1.0x)
+                            // 优化二：注入口：通过给HTML注入自定义Viewport限制双指缩放范围并屏蔽三方冗余登录
                             val viewportJs = """
                                 (function() {
                                     var meta = document.createElement('meta');
@@ -1726,6 +1730,13 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                                         var existingViewports = document.querySelectorAll('meta[name="viewport"]');
                                         existingViewports.forEach(function(el) { el.remove(); });
                                         head.appendChild(meta);
+                                        
+                                        // 注入自定义 CSS 屏蔽三方冗余登录对话框与顶栏多余按钮
+                                        var css = '[class*="modal_modal-overlay"], [class*="login-modal"], [class*="login-dialog"], [class*="prompt_prompt-"], [class*="alert_alert"], [class*="alert_alert-container"], div[class*="modal_modal-content"], div[class*="prompt_prompt-overlay"], .react-modal-sheet-container, .login-dialog, #login-dialog, .login-modal, .alert-container, [class*="menu-bar_account-info-group"], [class*="menu-bar_login-button"], [class*="menu-bar_mystuff-button"], div[class*="menu-bar_account-info-group"], div[class*="menu-bar_mystuff-button"] { display: none !important; }';
+                                        var style = document.createElement('style');
+                                        style.type = 'text/css';
+                                        style.appendChild(document.createTextNode(css));
+                                        head.appendChild(style);
                                     }
                                     
                                     function tryAttach() {
@@ -2390,11 +2401,10 @@ fun StudentTasksScreen(viewModel: MainViewModel, onGoToCode: () -> Unit) {
 
                 Button(
                     onClick = {
-                        // 自动关联任务到工作区
-                        viewModel.currentTaskId.value = task.taskId
-                        viewModel.currentTaskName.value = task.taskName
-                        viewModel.currentDraftName.value = "${task.taskName} - 草稿"
-                        onGoToCode()
+                        // 自动加载/创建关联任务的草稿并跳转到工作区
+                        viewModel.enterTaskProgramming(task.taskId, task.taskName) {
+                            onGoToCode()
+                        }
                         selectedTaskForDetail = null // 回到列表，保证下次进属于列表
                     },
                     modifier = Modifier.weight(1.5f).height(46.dp),
@@ -6519,5 +6529,217 @@ fun AiAssistPanel(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun StudentProfileScreen(viewModel: MainViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val studentDetails by viewModel.currentStudentDetails.collectAsState()
+    val studentClass by viewModel.currentStudentClass.collectAsState()
+
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
+    var passwordVisible by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF5F6FA))
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        // Top Banner / Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color(0xFF1A237E)),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Profile Avatar Placeholder
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .background(Color(0x33FFFFFF), shape = CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "👦",
+                        fontSize = 40.sp
+                    )
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text(
+                    text = studentDetails?.name ?: "载入中...",
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "星梭少儿编程智慧云端空间",
+                    color = Color(0xB3FFFFFF),
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        // Student Info Details Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "📋 个人档案基本信息",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF333333),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                ProfileInfoRow(label = "姓名", value = studentDetails?.name ?: "载入中...")
+                ProfileInfoRow(label = "学号", value = studentDetails?.studentNumber ?: "载入中...")
+                ProfileInfoRow(label = "所属班级", value = studentClass?.className ?: "载入中...")
+                ProfileInfoRow(label = "当前学段", value = studentClass?.grade ?: "载入中...")
+            }
+        }
+
+        // Change Password Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Text(
+                    text = "🔒 安全密码修改与重置",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF333333),
+                    modifier = Modifier.padding(bottom = 12.dp)
+                )
+
+                Divider(color = Color(0xFFEEEEEE), thickness = 1.dp)
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "💡 安全密码有助于保护您的 Scratch 创意草稿及 AI 评测记录。建议密码为 6 位数字或字母。",
+                    fontSize = 12.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+
+                OutlinedTextField(
+                    value = newPassword,
+                    onValueChange = { newPassword = it },
+                    label = { Text("请输入新密码") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                            Icon(
+                                imageVector = if (passwordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                                contentDescription = null
+                            )
+                        }
+                    }
+                )
+
+                OutlinedTextField(
+                    value = confirmPassword,
+                    onValueChange = { confirmPassword = it },
+                    label = { Text("请再次输入确认新密码") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+                    visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
+                )
+
+                Button(
+                    onClick = {
+                        if (newPassword.isBlank() || confirmPassword.isBlank()) {
+                            Toast.makeText(context, "密码不能为空哦！", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (newPassword != confirmPassword) {
+                            Toast.makeText(context, "两次输入密码不一致，请仔细检查！", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        if (newPassword.length < 6) {
+                            Toast.makeText(context, "为了账号安全，新密码至少需要 6 位长度哦！", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        
+                        viewModel.updateStudentPassword(newPassword) { success, msg ->
+                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            if (success) {
+                                newPassword = ""
+                                confirmPassword = ""
+                            }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(imageVector = Icons.Default.Lock, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("立即安全修改密码 ⚡", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ProfileInfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            color = Color.Gray,
+            fontWeight = FontWeight.Medium
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            color = Color(0xFF333333),
+            fontWeight = FontWeight.Bold
+        )
     }
 }

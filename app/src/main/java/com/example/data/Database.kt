@@ -158,6 +158,9 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertStudent(student: Student): Long
 
+    @Query("UPDATE student SET password = :newPass WHERE studentId = :studentId")
+    suspend fun updateStudentPassword(studentId: Int, newPass: String)
+
     @Query("SELECT * FROM student WHERE studentNumber = :studentNumber LIMIT 1")
     suspend fun getStudentByNumber(studentNumber: String): Student?
 
@@ -199,6 +202,9 @@ interface AppDao {
     // --- 草稿操作 ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertDraft(draft: ScratchDraft): Long
+
+    @Query("SELECT * FROM scratch_draft WHERE studentId = :studentId ORDER BY lastModifiedTime DESC")
+    suspend fun getDraftsByStudentDirect(studentId: Int): List<ScratchDraft>
 
     @Query("SELECT * FROM scratch_draft WHERE studentId = :studentId ORDER BY lastModifiedTime DESC")
     fun getDraftsByStudentFlow(studentId: Int): Flow<List<ScratchDraft>>

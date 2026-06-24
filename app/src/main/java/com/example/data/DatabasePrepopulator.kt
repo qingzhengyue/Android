@@ -36,78 +36,64 @@ object DatabasePrepopulator {
                 )
             ).toInt()
 
-            // 3. 插入学生 (多级班级学生示例数据)
-            val studentId1 = dao.insertStudent(
-                Student(
-                    studentNumber = "S2001",
-                    name = "张小帅",
-                    password = "123456",
-                    classId = classId1
-                )
-            ).toInt()
+            // 3. 插入学生 (多级班级学生示例数据，每个班至少25人)
+            val class1Names = listOf(
+                "张小帅", "李小美", "周杰伦", "蔡徐坤", "谷爱凌", 
+                "陈小明", "林华华", "王壮壮", "徐佳佳", "刘飞飞", 
+                "杨晨晨", "黄洋洋", "周涛涛", "吴圆圆", "徐婷婷", 
+                "孙蕾蕾", "胡帅帅", "朱佩佩", "高健健", "林欢欢", 
+                "何欣欣", "邓鹏鹏", "郭萌萌", "马丽丽", "罗阳阳"
+            )
+            var studentId1 = 0
+            var studentId2 = 0
+            var studentId3 = 0
+            var studentId4 = 0
+            var studentId5 = 0
 
-            val studentId2 = dao.insertStudent(
-                Student(
-                    studentNumber = "S2002",
-                    name = "李小美",
-                    password = "123456",
-                    classId = classId1
-                )
-            ).toInt()
+            for (i in 0 until 25) {
+                val sNum = "S" + (2001 + i)
+                val sName = class1Names.getOrElse(i) { "学生$sNum" }
+                val sId = dao.insertStudent(
+                    Student(
+                        studentNumber = sNum,
+                        name = sName,
+                        password = "123456",
+                        classId = classId1
+                    )
+                ).toInt()
+                if (i == 0) studentId1 = sId
+                if (i == 1) studentId2 = sId
+                if (i == 2) studentId3 = sId
+                if (i == 3) studentId4 = sId
+                if (i == 4) studentId5 = sId
+            }
 
-            val studentId3 = dao.insertStudent(
-                Student(
-                    studentNumber = "S2003",
-                    name = "周杰伦",
-                    password = "123456",
-                    classId = classId1
-                )
-            ).toInt()
+            val class2Names = listOf(
+                "王小飞", "赵丽颖", "易烊千玺", "迪丽热巴", "王源", 
+                "王俊凯", "肖战", "王一博", "杨幂", "赵露思", 
+                "张艺兴", "白敬亭", "吴磊", "关晓彤", "张子枫", 
+                "彭昱畅", "郭麒麟", "毛不易", "周深", "薛之谦", 
+                "邓紫棋", "李宇春", "张靓颖", "华晨宇", "张杰"
+            )
+            var studentId6 = 0
+            var studentId7 = 0
+            var studentId8 = 0
 
-            val studentId4 = dao.insertStudent(
-                Student(
-                    studentNumber = "S2004",
-                    name = "蔡徐坤",
-                    password = "123456",
-                    classId = classId1
-                )
-            ).toInt()
-
-            val studentId5 = dao.insertStudent(
-                Student(
-                    studentNumber = "S2005",
-                    name = "谷爱凌",
-                    password = "123456",
-                    classId = classId1
-                )
-            ).toInt()
-
-            val studentId6 = dao.insertStudent(
-                Student(
-                    studentNumber = "S3001",
-                    name = "王小飞",
-                    password = "123456",
-                    classId = classId2
-                )
-            ).toInt()
-
-            val studentId7 = dao.insertStudent(
-                Student(
-                    studentNumber = "S3002",
-                    name = "赵丽颖",
-                    password = "123456",
-                    classId = classId2
-                )
-            ).toInt()
-
-            val studentId8 = dao.insertStudent(
-                Student(
-                    studentNumber = "S3003",
-                    name = "易烊千玺",
-                    password = "123456",
-                    classId = classId2
-                )
-            ).toInt()
+            for (i in 0 until 25) {
+                val sNum = "S" + (3001 + i)
+                val sName = class2Names.getOrElse(i) { "学生$sNum" }
+                val sId = dao.insertStudent(
+                    Student(
+                        studentNumber = sNum,
+                        name = sName,
+                        password = "123456",
+                        classId = classId2
+                    )
+                ).toInt()
+                if (i == 0) studentId6 = sId
+                if (i == 1) studentId7 = sId
+                if (i == 2) studentId8 = sId
+            }
 
             // 4. 插入 AI 教学配置 (ai_teaching_config)
             dao.insertConfig(

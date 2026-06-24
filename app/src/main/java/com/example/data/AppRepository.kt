@@ -69,6 +69,10 @@ class AppRepository(private val context: Context) {
         dao.getStudentById(id)
     }
 
+    suspend fun updateStudentPassword(studentId: Int, newPass: String) = withContext(Dispatchers.IO) {
+        dao.updateStudentPassword(studentId, newPass)
+    }
+
     suspend fun getStudentsByClass(classId: Int): List<Student> = withContext(Dispatchers.IO) {
         dao.getStudentsByClass(classId)
     }
@@ -104,6 +108,10 @@ class AppRepository(private val context: Context) {
     // --- 草稿 ---
     suspend fun saveDraft(draft: ScratchDraft): Long = withContext(Dispatchers.IO) {
         dao.insertDraft(draft)
+    }
+
+    suspend fun getDraftsByStudentDirect(studentId: Int): List<ScratchDraft> = withContext(Dispatchers.IO) {
+        dao.getDraftsByStudentDirect(studentId)
     }
 
     fun getDraftsByStudent(studentId: Int): Flow<List<ScratchDraft>> = dao.getDraftsByStudentFlow(studentId)
