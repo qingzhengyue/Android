@@ -27,6 +27,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentUserName = MutableStateFlow(SharedPreferencesUtil.getUserName(context))
     val currentUserName: StateFlow<String> = _currentUserName.asStateFlow()
 
+    private val _currentIdentifier = MutableStateFlow(SharedPreferencesUtil.getIdentifier(context))
+    val currentIdentifier: StateFlow<String> = _currentIdentifier.asStateFlow()
+
     private val _currentClassId = MutableStateFlow(SharedPreferencesUtil.getClassId(context))
     val currentClassId: StateFlow<Int> = _currentClassId.asStateFlow()
 
@@ -304,6 +307,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentUserRole.value = role
         _currentClassId.value = classId
         _currentUserId.value = studentId
+        _currentIdentifier.value = SharedPreferencesUtil.getIdentifier(context)
 
         if (role == "student") {
             viewModelScope.launch {
@@ -328,10 +332,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     _worksList.value = it
                 }
             }
-            // 获取 AI 助手记录
+            // 获取 AI 助手记录并同步到对答对话记录中
             viewModelScope.launch {
-                repository.getAssistRecordsByStudent(studentId).collect {
-                    _aiRecordHistory.value = it
+                repository.getAssistRecordsByStudent(studentId).collect { list ->
+                    _aiRecordHistory.value = list
+                    // 同步到在线对答历史中以供随时回溯
+                    val mappedItems = list.map { record ->
+                        DialogueHistoryItem(
+                            id = record.callId.toString(),
+                            title = "【${record.assistType}】",
+                            question = record.requestContent,
+                            answer = record.aiResult,
+                            timestamp = java.text.SimpleDateFormat("yyyy/MM/dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(record.callTime))
+                        )
+                    }
+                    val defaultGreeting = DialogueHistoryItem(
+                        title = "【精灵姐姐】",
+                        question = "开始我们今天的编程冒险吧！",
+                        answer = "哈喽！我是你的智能精灵姐姐，今天想和我一起探索什么神奇的 Scratch 编程魔法呢？✨",
+                        timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                    )
+                    dialogueHistoryList.value = listOf(defaultGreeting) + mappedItems
                 }
             }
             viewModelScope.launch {
@@ -379,13 +400,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- 用户登录/注册逻辑 ---
     fun studentLogin(studentNum: String, pass: String, onSuccess: () -> Unit) {
+        val cleanNum = studentNum.trim().uppercase()
+        val cleanPass = pass.trim()
         viewModelScope.launch {
             _currentBtnLoading.value = true
             _authError.value = null
-            val student = repository.getStudentByNumber(studentNum)
+            val student = repository.getStudentByNumber(cleanNum)
             if (student == null) {
                 _authError.value = "没有找到该学号的学生，请确认或先注册！"
-            } else if (student.password != pass) {
+            } else if (student.password != cleanPass) {
                 _authError.value = "登录密码错误，请重新输入。"
             } else {
                 SharedPreferencesUtil.saveLoginSession(
@@ -405,18 +428,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun studentRegister(studentNum: String, name: String, pass: String, classId: Int, onSuccess: () -> Unit) {
+        val cleanNum = studentNum.trim().uppercase()
+        val cleanName = name.trim()
+        val cleanPass = pass.trim()
         viewModelScope.launch {
             _currentBtnLoading.value = true
             _authError.value = null
-            val existing = repository.getStudentByNumber(studentNum)
+            val existing = repository.getStudentByNumber(cleanNum)
             if (existing != null) {
                 _authError.value = "该学号已被注册！请直接登录。"
             } else {
                 val newId = repository.registerStudent(
                     Student(
-                        studentNumber = studentNum,
-                        name = name,
-                        password = pass,
+                        studentNumber = cleanNum,
+                        name = cleanName,
+                        password = cleanPass,
                         classId = classId
                     )
                 ).toInt()
@@ -424,9 +450,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     context = context,
                     userId = newId,
                     role = "student",
-                    userName = name,
+                    userName = cleanName,
                     classId = classId,
-                    identifier = studentNum
+                    identifier = cleanNum
                 )
                 _isLoggedIn.value = true
                 onUserLoggedIn()
@@ -437,26 +463,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun teacherRegister(workId: String, name: String, pass: String, onSuccess: () -> Unit) {
+        val cleanId = workId.trim().uppercase()
+        val cleanName = name.trim()
+        val cleanPass = pass.trim()
         viewModelScope.launch {
             _currentBtnLoading.value = true
             _authError.value = null
-            val existing = repository.getTeacherByWorkId(workId)
+            val existing = repository.getTeacherByWorkId(cleanId)
             if (existing != null) {
                 _authError.value = "该工号已被注册！请直接登录。"
             } else {
                 val newId = repository.registerTeacher(
                     Teacher(
-                        workId = workId,
-                        name = name,
-                        password = pass
+                        workId = cleanId,
+                        name = cleanName,
+                        password = cleanPass
                     )
                 ).toInt()
                 SharedPreferencesUtil.saveLoginSession(
                     context = context,
                     userId = newId,
                     role = "teacher",
-                    userName = name,
-                    identifier = workId
+                    userName = cleanName,
+                    identifier = cleanId
                 )
                 _isLoggedIn.value = true
                 onUserLoggedIn()
@@ -467,13 +496,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun teacherLogin(workId: String, pass: String, onSuccess: () -> Unit) {
+        val cleanId = workId.trim().uppercase()
+        val cleanPass = pass.trim()
         viewModelScope.launch {
             _currentBtnLoading.value = true
             _authError.value = null
-            val teacher = repository.getTeacherByWorkId(workId)
+            val teacher = repository.getTeacherByWorkId(cleanId)
             if (teacher == null) {
                 _authError.value = "未找到教师工号，请联系学校信息管理员。"
-            } else if (teacher.password != pass) {
+            } else if (teacher.password != cleanPass) {
                 _authError.value = "登录密码不正确。"
             } else {
                 SharedPreferencesUtil.saveLoginSession(
@@ -498,6 +529,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentUserName.value = ""
         _currentUserId.value = -1
         _currentClassId.value = 0
+        _currentIdentifier.value = ""
     }
 
     // --- 在线编程、草稿及提交 ---

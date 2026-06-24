@@ -1370,6 +1370,8 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var saveNameDialog by remember { mutableStateOf(false) }
     var showLoadDraftDialog by remember { mutableStateOf(false) }
     var showLoadWorkDialog by remember { mutableStateOf(false) }
+    var showSubmitDialog by remember { mutableStateOf(false) }
+    var submitWorkName by remember { mutableStateOf("") }
     
     // Draggable and foldable floating console state (优化一 & 优化二)
     var isExpanded by remember { mutableStateOf(false) }
@@ -1617,6 +1619,20 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     text = "智能精灵姐姐 👩‍💻",
                     containerColor = Color(0xFFC2185B) // Deep rose ruby
                 )
+
+                // 6. 提交作品 Button (学生专属作品提交通道)
+                val userRole by viewModel.currentUserRole.collectAsState()
+                if (userRole == "student") {
+                    TopBarActionButton(
+                        onClick = {
+                            submitWorkName = draftName
+                            showSubmitDialog = true
+                        },
+                        icon = Icons.Default.Send,
+                        text = "提交作品 🚀",
+                        containerColor = Color(0xFF1E88E5) // Nice blue
+                    )
+                }
             }
         }
 
@@ -1972,6 +1988,94 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     }
 
 
+
+    // 提交作品 Dialog
+    if (showSubmitDialog) {
+        AlertDialog(
+            onDismissRequest = { showSubmitDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Send, contentDescription = null, tint = Color(0xFF1E88E5))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("提交 Scratch 编程作业 🚀", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "提交后，AI 精灵姐姐将立即帮您做代码拼搭分析并出具精细的诊断评分报告，您的辅导老师也会在教师端同步看到您的优秀作品并进行点评噢！✨",
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
+                        color = Color.DarkGray
+                    )
+                    OutlinedTextField(
+                        value = submitWorkName,
+                        onValueChange = { submitWorkName = it },
+                        label = { Text("作品名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (submitWorkName.isBlank()) {
+                            android.widget.Toast.makeText(context, "请输入作品名称后再提交噢！", android.widget.Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+                        val webView = webViewInstance
+                        if (webView != null) {
+                            webView.evaluateJavascript(
+                                "(function() { " +
+                                "  try { " +
+                                "    if (window.vm) { return JSON.stringify(window.vm.toJSON()); } " +
+                                "    else if (window.scratch && window.scratch.vm) { return JSON.stringify(window.scratch.vm.toJSON()); } " +
+                                "    else if (typeof Blockly !== 'undefined') { " +
+                                "         var xml = Blockly.Xml.workspaceToDom(Blockly.mainWorkspace); " +
+                                "         return Blockly.Xml.domToText(xml); " +
+                                "    } " +
+                                "  } catch(e) {} " +
+                                "  return ''; " +
+                                "})()"
+                            ) { result: String? ->
+                                val cleaned = if (result != null && result != "null" && result != "\"\"") {
+                                    var s = result.trim()
+                                    if (s.startsWith("\"") && s.endsWith("\"") && s.length >= 2) {
+                                        s = s.substring(1, s.length - 1)
+                                        s = s.replace("\\\"", "\"").replace("\\\\", "\\")
+                                    }
+                                    s
+                                } else ""
+                                viewModel.currentDraftName.value = submitWorkName
+                                if (cleaned.isNotBlank()) {
+                                    viewModel.currentDraftCode.value = cleaned
+                                }
+                                viewModel.submitWorkAndAiReport { msg ->
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                showSubmitDialog = false
+                            }
+                        } else {
+                            viewModel.currentDraftName.value = submitWorkName
+                            viewModel.submitWorkAndAiReport { msg ->
+                                android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                            showSubmitDialog = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5))
+                ) {
+                    Text("确认提交")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSubmitDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 
     // 回溯本地草稿 Dialog
     if (showLoadDraftDialog) {
@@ -2405,12 +2509,184 @@ fun StudentWorksScreen(viewModel: MainViewModel) {
 
     var showReportDialog by remember { mutableStateOf(false) }
 
+    val currentClass by viewModel.currentClass.collectAsState()
+    val studentNum by viewModel.currentIdentifier.collectAsState()
+    val studentName by viewModel.currentUserName.collectAsState()
+    val aiRecords by viewModel.aiRecordHistory.collectAsState()
+
+    // Calculate dynamic learning hours record
+    val worksCount = works.size
+    val aiCount = aiRecords.size
+    val baseHours = 12.5f
+    val calculatedHours = baseHours + (worksCount * 1.5f) + (aiCount * 0.2f)
+    val formattedHours = String.format(java.util.Locale.getDefault(), "%.1f", calculatedHours)
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFFFAFAFA))
             .padding(12.dp)
     ) {
+        // Dynamic Learning Status Card (学情卡片)
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 16.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+        ) {
+            Box(
+                modifier = Modifier
+                    .background(
+                        brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                            colors = listOf(Color(0xFF3F51B5), Color(0xFF00BCD4))
+                        )
+                    )
+                    .padding(16.dp)
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "👤 编程小学员：$studentName",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "🆔 学号: $studentNum",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 12.sp
+                            )
+                        }
+                        
+                        // Class Badge
+                        Box(
+                            modifier = Modifier
+                                .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
+                                .padding(horizontal = 10.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "🏫 ${currentClass?.className ?: "默认先锋班"}",
+                                color = Color.White,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(Color.White.copy(alpha = 0.2f))
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Stat 1: Learning Hours
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "学时记录",
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "$formattedHours 小时",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Divider line
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(Color.White.copy(alpha = 0.2f))
+                        )
+
+                        // Stat 2: Submitted Works
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "提交作品",
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "$worksCount 件",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+
+                        // Divider line
+                        Box(
+                            modifier = Modifier
+                                .width(1.dp)
+                                .height(24.dp)
+                                .background(Color.White.copy(alpha = 0.2f))
+                        )
+
+                        // Stat 3: AI Assist count
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "AI 问答",
+                                    color = Color.White.copy(alpha = 0.8f),
+                                    fontSize = 11.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "$aiCount 次",
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 12.dp)
