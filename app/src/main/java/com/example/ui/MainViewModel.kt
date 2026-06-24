@@ -51,6 +51,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val currentDraftName = MutableStateFlow("我的太空漫步草稿")
     val currentTaskId = MutableStateFlow<Int?>(null)
     val currentTaskName = MutableStateFlow<String?>(null)
+    val workspaceLoadEvent = MutableStateFlow<String?>(null)
 
     // --- 草稿列表 ---
     private val _draftsList = MutableStateFlow<List<ScratchDraft>>(emptyList())
@@ -119,6 +120,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _realTimeStateEnabled = MutableStateFlow(false)
     val realTimeStateEnabled: StateFlow<Boolean> = _realTimeStateEnabled.asStateFlow()
+
+    // --- 教师端查看学生代码工作区状态 ---
+    val teacherViewingWorkspace = MutableStateFlow(false)
 
     fun setRealTimeStateEnabled(enabled: Boolean) {
         _realTimeStateEnabled.value = enabled
@@ -534,19 +538,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- 在线编程、草稿及提交 ---
     fun selectTemplate(id: Int) {
-        currentDraftCode.value = getTemplateCode(id)
+        val code = getTemplateCode(id)
+        currentDraftCode.value = code
         currentDraftName.value = when (id) {
             1 -> "我的猫咪漫步草稿"
             2 -> "水果捕获游戏草稿"
             3 -> "神奇电子琴草稿"
             else -> "迷宫探险草稿"
         }
+        workspaceLoadEvent.value = code
     }
 
     fun loadDraftToWorkspace(draft: ScratchDraft) {
         currentDraftCode.value = draft.blockCode
         currentDraftName.value = draft.draftName
         currentTaskId.value = draft.taskId
+        workspaceLoadEvent.value = draft.blockCode
         viewModelScope.launch {
             draft.taskId?.let {
                 val task = repository.getTaskById(it)
@@ -561,6 +568,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         currentDraftCode.value = work.workCode
         currentDraftName.value = "${work.workName} (载入版本)"
         currentTaskId.value = if (work.taskId == 0) null else work.taskId
+        workspaceLoadEvent.value = work.workCode
         viewModelScope.launch {
             if (work.taskId != 0) {
                 val task = repository.getTaskById(work.taskId)
@@ -572,12 +580,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearWorkspaceToNew() {
-        currentDraftCode.value = "{ " +
+        val code = "{ " +
                 "\"targets\": [{ \"isStage\": false, \"name\": \"角色1\", \"blocks\": {} }] " +
                 "}"
+        currentDraftCode.value = code
         currentDraftName.value = "全新的 Scratch 创意草稿"
         currentTaskId.value = null
         currentTaskName.value = "自由创作"
+        workspaceLoadEvent.value = code
     }
 
     fun saveDraftToDb(onResult: (String) -> Unit) {

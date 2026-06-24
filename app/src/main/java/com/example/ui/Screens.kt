@@ -727,6 +727,7 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
     var selectedScreenIndex by remember { mutableStateOf(0) }
     val currentUserName by viewModel.currentUserName.collectAsState()
     val context = LocalContext.current
+    val teacherViewingWorkspace by viewModel.teacherViewingWorkspace.collectAsState()
 
     Scaffold(
         topBar = {
@@ -758,7 +759,7 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
             }
 
             Column {
-                if (!(userRole == "student" && selectedScreenIndex == 0)) {
+                if (!((userRole == "student" && selectedScreenIndex == 0) || (userRole != "student" && teacherViewingWorkspace))) {
                     Surface(
                         color = Color.White,
                         shadowElevation = 2.dp,
@@ -836,7 +837,7 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
             }
         },
         bottomBar = {
-            if (userRole != "student") {
+            if (userRole != "student" && !teacherViewingWorkspace) {
                 NavigationBar(containerColor = Color.White) {
                     NavigationBarItem(
                         selected = selectedScreenIndex == 0,
@@ -879,11 +880,15 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                     3 -> StudentAiAssistHistoricalHub(viewModel = viewModel)
                 }
             } else {
-                when (selectedScreenIndex) {
-                    0 -> TeacherTaskManagementScreen(viewModel = viewModel)
-                    1 -> TeacherTaskListScreen(viewModel = viewModel)
-                    2 -> TeacherWorksClassViewScreen(viewModel = viewModel)
-                    3 -> TeacherClassManagementUnifiedScreen(viewModel = viewModel)
+                if (teacherViewingWorkspace) {
+                    InteractiveScratchProgrammingScreen(viewModel = viewModel, onBackToHall = { viewModel.teacherViewingWorkspace.value = false })
+                } else {
+                    when (selectedScreenIndex) {
+                        0 -> TeacherTaskManagementScreen(viewModel = viewModel)
+                        1 -> TeacherTaskListScreen(viewModel = viewModel)
+                        2 -> TeacherWorksClassViewScreen(viewModel = viewModel)
+                        3 -> TeacherClassManagementUnifiedScreen(viewModel = viewModel)
+                    }
                 }
             }
         }
@@ -1352,6 +1357,7 @@ fun MagicBoxDrawerPanel(
 
 @Composable
 fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isTablet = configuration.screenWidthDp > 600
     val drawerWidth = if (isTablet) 240.dp else configuration.screenWidthDp.dp
@@ -1426,11 +1432,19 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         }
     }
 
+    val workspaceLoadEvent by viewModel.workspaceLoadEvent.collectAsState()
+    LaunchedEffect(workspaceLoadEvent, webViewInstance) {
+        val code = workspaceLoadEvent
+        val webView = webViewInstance
+        if (code != null && webView != null) {
+            loadProjectIntoWebView(webView, code, context)
+            viewModel.workspaceLoadEvent.value = null
+        }
+    }
+
     var showMagicBoxDrawer by remember { mutableStateOf(false) }
 
     var localInputName by remember { mutableStateOf(draftName) }
-
-    val context = LocalContext.current
 
     val coerceInSafe = remember {
         { value: Float, min: Float, max: Float ->
@@ -1441,6 +1455,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     // 首次进入编程界面缩放提示 (优化二)
     LaunchedEffect(Unit) {
         android.widget.Toast.makeText(context, "双指捏合可缩放画布 🔍", android.widget.Toast.LENGTH_LONG).show()
+        if (draftCode.isNotBlank()) {
+            viewModel.workspaceLoadEvent.value = draftCode
+        }
     }
 
     // Scratch editor mirror URLs: allows seamless toggle when official MIT Scratch is blocked (Problem 2 Requirement 2)
@@ -4382,6 +4399,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                     Button(
                                         onClick = {
                                             viewModel.loadWorkToWorkspace(work)
+                                            viewModel.teacherViewingWorkspace.value = true
                                             Toast.makeText(context, "已成功载入该作品代码，快去工作区看孩子们的积木吧！", Toast.LENGTH_SHORT).show()
                                         },
                                         colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
@@ -5836,48 +5854,60 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
 }
 
 fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.content.Context) {
-    if (webView == null) return
+    if (webView == null || pJson.isBlank()) return
     val cleanJson = pJson.replace("'", "\\'").replace("\n", " ").replace("\r", " ")
     val js = """
         (function() {
             try {
-                var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
-                if (!targetVm) {
-                    var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
-                    if (el) {
-                        var keys = Object.keys(el);
-                        var key = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
-                        if (key) {
-                            var fiber = el[key];
-                            while (fiber) {
-                                if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
-                                    targetVm = fiber.stateNode.props.vm;
-                                    break;
+                function tryLoad() {
+                    var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
+                    if (!targetVm) {
+                        var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
+                        if (el) {
+                            var keys = Object.keys(el);
+                            var key = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
+                            if (key) {
+                                var fiber = el[key];
+                                while (fiber) {
+                                    if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
+                                        targetVm = fiber.stateNode.props.vm;
+                                        break;
+                                    }
+                                    fiber = fiber.return;
                                 }
-                                fiber = fiber.return;
                             }
                         }
                     }
-                }
-                
-                if (!targetVm) {
-                    var frames = document.querySelectorAll('iframe');
-                    for (var i = 0; i < frames.length; i++) {
-                        var sw = frames[i].contentWindow;
-                        if (sw && sw.vm) {
-                            targetVm = sw.vm;
-                            break;
+                    if (!targetVm) {
+                        var frames = document.querySelectorAll('iframe');
+                        for (var i = 0; i < frames.length; i++) {
+                            var sw = frames[i].contentWindow;
+                            if (sw && sw.vm) {
+                                targetVm = sw.vm;
+                                break;
+                            }
                         }
                     }
+                    if (targetVm) {
+                        targetVm.loadProject('$cleanJson').then(function() {
+                            console.log("Success loading project");
+                        }).catch(function(err) {
+                            console.error("Error loadProject:", err);
+                        });
+                        return true;
+                    }
+                    return false;
                 }
-                
-                if (targetVm) {
-                    targetVm.loadProject('$cleanJson').then(function() {
-                        console.log("Success");
-                    });
-                    return "Injected project loading";
+                var loaded = tryLoad();
+                if (!loaded) {
+                    var loadInterval = setInterval(function() {
+                        if (tryLoad()) {
+                            clearInterval(loadInterval);
+                        }
+                    }, 1000);
+                    setTimeout(function() { clearInterval(loadInterval); }, 15000);
                 }
-                return "VM not found";
+                return loaded ? "Loaded immediately" : "Polling for VM...";
             } catch(e) {
                 return "Error: " + e.message;
             }
