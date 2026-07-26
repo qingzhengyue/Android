@@ -230,7 +230,52 @@ data class ScratchWork(
     val teacherComment: String? = null, // 教师评语
     @ColumnInfo(name = "teacherReviewTime") 
     @SerialName("teacher_review_time")
-    val teacherReviewTime: Long? = null // 评价时间
+    val teacherReviewTime: Long? = null, // 评价时间
+    @ColumnInfo(name = "isPublic", defaultValue = "0")
+    @SerialName("is_public")
+    val isPublic: Boolean = false, // 是否发布到开源大厅
+    @ColumnInfo(name = "forkFromId")
+    @SerialName("fork_from_id")
+    val forkFromId: Int? = null, // 源作品ID (克隆关联)
+    @ColumnInfo(name = "likesCount", defaultValue = "0")
+    @SerialName("likes_count")
+    val likesCount: Int = 0, // 点赞数
+    @ColumnInfo(name = "syncStatus", defaultValue = "1")
+    @SerialName("sync_status")
+    val syncStatus: Int = 1, // 0 = 待同步, 1 = 已同步
+    @ColumnInfo(name = "plagiarismFlag", defaultValue = "0")
+    @SerialName("plagiarism_flag")
+    val plagiarismFlag: Boolean = false, // 是否标记为疑似抄袭
+    @ColumnInfo(name = "similarityScore", defaultValue = "0")
+    @SerialName("similarity_score")
+    val similarityScore: Int = 0 // 相似度百分比
+)
+
+// 8.5. 作品互动评论 (WorkComment)
+@Serializable
+@Entity(tableName = "work_comment")
+data class WorkComment(
+    @PrimaryKey(autoGenerate = true)
+    @SerialName("comment_id")
+    val commentId: Int = 0,
+    @ColumnInfo(name = "workId")
+    @SerialName("work_id")
+    val workId: Int,
+    @ColumnInfo(name = "authorStudentId")
+    @SerialName("author_student_id")
+    val authorStudentId: Int,
+    @ColumnInfo(name = "authorName")
+    @SerialName("author_name")
+    val authorName: String,
+    @ColumnInfo(name = "content")
+    @SerialName("content")
+    val content: String,
+    @ColumnInfo(name = "createTime")
+    @SerialName("create_time")
+    val createTime: Long = System.currentTimeMillis(),
+    @ColumnInfo(name = "isApproved", defaultValue = "1")
+    @SerialName("is_approved")
+    val isApproved: Boolean = true
 )
 
 // 9. 作品AI评测报告 (WorkAiReport)
@@ -466,6 +511,45 @@ interface AppDao {
     @Query("UPDATE scratch_work SET reviewStatus = :status, teacherScore = :score, teacherComment = :comment, teacherReviewTime = :reviewTime WHERE workId = :workId")
     suspend fun updateWorkReview(workId: Int, status: String, score: Int?, comment: String?, reviewTime: Long)
 
+    // --- 开源大厅与同伴互评 (Open Hall & Peer Comments) ---
+    @Query("SELECT * FROM scratch_work WHERE isPublic = 1 ORDER BY submitTime DESC")
+    fun getPublicWorksFlow(): Flow<List<ScratchWork>>
+
+    @Query("SELECT * FROM scratch_work WHERE isPublic = 1 ORDER BY likesCount DESC, submitTime DESC")
+    fun getPopularPublicWorksFlow(): Flow<List<ScratchWork>>
+
+    @Query("UPDATE scratch_work SET isPublic = :isPublic WHERE workId = :workId")
+    suspend fun updateWorkPublicStatus(workId: Int, isPublic: Boolean)
+
+    @Query("UPDATE scratch_work SET likesCount = likesCount + 1 WHERE workId = :workId")
+    suspend fun incrementWorkLikes(workId: Int)
+
+    @Query("UPDATE scratch_work SET plagiarismFlag = :flag, similarityScore = :similarity WHERE workId = :workId")
+    suspend fun updateWorkPlagiarismStatus(workId: Int, flag: Boolean, similarity: Int)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertComment(comment: WorkComment): Long
+
+    @Query("SELECT * FROM work_comment WHERE workId = :workId AND isApproved = 1 ORDER BY createTime DESC")
+    fun getCommentsByWorkFlow(workId: Int): Flow<List<WorkComment>>
+
+    @Query("SELECT * FROM work_comment WHERE workId = :workId AND isApproved = 1 ORDER BY createTime DESC")
+    suspend fun getCommentsByWork(workId: Int): List<WorkComment>
+
+    // --- 离线同步 (Offline Sync) ---
+    @Query("SELECT * FROM scratch_work WHERE syncStatus = 0")
+    suspend fun getUnsyncedWorks(): List<ScratchWork>
+
+    @Query("UPDATE scratch_work SET syncStatus = :status WHERE workId = :workId")
+    suspend fun updateWorkSyncStatus(workId: Int, status: Int)
+
+    // --- 教师学情分析 (Analytics) ---
+    @Query("SELECT * FROM work_ai_report WHERE studentId IN (SELECT studentId FROM student WHERE classId = :classId)")
+    suspend fun getAiReportsByClassId(classId: Int): List<WorkAiReport>
+
+    @Query("SELECT * FROM scratch_work WHERE taskId = :taskId")
+    suspend fun getWorksByTaskId(taskId: Int): List<ScratchWork>
+
     // --- AI 评测报告 ---
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAiReport(report: WorkAiReport): Long
@@ -491,9 +575,10 @@ interface AppDao {
         AiTeachingConfig::class,
         AiAssistRecord::class,
         ScratchWork::class,
+        WorkComment::class,
         WorkAiReport::class
     ],
-    version = 4, // 升级到版本4，添加 isActive 字段支持软删除
+    version = 5, // 升级到版本5，添加开源大厅、互动评论、抄袭检测与离线同步字段
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

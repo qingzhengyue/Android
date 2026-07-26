@@ -471,6 +471,169 @@ class AppRepository(private val context: Context) {
         dao.getAllStudents()
     }
 
+    // --- 开源大厅与同伴互评 (Open Hall & Peer Comments) ---
+    fun getPublicWorksFlow(): Flow<List<ScratchWork>> = dao.getPublicWorksFlow()
+
+    fun getPopularPublicWorksFlow(): Flow<List<ScratchWork>> = dao.getPopularPublicWorksFlow()
+
+    suspend fun toggleWorkPublicStatus(workId: Int, isPublic: Boolean) = withContext(Dispatchers.IO) {
+        dao.updateWorkPublicStatus(workId, isPublic)
+        try {
+            val updated = dao.getWorkById(workId)
+            if (updated != null) {
+                supabase?.from("scratch_work")?.upsert(updated)
+            }
+        } catch (e: Exception) {
+            Log.e("Supabase", "Public status sync failed: ${e.message}")
+        }
+    }
+
+    suspend fun likeWork(workId: Int) = withContext(Dispatchers.IO) {
+        dao.incrementWorkLikes(workId)
+    }
+
+    suspend fun forkWork(sourceWork: ScratchWork, targetStudentId: Int, targetClassId: Int): Long = withContext(Dispatchers.IO) {
+        val clonedWork = ScratchWork(
+            workName = "${sourceWork.workName} (克隆版)",
+            workCode = sourceWork.workCode,
+            studentId = targetStudentId,
+            classId = targetClassId,
+            taskId = sourceWork.taskId,
+            submitCount = 1,
+            submitTime = System.currentTimeMillis(),
+            reviewStatus = "待审核",
+            isPublic = false,
+            forkFromId = sourceWork.workId,
+            syncStatus = 0
+        )
+        val newId = dao.insertWork(clonedWork)
+        newId
+    }
+
+    suspend fun submitComment(
+        workId: Int,
+        authorId: Int,
+        authorName: String,
+        content: String
+    ): GeminiClient.ContentModerationResult = withContext(Dispatchers.IO) {
+        // AI 风控前置审核 (Task 3)
+        val modResult = GeminiClient.moderateTextContent(content)
+        if (modResult.isSafe) {
+            val comment = WorkComment(
+                workId = workId,
+                authorStudentId = authorId,
+                authorName = authorName,
+                content = content,
+                createTime = System.currentTimeMillis(),
+                isApproved = true
+            )
+            val cId = dao.insertComment(comment)
+            try {
+                supabase?.from("work_comment")?.upsert(comment.copy(commentId = cId.toInt()))
+            } catch (e: Exception) {
+                Log.e("Supabase", "Comment sync error: ${e.message}")
+            }
+        }
+        modResult
+    }
+
+    fun getCommentsByWorkFlow(workId: Int): Flow<List<WorkComment>> = dao.getCommentsByWorkFlow(workId)
+
+    // --- 抄袭检测 (Task 6) ---
+    suspend fun checkAndSetWorkSimilarity(work: ScratchWork): ScratchCodeSimilarity.SimilarityResult = withContext(Dispatchers.IO) {
+        val sameTaskWorks = dao.getWorksByTaskId(work.taskId).filter { it.workId != work.workId }
+        val allStudents = dao.getAllStudents().associate { it.studentId to it.name }
+        val result = ScratchCodeSimilarity.checkSimilarityAgainstClassWorks(work.workCode, sameTaskWorks, allStudents)
+
+        dao.updateWorkPlagiarismStatus(work.workId, result.isPlagiarism, result.similarityPercentage)
+        result
+    }
+
+    // --- 离线断点续传同步 (Task 5) ---
+    suspend fun getUnsyncedWorks(): List<ScratchWork> = withContext(Dispatchers.IO) {
+        dao.getUnsyncedWorks()
+    }
+
+    suspend fun syncSingleWorkToCloud(work: ScratchWork): Boolean = withContext(Dispatchers.IO) {
+        try {
+            if (supabase != null) {
+                supabase!!.from("scratch_work").upsert(work)
+                dao.updateWorkSyncStatus(work.workId, 1)
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            Log.e("Supabase", "Single work sync failed: ${e.message}")
+            false
+        }
+    }
+
+    // --- 教师学情分析大屏数据 (Task 4) ---
+    data class ClassAnalyticsData(
+        val totalStudents: Int,
+        val submittedCount: Int,
+        val avgGrammar: Float,
+        val avgLogic: Float,
+        val avgTaskMatch: Float,
+        val avgCreative: Float,
+        val avgTotal: Float,
+        val commonErrors: List<String>,
+        val plagiarismRiskCount: Int
+    )
+
+    suspend fun getClassAnalyticsData(classId: Int): ClassAnalyticsData = withContext(Dispatchers.IO) {
+        val students = dao.getStudentsByClass(classId)
+        val works = dao.getWorksByClass(classId)
+        val reports = dao.getAiReportsByClassId(classId)
+
+        val totalStudents = students.size
+        val submittedCount = works.distinctBy { it.studentId }.size
+        val plagiarismRiskCount = works.count { it.plagiarismFlag }
+
+        if (reports.isEmpty()) {
+            return@withContext ClassAnalyticsData(
+                totalStudents = totalStudents,
+                submittedCount = submittedCount,
+                avgGrammar = 0f,
+                avgLogic = 0f,
+                avgTaskMatch = 0f,
+                avgCreative = 0f,
+                avgTotal = 0f,
+                commonErrors = listOf("尚未有智能评测数据，待学生提交作业后自动生成"),
+                plagiarismRiskCount = plagiarismRiskCount
+            )
+        }
+
+        val avgGrammar = reports.map { it.grammarScore }.average().toFloat()
+        val avgLogic = reports.map { it.logicScore }.average().toFloat()
+        val avgTaskMatch = reports.map { it.taskMatchScore }.average().toFloat()
+        val avgCreative = reports.map { it.creativeScore }.average().toFloat()
+        val avgTotal = reports.map { it.averageScore }.average().toFloat()
+
+        val errors = mutableListOf<String>()
+        if (avgGrammar < 18) errors.add("语法格式：缺失事件启动块（如当绿旗被点击）")
+        if (avgLogic < 22) errors.add("逻辑结构：条件嵌套层级过深，循环未加时间间隔")
+        if (avgTaskMatch < 18) errors.add("任务偏离：角色未完全匹配作业所要求的指令动作")
+        if (avgCreative < 14) errors.add("创新表现：造型与音效组合偏向单一，缺背景交替")
+
+        if (errors.isEmpty()) {
+            errors.add("班级整体掌握良好！少数同学需要注意变量初始化的逻辑规范。")
+        }
+
+        ClassAnalyticsData(
+            totalStudents = totalStudents,
+            submittedCount = submittedCount,
+            avgGrammar = avgGrammar,
+            avgLogic = avgLogic,
+            avgTaskMatch = avgTaskMatch,
+            avgCreative = avgCreative,
+            avgTotal = avgTotal,
+            commonErrors = errors,
+            plagiarismRiskCount = plagiarismRiskCount
+        )
+    }
+
     // --- AI 每日限额检查 ---
     suspend fun checkDailyAssistOk(studentId: Int, classId: Int): Boolean = withContext(Dispatchers.IO) {
         val config = dao.getConfigByClassId(classId)

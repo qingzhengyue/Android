@@ -104,6 +104,14 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     val realTimeCheckEnabled by viewModel.realTimeStateEnabled.collectAsState()
     var scratchChangeCounter by remember { mutableStateOf(0) }
 
+    // Task 5: 2秒防抖离线自动保存与断点续传
+    LaunchedEffect(draftCode, draftName) {
+        if (draftCode.isNotBlank() && draftCode != "{}") {
+            delay(2000L)
+            viewModel.triggerDebouncedAutoSave(viewModel.currentTaskId.value, draftCode)
+        }
+    }
+
     fun getLiveCodeAndCall(funcType: String) {
         android.util.Log.d("GetLiveCode", "[START] getLiveCodeAndCall 被调用: funcType=$funcType, webViewInstance=${webViewInstance != null}")
         // 防止重复调用: 如果AI已经在加载中, 不再发起新请求

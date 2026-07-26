@@ -1737,6 +1737,118 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    // =========================================================================
+    // --- 拓展高级模块方法 (Tasks 2, 3, 4, 5, 6) ---
+    // =========================================================================
+
+    // 开源大厅与同伴互评 (Task 2)
+    val publicWorksList: StateFlow<List<ScratchWork>> = repository.getPublicWorksFlow()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    val popularWorksList: StateFlow<List<ScratchWork>> = repository.getPopularPublicWorksFlow()
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    fun toggleWorkPublic(workId: Int, isPublic: Boolean) {
+        viewModelScope.launch {
+            repository.toggleWorkPublicStatus(workId, isPublic)
+        }
+    }
+
+    fun likeWork(workId: Int) {
+        viewModelScope.launch {
+            repository.likeWork(workId)
+        }
+    }
+
+    fun forkWork(sourceWork: ScratchWork, onResult: (Boolean, String) -> Unit) {
+        val sId = _currentUserId.value
+        val cId = _currentClassId.value
+        if (sId == -1) {
+            onResult(false, "请先登录学生账号再进行 Fork 二次开发哦~")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val newId = repository.forkWork(sourceWork, sId, cId)
+                currentDraftCode.value = sourceWork.workCode
+                currentDraftName.value = "${sourceWork.workName} (克隆自 ${sourceWork.studentId})"
+                onResult(true, "🎉 克隆二次开发成功！已导入工作台，新作品 ID: $newId")
+            } catch (e: Exception) {
+                onResult(false, "克隆失败: ${e.message}")
+            }
+        }
+    }
+
+    // AI 自动化内容风控与评论提交 (Task 3)
+    fun submitComment(workId: Int, content: String, onResult: (Boolean, String) -> Unit) {
+        val sId = _currentUserId.value
+        val name = _currentUserName.value.ifBlank { "匿名同学" }
+        if (sId == -1) {
+            onResult(false, "请登录后发表评论")
+            return
+        }
+        viewModelScope.launch {
+            val mod = repository.submitComment(workId, sId, name, content)
+            if (mod.isSafe) {
+                onResult(true, "评论发表成功，已通过 AI 风控审核！")
+            } else {
+                onResult(false, "🚨 发表失败：${mod.reason}")
+            }
+        }
+    }
+
+    fun getCommentsForWork(workId: Int): Flow<List<WorkComment>> =
+        repository.getCommentsByWorkFlow(workId)
+
+    // 教师多维学情可视化大屏数据 (Task 4)
+    val classAnalyticsState = MutableStateFlow<AppRepository.ClassAnalyticsData?>(null)
+
+    fun loadClassAnalytics(classId: Int) {
+        viewModelScope.launch {
+            val data = repository.getClassAnalyticsData(classId)
+            classAnalyticsState.value = data
+        }
+    }
+
+    // 离线断点续传与防抖自动保存 (Task 5)
+    val syncStatusNotice = MutableStateFlow<String?>(null)
+
+    fun triggerDebouncedAutoSave(draftId: Int?, codeJson: String) {
+        viewModelScope.launch {
+            val studentId = _currentUserId.value
+            if (studentId == -1) return@launch
+            val draft = ScratchDraft(
+                draftId = draftId ?: 0,
+                draftName = currentDraftName.value,
+                blockCode = codeJson,
+                studentId = studentId,
+                taskId = currentTaskId.value,
+                lastModifiedTime = System.currentTimeMillis()
+            )
+            repository.saveDraft(draft)
+            syncStatusNotice.value = "⚡ 本地自动保存完成 (${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())})"
+        }
+    }
+
+    fun performOfflineSync(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val syncManager = ScratchSyncManager(repository)
+            val res = syncManager.performBackgroundSync()
+            syncStatusNotice.value = res.message
+            onResult(res.message)
+        }
+    }
+
+    // AI 评测防作弊与代码相似度检测 (Task 6)
+    val plagiarismResultState = MutableStateFlow<ScratchCodeSimilarity.SimilarityResult?>(null)
+
+    fun checkWorkPlagiarism(work: ScratchWork) {
+        viewModelScope.launch {
+            val result = repository.checkAndSetWorkSimilarity(work)
+            plagiarismResultState.value = result
+        }
+    }
 }
 
 // --- 静态外置获取 Scratch 练习模板代码，用于在 ViewModel 初始化时提供初始值 ---

@@ -845,12 +845,15 @@ fun LoginScreen(viewModel: MainViewModel) {
 
 @Composable
 fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
-    var selectedScreenIndex by remember { mutableStateOf(0) }
+    var selectedScreenIndex by remember { mutableIntStateOf(0) }
     val currentUserName by viewModel.currentUserName.collectAsState()
     val context = LocalContext.current
     val teacherViewingWorkspace by viewModel.teacherViewingWorkspace.collectAsState()
 
-    Scaffold(
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val isWideScreen = maxWidth >= 600.dp
+
+        Scaffold(
         topBar = {
             var showLogoutConfirm by remember { mutableStateOf(false) }
 
@@ -958,29 +961,35 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
             }
         },
         bottomBar = {
-            if (userRole != "student" && !teacherViewingWorkspace) {
+            if (userRole != "student" && !teacherViewingWorkspace && !isWideScreen) {
                 NavigationBar(containerColor = Color.White) {
                     NavigationBarItem(
                         selected = selectedScreenIndex == 0,
                         onClick = { selectedScreenIndex = 0 },
-                        label = { Text("发布任务") },
-                        icon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                        label = { Text("学情大屏") },
+                        icon = { Icon(Icons.Default.Analytics, contentDescription = null) }
                     )
                     NavigationBarItem(
                         selected = selectedScreenIndex == 1,
                         onClick = { selectedScreenIndex = 1 },
-                        label = { Text("任务列表") },
-                        icon = { Icon(Icons.Default.Assignment, contentDescription = null) }
+                        label = { Text("发布任务") },
+                        icon = { Icon(Icons.Default.Edit, contentDescription = null) }
                     )
                     NavigationBarItem(
                         selected = selectedScreenIndex == 2,
                         onClick = { selectedScreenIndex = 2 },
-                        label = { Text("本班作品") },
-                        icon = { Icon(Icons.Default.SupervisorAccount, contentDescription = null) }
+                        label = { Text("任务列表") },
+                        icon = { Icon(Icons.Default.Assignment, contentDescription = null) }
                     )
                     NavigationBarItem(
                         selected = selectedScreenIndex == 3,
                         onClick = { selectedScreenIndex = 3 },
+                        label = { Text("本班作品") },
+                        icon = { Icon(Icons.Default.SupervisorAccount, contentDescription = null) }
+                    )
+                    NavigationBarItem(
+                        selected = selectedScreenIndex == 4,
+                        onClick = { selectedScreenIndex = 4 },
                         label = { Text("班级管理") },
                         icon = { Icon(Icons.Default.Class, contentDescription = null) }
                     )
@@ -988,33 +997,114 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
             }
         }
     ) { innerPadding ->
-        Box(
+        Row(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (userRole == "student") {
-                when (selectedScreenIndex) {
-                    0 -> InteractiveScratchProgrammingScreen(viewModel = viewModel, onBackToHall = { selectedScreenIndex = 1 })
-                    1 -> StudentTasksScreen(viewModel = viewModel, onGoToCode = { selectedScreenIndex = 0 })
-                    2 -> StudentWorksScreen(viewModel = viewModel)
-                    3 -> StudentAiAssistHistoricalHub(viewModel = viewModel)
-                    4 -> StudentProfileScreen(viewModel = viewModel, onBack = { selectedScreenIndex = 0 })
+            if (isWideScreen && !teacherViewingWorkspace) {
+                NavigationRail(containerColor = Color(0xFFF1F5F9)) {
+                    if (userRole == "student") {
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 0,
+                            onClick = { selectedScreenIndex = 0 },
+                            label = { Text("编程工作台", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Code, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 1,
+                            onClick = { selectedScreenIndex = 1 },
+                            label = { Text("开源大厅", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Explore, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 2,
+                            onClick = { selectedScreenIndex = 2 },
+                            label = { Text("学习任务", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Assignment, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 3,
+                            onClick = { selectedScreenIndex = 3 },
+                            label = { Text("我的作品", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Collections, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 4,
+                            onClick = { selectedScreenIndex = 4 },
+                            label = { Text("AI 辅助", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.AutoAwesome, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 5,
+                            onClick = { selectedScreenIndex = 5 },
+                            label = { Text("个人中心", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Person, contentDescription = null) }
+                        )
+                    } else {
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 0,
+                            onClick = { selectedScreenIndex = 0 },
+                            label = { Text("学情大屏", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Analytics, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 1,
+                            onClick = { selectedScreenIndex = 1 },
+                            label = { Text("发布任务", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 2,
+                            onClick = { selectedScreenIndex = 2 },
+                            label = { Text("任务列表", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Assignment, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 3,
+                            onClick = { selectedScreenIndex = 3 },
+                            label = { Text("本班作品", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.SupervisorAccount, contentDescription = null) }
+                        )
+                        NavigationRailItem(
+                            selected = selectedScreenIndex == 4,
+                            onClick = { selectedScreenIndex = 4 },
+                            label = { Text("班级管理", fontSize = 10.sp) },
+                            icon = { Icon(Icons.Default.Class, contentDescription = null) }
+                        )
+                    }
                 }
-            } else {
-                if (teacherViewingWorkspace) {
-                    InteractiveScratchProgrammingScreen(viewModel = viewModel, onBackToHall = { viewModel.teacherViewingWorkspace.value = false })
-                } else {
+            }
+
+            Box(modifier = Modifier.weight(1f)) {
+                if (userRole == "student") {
                     when (selectedScreenIndex) {
-                        0 -> TeacherTaskManagementScreen(viewModel = viewModel)
-                        1 -> TeacherTaskListScreen(viewModel = viewModel)
-                        2 -> TeacherWorksClassViewScreen(viewModel = viewModel)
-                        3 -> TeacherClassManagementUnifiedScreen(viewModel = viewModel)
+                        0 -> InteractiveScratchProgrammingScreen(viewModel = viewModel, onBackToHall = { selectedScreenIndex = 2 })
+                        1 -> OpenHallScreen(viewModel = viewModel, onNavigateToEditor = { selectedScreenIndex = 0 })
+                        2 -> StudentTasksScreen(viewModel = viewModel, onGoToCode = { selectedScreenIndex = 0 })
+                        3 -> StudentWorksScreen(viewModel = viewModel)
+                        4 -> StudentAiAssistHistoricalHub(viewModel = viewModel)
+                        5 -> StudentProfileScreen(viewModel = viewModel, onBack = { selectedScreenIndex = 0 })
+                        else -> OpenHallScreen(viewModel = viewModel, onNavigateToEditor = { selectedScreenIndex = 0 })
+                    }
+                } else {
+                    if (teacherViewingWorkspace) {
+                        InteractiveScratchProgrammingScreen(viewModel = viewModel, onBackToHall = { viewModel.teacherViewingWorkspace.value = false })
+                    } else {
+                        when (selectedScreenIndex) {
+                            0 -> TeacherAnalyticsScreen(viewModel = viewModel)
+                            1 -> TeacherTaskManagementScreen(viewModel = viewModel)
+                            2 -> TeacherTaskListScreen(viewModel = viewModel)
+                            3 -> TeacherWorksClassViewScreen(viewModel = viewModel)
+                            4 -> TeacherClassManagementUnifiedScreen(viewModel = viewModel)
+                            else -> TeacherAnalyticsScreen(viewModel = viewModel)
+                        }
                     }
                 }
             }
         }
     }
+}
 }
 
 @Composable

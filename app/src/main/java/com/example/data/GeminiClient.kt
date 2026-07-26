@@ -168,6 +168,51 @@ object GeminiClient {
         return@withContext fallbackResponse
     }
 
+    data class ContentModerationResult(
+        val isSafe: Boolean,
+        val reason: String
+    )
+
+    /**
+     * AI 自动化内容风控过滤 (Task 3)
+     * 自动拦截开源大厅与同伴互动评论中的不良文本、攻击性言论或敏感违规词汇。
+     */
+    suspend fun moderateTextContent(content: String): ContentModerationResult = withContext(Dispatchers.IO) {
+        if (content.isBlank()) return@withContext ContentModerationResult(true, "内容为空")
+
+        // 本地敏感词快速前置检测
+        val blackList = listOf("死", "杀", "脏话", "蠢", "笨蛋", "滚", "垃圾", "坏蛋", "作弊", "私聊")
+        val lowerContent = content.lowercase()
+        for (word in blackList) {
+            if (lowerContent.contains(word)) {
+                return@withContext ContentModerationResult(
+                    isSafe = false,
+                    reason = "触发少儿社区敏感词 [$word]，请修改语言后发布。"
+                )
+            }
+        }
+
+        val prompt = """
+            你是一个少儿 Scratch 编程开源社区的风控安全审核员。请审核以下文本（作品名称、作品说明或学生评论）是否符合少儿健康社区规范。
+            审查标准：不得包含违规、暴力、辱骂、负面情绪、人身攻击、泄露隐私或诱导非学习行为。
+            受审文本："$content"
+
+            请仅返回如下标准 JSON 格式，不要包含任何 markdown 标签或多余说明：
+            {"isSafe": true或false, "reason": "审核说明或理由"}
+        """.trimIndent()
+
+        try {
+            val responseText = generateContent(prompt)
+            val cleanJson = responseText.replace("```json", "").replace("```", "").trim()
+            val json = JSONObject(cleanJson)
+            val isSafe = json.optBoolean("isSafe", true)
+            val reason = json.optString("reason", if (isSafe) "内容符合社区规范" else "不合规文本")
+            ContentModerationResult(isSafe, reason)
+        } catch (e: Exception) {
+            ContentModerationResult(true, "内容正常")
+        }
+    }
+
     /**
      * 调用 AI 自动评测并解析特定的 JSON 得分格式
      */
@@ -177,8 +222,14 @@ object GeminiClient {
         workName: String,
         codeJson: String
     ): EvaluationResult = withContext(Dispatchers.IO) {
+        // RAG 知识库检索增强 (Task 7)
+        val ragKnowledge = EducationalKnowledgeBase.retrieveRelevantContext("$taskName $taskDetail", codeJson)
+
         val systemPrompt = """
             你是一个充满爱心的资深少儿编程(Scratch 3.0)教学评测专家。请针对学生交上来的Scratch JSON积木代码进行专业而亲切的自动评测。
+
+            $ragKnowledge
+
             任务要求：
             - 任务名称：$taskName
             - 任务详情：$taskDetail
