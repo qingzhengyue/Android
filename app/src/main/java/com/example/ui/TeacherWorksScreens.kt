@@ -487,74 +487,84 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                         modifier = Modifier.fillMaxWidth(),
                         minLines = 3
                     )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // 1. 取消按钮 (中性操作，权重 1)
+                        OutlinedButton(
+                            onClick = { reviewingWork = null },
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFF4B5563)),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("取消", color = Color(0xFF9CA3AF), fontSize = 14.sp, maxLines = 1)
+                        }
+
+                        // 2. 打回重做按钮 (负向操作，红色，权重 1.2)
+                        Button(
+                            onClick = {
+                                val scoreVal = scoreInput.toIntOrNull() ?: 60
+                                viewModel.submitTeacherReview(
+                                    workId = workForReview.workId,
+                                    status = "打回重做",
+                                    score = scoreVal,
+                                    comment = commentInput
+                                ) { msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    reviewingWork = null
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1.2f)
+                                .fillMaxHeight(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("打回重做", fontSize = 14.sp, maxLines = 1)
+                        }
+
+                        // 3. 过审并打分按钮 (主操作，绿色，权重 1.5 最大，最显眼)
+                        Button(
+                            onClick = {
+                                val scoreVal = scoreInput.toIntOrNull() ?: 90
+                                viewModel.submitTeacherReview(
+                                    workId = workForReview.workId,
+                                    status = "已打分",
+                                    score = scoreVal,
+                                    comment = commentInput
+                                ) { msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                    reviewingWork = null
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .fillMaxHeight(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("过审并打分", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
+                        }
+                    }
                 }
             },
-            confirmButton = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // 1. 取消按钮
-                    OutlinedButton(
-                        onClick = { reviewingWork = null },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text("取消", color = Color(0xFF6B7280), fontSize = 12.sp)
-                    }
-
-                    // 2. 打回重做按钮
-                    Button(
-                        onClick = {
-                            val scoreVal = scoreInput.toIntOrNull() ?: 60
-                            viewModel.submitTeacherReview(
-                                workId = workForReview.workId,
-                                status = "打回重做",
-                                score = scoreVal,
-                                comment = commentInput
-                            ) { msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                reviewingWork = null
-                            }
-                        },
-                        modifier = Modifier.weight(1.2f),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-                    ) {
-                        Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text("打回重做", fontSize = 12.sp)
-                    }
-
-                    // 3. 同意过审打分按钮
-                    Button(
-                        onClick = {
-                            val scoreVal = scoreInput.toIntOrNull() ?: 90
-                            viewModel.submitTeacherReview(
-                                workId = workForReview.workId,
-                                status = "已打分",
-                                score = scoreVal,
-                                comment = commentInput
-                            ) { msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                reviewingWork = null
-                            }
-                        },
-                        modifier = Modifier.weight(1.5f),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
-                    ) {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp))
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text("过审并打分", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
-            },
+            confirmButton = {},
             dismissButton = null
         )
     }
@@ -666,43 +676,53 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                             }
                         }
                     }
-                }
-            },
-            confirmButton = {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 4.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Button(
-                        onClick = {
-                            try {
-                                val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                                val clip = android.content.ClipData.newPlainText("Scratch Work Code", formattedJson)
-                                clipboard.setPrimaryClip(clip)
-                                Toast.makeText(context, "代码已复制到剪贴板！", Toast.LENGTH_LONG).show()
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "复制失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("复制代码", fontSize = 13.sp)
-                    }
 
-                    OutlinedButton(
-                        onClick = { viewingWorkDetail = null },
-                        shape = RoundedCornerShape(8.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("关闭", color = Color.DarkGray, fontSize = 13.sp)
+                        // 1. 复制代码按钮（主操作，均分宽度）
+                        Button(
+                            onClick = {
+                                try {
+                                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                                    val clip = android.content.ClipData.newPlainText("Scratch Work Code", formattedJson)
+                                    clipboard.setPrimaryClip(clip)
+                                    Toast.makeText(context, "代码已复制到剪贴板！", Toast.LENGTH_LONG).show()
+                                } catch (e: Exception) {
+                                    Toast.makeText(context, "复制失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                        ) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("复制代码", fontSize = 15.sp, maxLines = 1)
+                        }
+
+                        // 2. 关闭按钮（次操作，均分宽度）
+                        OutlinedButton(
+                            onClick = { viewingWorkDetail = null },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, Color(0xFF4B5563))
+                        ) {
+                            Text("关闭", color = Color(0xFFD1D5DB), fontSize = 15.sp, maxLines = 1)
+                        }
                     }
                 }
             },
+            confirmButton = {},
             dismissButton = null,
             properties = DialogProperties(usePlatformDefaultWidth = false)
         )
