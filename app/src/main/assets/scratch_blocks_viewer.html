@@ -2,408 +2,395 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Scratch 积木查看器</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>星梭 Scratch 智学积木工作台</title>
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-body { font-family:'Segoe UI',sans-serif; background:#f0f2f5; padding:8px; color:#333; }
-.target-section { margin-bottom:12px; background:#fff; border-radius:10px; box-shadow:0 1px 4px rgba(0,0,0,0.1); overflow:hidden; }
-.target-header { padding:10px 14px; display:flex; align-items:center; gap:8px; font-size:14px; font-weight:700; }
-.target-header.stage { background:linear-gradient(135deg,#FFF3E0,#FFE0B2); color:#E65100; }
-.target-header.sprite { background:linear-gradient(135deg,#E3F2FD,#BBDEFB); color:#1565C0; }
-.target-info { font-size:11px; color:#666; padding:2px 14px 6px; }
-.stacks-area { padding:8px 12px 12px; }
-.stack { margin-bottom:10px; }
-.block { display:flex; align-items:center; flex-wrap:wrap; padding:6px 10px; margin:2px 0; border-radius:6px; color:#fff; font-size:12px; font-weight:600; min-height:32px; position:relative; gap:3px; }
-.block::before { content:''; position:absolute; top:-2px; left:14px; width:12px; height:4px; background:inherit; border-radius:2px 2px 0 0; }
-.block:first-child::before { display:none; }
-.block.hat { border-radius:16px 16px 6px 6px; padding-top:8px; }
-.block.hat::before { display:none; }
-.block.cap { border-radius:6px 6px 16px 16px; }
-.block .param { background:rgba(255,255,255,0.25); padding:1px 6px; border-radius:10px; font-size:11px; white-space:nowrap; }
-.block .param.dropdown { background:rgba(255,255,255,0.35); border-radius:4px; font-size:11px; }
-.block .param.var { background:rgba(255,255,255,0.3); border-radius:10px; }
-.substack-container { margin-left:16px; padding:4px 0 4px 8px; border-left:4px solid rgba(255,255,255,0.4); }
-.substack-label { font-size:9px; color:rgba(255,255,255,0.7); padding:2px 0; }
-.else-label { font-size:10px; color:#fff; font-weight:700; padding:2px 6px; opacity:0.8; }
-.category-badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:9px; color:#fff; margin:2px; font-weight:600; }
-.stats-bar { display:flex; flex-wrap:wrap; gap:4px; padding:6px 14px 10px; border-top:1px solid #eee; }
-.empty-msg { color:#999; font-size:12px; padding:12px; text-align:center; }
-.flow-arrow { text-align:center; color:#bbb; font-size:10px; margin:1px 0; }
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background:#f1f5f9; color:#1e293b; height:100vh; overflow:hidden; display:flex; flex-direction:column; }
+
+/* 顶栏工具条 */
+header { background:linear-gradient(135deg, #2563eb, #1d4ed8); color:#fff; padding:8px 12px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 4px rgba(0,0,0,0.1); flex-shrink:0; }
+.logo-title { font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
+.top-actions { display:flex; gap:6px; }
+.btn { border:none; padding:5px 10px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:all 0.2s; }
+.btn-run { background:#22c55e; color:#fff; }
+.btn-run:active { background:#16a34a; }
+.btn-stop { background:#ef4444; color:#fff; }
+.btn-clear { background:rgba(255,255,255,0.2); color:#fff; }
+.btn-add { background:#3b82f6; color:#fff; }
+
+/* 主工作区布局：侧边积木库 + 主积木工作台 + 舞台预览 */
+.main-container { display:flex; flex:1; overflow:hidden; }
+
+/* 侧边分类栏 */
+.category-sidebar { width:72px; background:#e2e8f0; border-right:1px solid #cbd5e1; display:flex; flex-direction:column; gap:4px; padding:6px 2px; flex-shrink:0; overflow-y:auto; }
+.cat-item { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:6px 2px; border-radius:8px; font-size:10px; font-weight:600; cursor:pointer; color:#475569; gap:3px; }
+.cat-dot { width:12px; height:12px; border-radius:50%; }
+.cat-item.active { background:#fff; color:#0f172a; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+
+/* 积木选择面板 */
+.palette-panel { width:130px; background:#fff; border-right:1px solid #cbd5e1; overflow-y:auto; padding:6px; display:flex; flex-direction:column; gap:6px; flex-shrink:0; }
+.palette-title { font-size:11px; font-weight:700; color:#64748b; padding-bottom:4px; border-bottom:1px solid #f1f5f9; }
+
+/* 积木渲染卡片 */
+.block { display:inline-flex; align-items:center; flex-wrap:wrap; padding:6px 10px; margin:2px 0; border-radius:6px; color:#fff; font-size:11px; font-weight:600; min-height:30px; position:relative; gap:4px; cursor:pointer; box-shadow:0 1px 2px rgba(0,0,0,0.15); user-select:none; }
+.block .param { background:rgba(255,255,255,0.3); padding:1px 5px; border-radius:8px; font-size:10px; }
+
+.block-motion { background:#4C97FF; }
+.block-looks { background:#9966FF; }
+.block-sound { background:#CF63CF; }
+.block-events { background:#FFBF00; }
+.block-control { background:#FFAB19; }
+.block-sensing { background:#5CB1D6; }
+.block-operators { background:#59C059; }
+.block-data { background:#FF8C1A; }
+
+/* 画布工作区 */
+.workspace-area { flex:1; background:#f8fafc; overflow:auto; padding:12px; position:relative; display:flex; flex-direction:column; }
+.workspace-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; font-size:12px; color:#64748b; font-weight:600; }
+.canvas-stack { background:#fff; border:2px dashed #cbd5e1; border-radius:10px; min-height:220px; padding:12px; display:flex; flex-direction:column; gap:6px; }
+.canvas-stack.empty { display:flex; align-items:center; justify-content:center; color:#94a3b8; font-size:12px; text-align:center; }
+
+/* 右侧舞台预览区 */
+.stage-panel { width:180px; background:#fff; border-left:1px solid #cbd5e1; display:flex; flex-direction:column; padding:8px; gap:8px; flex-shrink:0; }
+.stage-screen { width:100%; height:140px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:8px; position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+.sprite-cat { width:42px; height:42px; position:absolute; transition:all 0.3s ease; }
+.bubble { position:absolute; top:8px; left:8px; background:#fff; border:1px solid #64748b; border-radius:8px; padding:3px 6px; font-size:10px; display:none; max-width:140px; word-break:break-all; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+.stage-log { flex:1; background:#0f172a; color:#38bdf8; font-family:monospace; font-size:9px; padding:6px; border-radius:6px; overflow-y:auto; line-height:1.3; }
+
+/* 屏幕尺寸较小时（手机竖屏）适配 */
+@media (max-width: 500px) {
+  .stage-panel { width:130px; }
+  .palette-panel { width:100px; }
+  .category-sidebar { width:56px; }
+}
 </style>
 </head>
 <body>
-<div id="app"><div class="empty-msg">正在加载积木数据...</div></div>
+
+<header>
+  <div class="logo-title">
+    <span>🧩 星梭 Scratch 工作台</span>
+  </div>
+  <div class="top-actions">
+    <button class="btn btn-run" onclick="runScratchBlocks()">🟢 运行</button>
+    <button class="btn btn-stop" onclick="stopScratchBlocks()">🛑 重置</button>
+    <button class="btn btn-clear" onclick="clearWorkspace()">🗑️ 清空</button>
+  </div>
+</header>
+
+<div class="main-container">
+  <!-- 侧边分类栏 -->
+  <div class="category-sidebar">
+    <div class="cat-item active" onclick="switchCategory('motion', this)">
+      <div class="cat-dot" style="background:#4C97FF;"></div>运动
+    </div>
+    <div class="cat-item" onclick="switchCategory('looks', this)">
+      <div class="cat-dot" style="background:#9966FF;"></div>外观
+    </div>
+    <div class="cat-item" onclick="switchCategory('sound', this)">
+      <div class="cat-dot" style="background:#CF63CF;"></div>声音
+    </div>
+    <div class="cat-item" onclick="switchCategory('events', this)">
+      <div class="cat-dot" style="background:#FFBF00;"></div>事件
+    </div>
+    <div class="cat-item" onclick="switchCategory('control', this)">
+      <div class="cat-dot" style="background:#FFAB19;"></div>控制
+    </div>
+    <div class="cat-item" onclick="switchCategory('sensing', this)">
+      <div class="cat-dot" style="background:#5CB1D6;"></div>侦测
+    </div>
+    <div class="cat-item" onclick="switchCategory('operators', this)">
+      <div class="cat-dot" style="background:#59C059;"></div>运算
+    </div>
+    <div class="cat-item" onclick="switchCategory('data', this)">
+      <div class="cat-dot" style="background:#FF8C1A;"></div>变量
+    </div>
+  </div>
+
+  <!-- 积木库列表面板 -->
+  <div class="palette-panel" id="palettePanel">
+    <!-- 动态渲染分类积木 -->
+  </div>
+
+  <!-- 积木工作区 -->
+  <div class="workspace-area">
+    <div class="workspace-header">
+      <span>🐱 角色 1 (Sprite1) 积木程序</span>
+      <span id="blockCountText">0 个积木</span>
+    </div>
+    <div class="canvas-stack" id="canvasStack">
+      <div class="canvas-stack empty" id="emptyTip">
+        👈 点击左侧积木添加程序<br>或使用 AI 助手一键插入
+      </div>
+    </div>
+  </div>
+
+  <!-- 舞台预览区 -->
+  <div class="stage-panel">
+    <div style="font-size:11px;font-weight:700;color:#475569;">🖼️ 舞台运行效果</div>
+    <div class="stage-screen">
+      <div class="bubble" id="sayBubble">你好！</div>
+      <svg class="sprite-cat" id="catSprite" viewBox="0 0 100 100" style="left:70px; top:50px;">
+        <path d="M20,30 L30,10 L45,25 L55,25 L70,10 L80,30 C90,45 85,70 50,85 C15,70 10,45 20,30 Z" fill="#FFAB19"/>
+        <circle cx="35" cy="40" r="6" fill="#fff"/><circle cx="35" cy="40" r="3" fill="#000"/>
+        <circle cx="65" cy="40" r="6" fill="#fff"/><circle cx="65" cy="40" r="3" fill="#000"/>
+        <path d="M45,55 Q50,60 55,55" stroke="#000" stroke-width="2" fill="none"/>
+      </svg>
+    </div>
+    <div style="font-size:10px;font-weight:700;color:#64748b;">📜 运行日志</div>
+    <div class="stage-log" id="stageLog">【系统】工作台已就绪...</div>
+  </div>
+</div>
+
 <script>
-const COLORS = {
-  motion:'#4C97FF', looks:'#9966FF', sound:'#CF63CF', events:'#FFBF00',
-  control:'#FFAB19', sensing:'#5CB1D6', operators:'#59C059',
-  data:'#FF8C1A', data_lists:'#FF6680', procedures:'#FF6680',
-  pen:'#0FBD8C', text:'#888'
-};
-const CAT_CN = {
-  motion:'运动', looks:'外观', sound:'声音', events:'事件',
-  control:'控制', sensing:'侦测', operators:'运算',
-  data:'变量', data_lists:'列表', procedures:'自制积木',
-  pen:'画笔', text:'其他'
+// 预置积木库定义
+const PALETTE = {
+  motion: [
+    { opcode:'motion_movesteps', label:'移动 <span class="param">10</span> 步', cls:'block-motion' },
+    { opcode:'motion_turnright', label:'右转 <span class="param">15</span> 度', cls:'block-motion' },
+    { opcode:'motion_turnleft', label:'左转 <span class="param">15</span> 度', cls:'block-motion' },
+    { opcode:'motion_gotoxy', label:'移到 x:<span class="param">0</span> y:<span class="param">0</span>', cls:'block-motion' },
+    { opcode:'motion_changexby', label:'将 x 坐标增加 <span class="param">10</span>', cls:'block-motion' },
+    { opcode:'motion_changeyby', label:'将 y 坐标增加 <span class="param">10</span>', cls:'block-motion' }
+  ],
+  looks: [
+    { opcode:'looks_sayforsecs', label:'说 <span class="param">Hello!</span> <span class="param">2</span> 秒', cls:'block-looks' },
+    { opcode:'looks_thinkforsecs', label:'思考 <span class="param">Hmm...</span> <span class="param">2</span> 秒', cls:'block-looks' },
+    { opcode:'looks_show', label:'显示', cls:'block-looks' },
+    { opcode:'looks_hide', label:'隐藏', cls:'block-looks' },
+    { opcode:'looks_changesizeby', label:'将大小增加 <span class="param">10</span>', cls:'block-looks' }
+  ],
+  sound: [
+    { opcode:'sound_play', label:'播放声音 <span class="param">喵</span>', cls:'block-sound' },
+    { opcode:'sound_stopallloops', label:'停止所有声音', cls:'block-sound' }
+  ],
+  events: [
+    { opcode:'event_whenflagclicked', label:'当 🟢 被点击', cls:'block-events' },
+    { opcode:'event_whenkeypressed', label:'当按下 <span class="param">空格</span> 键', cls:'block-events' },
+    { opcode:'event_whenthisspriteclicked', label:'当角色被点击', cls:'block-events' }
+  ],
+  control: [
+    { opcode:'control_wait', label:'等待 <span class="param">1</span> 秒', cls:'block-control' },
+    { opcode:'control_repeat', label:'重复执行 <span class="param">10</span> 次', cls:'block-control' },
+    { opcode:'control_forever', label:'重复执行 [循环]', cls:'block-control' },
+    { opcode:'control_if', label:'如果 <span class="param">条件</span> 那么', cls:'block-control' }
+  ],
+  sensing: [
+    { opcode:'sensing_touchingobject', label:'碰到 <span class="param">鼠标指针</span> ?', cls:'block-sensing' },
+    { opcode:'sensing_askandwait', label:'询问 <span class="param">你叫什么名字?</span>', cls:'block-sensing' }
+  ],
+  operators: [
+    { opcode:'operator_add', label:'<span class="param">a</span> + <span class="param">b</span>', cls:'block-operators' },
+    { opcode:'operator_random', label:'在 <span class="param">1</span> 到 <span class="param">10</span> 随机数', cls:'block-operators' }
+  ],
+  data: [
+    { opcode:'data_setvariableto', label:'将 <span class="param">my variable</span> 设为 <span class="param">0</span>', cls:'block-data' },
+    { opcode:'data_changevariableby', label:'将 <span class="param">my variable</span> 增加 <span class="param">1</span>', cls:'block-data' }
+  ]
 };
 
-function getCategory(opcode) {
-  if (opcode.startsWith('motion')) return 'motion';
-  if (opcode.startsWith('looks')) return 'looks';
-  if (opcode.startsWith('sound')) return 'sound';
-  if (opcode.startsWith('event')) return 'events';
-  if (opcode.startsWith('control')) return 'control';
-  if (opcode.startsWith('sensing')) return 'sensing';
-  if (opcode.startsWith('operator')) return 'operators';
-  if (opcode.startsWith('data') && !opcode.includes('list')) return 'data';
-  if (opcode.startsWith('data') && opcode.includes('list')) return 'data_lists';
-  if (opcode.startsWith('procedures')) return 'procedures';
-  if (opcode.startsWith('pen')) return 'pen';
-  return 'text';
+// 当前画布积木数组
+let activeBlocks = [];
+let catX = 70, catY = 50, catSize = 100, isVisible = true;
+
+function logMessage(msg) {
+  const logEl = document.getElementById('stageLog');
+  logEl.innerHTML += '<br>' + msg;
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
-function getBlockShape(opcode) {
-  if (opcode === 'event_whenflagclicked' || opcode === 'event_whenkeypressed' ||
-      opcode === 'event_whenthisspriteclicked' || opcode === 'event_whenbackdropswitchesto' ||
-      opcode === 'event_whenbroadcastreceived' || opcode === 'event_whengreaterthan') return 'hat';
-  if (opcode === 'control_stop' || opcode === 'control_stop_all') return 'cap';
-  if (opcode === 'control_repeat' || opcode === 'control_forever' ||
-      opcode === 'control_if' || opcode === 'control_if_else' ||
-      opcode === 'control_repeat_until' || opcode === 'control_for_each' ||
-      opcode === 'control_while') return 'c-block';
-  return 'stack';
+function switchCategory(catKey, elem) {
+  document.querySelectorAll('.cat-item').forEach(e => e.classList.remove('active'));
+  if (elem) elem.classList.add('active');
+  renderPalette(catKey);
 }
 
-function getBlockText(opcode, fields, inputs) {
-  const f = fields || {};
-  const inp = inputs || {};
-  const T = {
-    'motion_movesteps': () => `移动 <span class="param">${v('STEPS')}</span> 步`,
-    'motion_turnright': () => `右转 <span class="param">${v('DEGREES')}</span> 度`,
-    'motion_turnleft': () => `左转 <span class="param">${v('DEGREES')}</span> 度`,
-    'motion_pointindirection': () => `面向 <span class="param">${v('DIRECTION')}</span> 方向`,
-    'motion_pointtowards': () => `面向 <span class="param">${v('TOWARDS')}</span>`,
-    'motion_gotoxy': () => `移到 x:<span class="param">${v('X')}</span> y:<span class="param">${v('Y')}</span>`,
-    'motion_goto': () => `移到 <span class="param dropdown">${v('TO')}</span>`,
-    'motion_glidesecstoxy': () => `在 <span class="param">${v('SECS')}</span> 秒内滑行到 x:<span class="param">${v('X')}</span> y:<span class="param">${v('Y')}</span>`,
-    'motion_changexby': () => `将 x 坐标增加 <span class="param">${v('DX')}</span>`,
-    'motion_changeyby': () => `将 y 坐标增加 <span class="param">${v('DY')}</span>`,
-    'motion_setx': () => `将 x 坐标设为 <span class="param">${v('X')}</span>`,
-    'motion_sety': () => `将 y 坐标设为 <span class="param">${v('Y')}</span>`,
-    'motion_ifonedgebounce': () => '碰到边缘就反弹',
-    'motion_setrotationstyle': () => `设置旋转模式 <span class="param dropdown">${v('STYLE')}</span>`,
-    'motion_xposition': () => 'x 坐标',
-    'motion_yposition': () => 'y 坐标',
-    'motion_direction': () => '方向',
+function renderPalette(catKey) {
+  const panel = document.getElementById('palettePanel');
+  const list = PALETTE[catKey] || [];
+  let html = `<div class="palette-title">选择积木</div>`;
+  list.forEach(b => {
+    html += `<div class="block ${b.cls}" onclick="addBlock('${b.opcode}', '${encodeURIComponent(b.label)}')">${b.label}</div>`;
+  });
+  panel.innerHTML = html;
+}
 
-    'looks_sayforsecs': () => `说 <span class="param">${v('MESSAGE')}</span> <span class="param">${v('SECS')}</span> 秒`,
-    'looks_say': () => `说 <span class="param">${v('MESSAGE')}</span>`,
-    'looks_thinkforsecs': () => `思考 <span class="param">${v('MESSAGE')}</span> <span class="param">${v('SECS')}</span> 秒`,
-    'looks_think': () => `思考 <span class="param">${v('MESSAGE')}</span>`,
-    'looks_show': () => '显示',
-    'looks_hide': () => '隐藏',
-    'looks_switchcostumeto': () => `切换到造型 <span class="param dropdown">${v('COSTUME')}</span>`,
-    'looks_nextcostume': () => '下一个造型',
-    'looks_switchbackdropto': () => `切换到背景 <span class="param dropdown">${v('BACKDROP')}</span>`,
-    'looks_nextbackdrop': () => '下一个背景',
-    'looks_changesizeby': () => `将大小增加 <span class="param">${v('CHANGE')}</span>`,
-    'looks_setsizeto': () => `将大小设为 <span class="param">${v('SIZE')}</span>`,
-    'looks_changeeffectby': () => `将 <span class="param dropdown">${v('EFFECT')}</span> 特效增加 <span class="param">${v('CHANGE')}</span>`,
-    'looks_seteffectto': () => `将 <span class="param dropdown">${v('EFFECT')}</span> 特效设为 <span class="param">${v('VALUE')}</span>`,
-    'looks_cleargraphiceffects': () => '清除图形特效',
-    'looks_goforwardbackwardlayers': () => `<span class="param dropdown">${v('FORWARD_BACKWARD')}</span> <span class="param">${v('NUM')}</span> 层`,
-    'looks_gotofrontback': () => `移到 <span class="param dropdown">${v('FRONT_BACK')}</span> 层`,
-    'looks_costumenumbername': () => '<span class="param dropdown">造型编号</span>',
-    'looks_backdropnumbername': () => '<span class="param dropdown">背景编号</span>',
-    'looks_size': () => '大小',
+function addBlock(opcode, encodedLabel) {
+  const label = decodeURIComponent(encodedLabel);
+  activeBlocks.push({ id: 'block_' + Date.now() + '_' + Math.floor(Math.random()*100), opcode: opcode, label: label });
+  updateWorkspaceUI();
+  logMessage('➕ 添加积木: ' + opcode);
+  notifyAndroidCodeChange();
+}
 
-    'sound_playuntildone': () => `播放声音 <span class="param dropdown">${v('SOUND_MENU')}</span> 直到结束`,
-    'sound_play': () => `播放声音 <span class="param dropdown">${v('SOUND_MENU')}</span>`,
-    'sound_stopallsounds': () => '停止所有声音',
-    'sound_changevolumeby': () => `将音量增加 <span class="param">${v('VOLUME')}</span>`,
-    'sound_setvolumeto': () => `将音量设为 <span class="param">${v('VOLUME')}</span>`,
-    'sound_changeeffectby': () => `将 <span class="param dropdown">${v('EFFECT')}</span> 音效增加 <span class="param">${v('VALUE')}</span>`,
-    'sound_seteffectto': () => `将 <span class="param dropdown">${v('EFFECT')}</span> 音效设为 <span class="param">${v('VALUE')}</span>`,
-    'sound_cleareffects': () => '清除声音特效',
-    'sound_volume': () => '音量',
+// 供 Android 端调用的 API：一键插入积木代码
+window.addBlockFromAndroid = function(opcode, label) {
+  const displayLabel = label || opcode;
+  const cls = getCategoryClassByOpcode(opcode);
+  activeBlocks.push({ id: 'block_' + Date.now(), opcode: opcode, label: `<span class="${cls}">${displayLabel}</span>` });
+  updateWorkspaceUI();
+  logMessage('🪄 AI魔法插入积木: ' + opcode);
+  notifyAndroidCodeChange();
+  return "success";
+};
 
-    'event_whenflagclicked': () => '🏁 当绿旗被点击',
-    'event_whenkeypressed': () => `⌨️ 当按下 <span class="param dropdown">${v('KEY_OPTION')}</span> 键`,
-    'event_whenthisspriteclicked': () => '🖱️ 当角色被点击',
-    'event_whenbackdropswitchesto': () => `当背景切换到 <span class="param dropdown">${v('BACKDROP')}</span>`,
-    'event_whenbroadcastreceived': () => `📩 当收到 <span class="param dropdown">${v('BROADCAST_OPTION')}</span>`,
-    'event_broadcast': () => `📤 广播 <span class="param dropdown">${v('BROADCAST_OPTION')}</span>`,
-    'event_broadcastandwait': () => `📤 广播 <span class="param dropdown">${v('BROADCAST_OPTION')}</span> 并等待`,
+function getCategoryClassByOpcode(op) {
+  if (op.startsWith('motion')) return 'block-motion';
+  if (op.startsWith('looks')) return 'block-looks';
+  if (op.startsWith('sound')) return 'block-sound';
+  if (op.startsWith('event')) return 'block-events';
+  if (op.startsWith('control')) return 'block-control';
+  if (op.startsWith('sensing')) return 'block-sensing';
+  if (op.startsWith('operator')) return 'block-operators';
+  return 'block-data';
+}
 
-    'control_wait': () => `等待 <span class="param">${v('DURATION')}</span> 秒`,
-    'control_repeat': () => `🔁 重复 <span class="param">${v('TIMES')}</span> 次`,
-    'control_forever': () => '🔁 重复执行',
-    'control_if': () => `如果 <span class="param">${v('CONDITION')}</span> 那么`,
-    'control_if_else': () => `如果 <span class="param">${v('CONDITION')}</span> 那么`,
-    'control_wait_until': () => `等待直到 <span class="param">${v('CONDITION')}</span>`,
-    'control_repeat_until': () => `🔁 重复执行直到 <span class="param">${v('CONDITION')}</span>`,
-    'control_stop': () => `停止 <span class="param dropdown">${v('STOP_OPTION')}</span>`,
-    'control_stop_all': () => '⛔ 停止全部',
-    'control_create_clone_of': () => `创建 <span class="param dropdown">${v('CLONE_OPTION')}</span> 的克隆`,
-    'control_delete_this_clone': () => '删除此克隆',
-    'control_start_as_clone': () => '当作为克隆体启动时',
-    'control_for_each': () => `对于 <span class="param var">${v('VARIABLE')}</span> 在 <span class="param">${v('VALUE')}</span> 中`,
-    'control_while': () => `当 <span class="param">${v('CONDITION')}</span> 时重复`,
+function removeBlock(index) {
+  activeBlocks.splice(index, 1);
+  updateWorkspaceUI();
+  logMessage('🗑️ 移除积木');
+  notifyAndroidCodeChange();
+}
 
-    'sensing_touchingobject': () => `碰到 <span class="param dropdown">${v('TOUCHINGOBJECTMENU')}</span> ?`,
-    'sensing_touchingcolor': () => `碰到颜色 <span class="param">${v('COLOR')}</span> ?`,
-    'sensing_coloristouchingcolor': () => `颜色 <span class="param">${v('COLOR')}</span> 碰到 <span class="param">${v('COLOR2')}</span> ?`,
-    'sensing_distanceto': () => `到 <span class="param dropdown">${v('DISTANCETOMENU')}</span> 的距离`,
-    'sensing_askandwait': () => `询问 <span class="param">${v('QUESTION')}</span> 并等待`,
-    'sensing_answer': () => '回答',
-    'sensing_keypressed': () => `按下 <span class="param dropdown">${v('KEY_OPTION')}</span> 键？`,
-    'sensing_mousedown': () => '鼠标按下？',
-    'sensing_mousex': () => '鼠标的 x',
-    'sensing_mousey': () => '鼠标的 y',
-    'sensing_timer': () => '计时器',
-    'sensing_resettimer': () => '计时器归零',
-    'sensing_dayssince2000': () => '2000年至今的天数',
-    'sensing_current': () => `当前 <span class="param dropdown">${v('CURRENTMENU')}</span>`,
-    'sensing_username': () => '用户名',
+function clearWorkspace() {
+  activeBlocks = [];
+  updateWorkspaceUI();
+  logMessage('🧹 画布已清空');
+  notifyAndroidCodeChange();
+}
 
-    'operator_add': () => `<span class="param">${v('NUM1')}</span> + <span class="param">${v('NUM2')}</span>`,
-    'operator_subtract': () => `<span class="param">${v('NUM1')}</span> - <span class="param">${v('NUM2')}</span>`,
-    'operator_multiply': () => `<span class="param">${v('NUM1')}</span> × <span class="param">${v('NUM2')}</span>`,
-    'operator_divide': () => `<span class="param">${v('NUM1')}</span> ÷ <span class="param">${v('NUM2')}</span>`,
-    'operator_random': () => `在 <span class="param">${v('FROM')}</span> 和 <span class="param">${v('TO')}</span> 之间取随机数`,
-    'operator_lt': () => `<span class="param">${v('OPERAND1')}</span> < <span class="param">${v('OPERAND2')}</span>`,
-    'operator_equals': () => `<span class="param">${v('OPERAND1')}</span> = <span class="param">${v('OPERAND2')}</span>`,
-    'operator_gt': () => `<span class="param">${v('OPERAND1')}</span> > <span class="param">${v('OPERAND2')}</span>`,
-    'operator_and': () => `<span class="param">${v('OPERAND1')}</span> 且 <span class="param">${v('OPERAND2')}</span>`,
-    'operator_or': () => `<span class="param">${v('OPERAND1')}</span> 或 <span class="param">${v('OPERAND2')}</span>`,
-    'operator_not': () => `<span class="param">${v('OPERAND')}</span> 不成立`,
-    'operator_join': () => `连接 <span class="param">${v('STRING1')}</span> 和 <span class="param">${v('STRING2')}</span>`,
-    'operator_letter_of': () => `<span class="param">${v('LETTER')}</span> 在 <span class="param">${v('STRING')}</span> 中的字母`,
-    'operator_length': () => `<span class="param">${v('STRING')}</span> 的长度`,
-    'operator_contains': () => `<span class="param">${v('STRING1')}</span> 包含 <span class="param">${v('STRING2')}</span> ?`,
-    'operator_mod': () => `<span class="param">${v('NUM1')}</span> 除以 <span class="param">${v('NUM2')}</span> 的余数`,
-    'operator_round': () => `将 <span class="param">${v('NUM')}</span> 四舍五入`,
-    'operator_mathop': () => `<span class="param dropdown">${v('OPERATOR')}</span> <span class="param">${v('NUM')}</span>`,
+function updateWorkspaceUI() {
+  const stackEl = document.getElementById('canvasStack');
+  const countEl = document.getElementById('blockCountText');
+  countEl.innerText = activeBlocks.length + ' 个积木';
 
-    'data_setvariableto': () => `将 <span class="param var">${v('VARIABLE')}</span> 设为 <span class="param">${v('VALUE')}</span>`,
-    'data_changevariableby': () => `将 <span class="param var">${v('VARIABLE')}</span> 增加 <span class="param">${v('VALUE')}</span>`,
-    'data_showvariable': () => `显示变量 <span class="param var">${v('VARIABLE')}</span>`,
-    'data_hidevariable': () => `隐藏变量 <span class="param var">${v('VARIABLE')}</span>`,
-    'data_variable': () => '<span class="param var">变量</span>',
-
-    'data_addtolist': () => `将 <span class="param">${v('ITEM')}</span> 添加到 <span class="param var">${v('LIST')}</span>`,
-    'data_deleteoflist': () => `删除 <span class="param var">${v('LIST')}</span> 的第 <span class="param">${v('INDEX')}</span> 项`,
-    'data_insertatlist': () => `在 <span class="param var">${v('LIST')}</span> 的第 <span class="param">${v('INDEX')}</span> 项前插入 <span class="param">${v('ITEM')}</span>`,
-    'data_replaceitemoflist': () => `将 <span class="param var">${v('LIST')}</span> 的第 <span class="param">${v('INDEX')}</span> 项替换为 <span class="param">${v('ITEM')}</span>`,
-    'data_itemoflist': () => `<span class="param var">${v('LIST')}</span> 的第 <span class="param">${v('INDEX')}</span> 项`,
-    'data_lengthoflist': () => `<span class="param var">${v('LIST')}</span> 的长度`,
-    'data_listcontainsitem': () => `<span class="param var">${v('LIST')}</span> 包含 <span class="param">${v('ITEM')}</span> ?`,
-    'data_showlist': () => `显示列表 <span class="param var">${v('LIST')}</span>`,
-    'data_hidelist': () => `隐藏列表 <span class="param var">${v('LIST')}</span>`,
-
-    'pen_clear': () => '🖊️ 全部擦除',
-    'pen_stamp': () => '🖊️ 盖章',
-    'pen_pendown': () => '🖊️ 落笔',
-    'pen_penup': () => '🖊️ 抬笔',
-    'pen_setpencolortocolor': () => `🖊️ 笔的颜色设为 <span class="param">${v('COLOR')}</span>`,
-    'pen_changepencolorparamby': () => `🖊️ 笔的 <span class="param dropdown">${v('COLOR_PARAM')}</span> 增加 <span class="param">${v('VALUE')}</span>`,
-    'pen_setpencolortoparam': () => `🖊️ 笔的 <span class="param dropdown">${v('COLOR_PARAM')}</span> 设为 <span class="param">${v('VALUE')}</span>`,
-    'pen_changepensizeby': () => `🖊️ 笔粗细增加 <span class="param">${v('SIZE')}</span>`,
-    'pen_setpensizeto': () => `🖊️ 笔粗细设为 <span class="param">${v('SIZE')}</span>`,
-
-    'procedures_definition': () => '📦 定义',
-    'procedures_prototype': () => '📦 函数定义',
-    'procedures_call': () => '📦 调用自定义积木',
-  };
-
-  function v(name) {
-    if (f && f[name]) return esc(f[name][0] || name);
-    if (inp && inp[name]) {
-      const val = inp[name];
-      if (Array.isArray(val)) {
-        if (val[0] === 10) return `<span class="param var">${esc(val[1]||name)}</span>`;
-        if (val[0] === 11) return `<span class="param var">${esc(val[1]||name)}</span>`;
-        if (val[0] === 12) return `<span class="param var">${esc(val[1]||name)}</span>`;
-        if (Array.isArray(val[1])) return '<span class="param">[...]</span>';
-        return `<span class="param">${esc(String(val[1] ?? name))}</span>`;
-      }
-      return `<span class="param">${esc(String(val))}</span>`;
-    }
-    return name;
+  if (activeBlocks.length === 0) {
+    stackEl.innerHTML = `<div class="canvas-stack empty">👈 点击左侧积木添加程序<br>或使用 AI 助手一键插入</div>`;
+    return;
   }
 
-  const fn = T[opcode];
-  if (fn) return fn();
-  return opcode.replace(/_/g, ' ');
+  let html = '';
+  activeBlocks.forEach((b, idx) => {
+    const cls = getCategoryClassByOpcode(b.opcode);
+    html += `<div class="block ${cls}" style="justify-content:space-between;width:100%;">
+      <span>${b.label}</span>
+      <span style="font-size:12px;opacity:0.8;margin-left:8px;" onclick="event.stopPropagation();removeBlock(${idx})">✕</span>
+    </div>`;
+  });
+  stackEl.innerHTML = html;
 }
 
-function esc(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+function runScratchBlocks() {
+  if (activeBlocks.length === 0) {
+    logMessage('⚠️ 画布为空，无法运行程序');
+    return;
+  }
+  logMessage('🟢 开始执行 Scratch 积木程序...');
+  
+  let delay = 0;
+  const catSvg = document.getElementById('catSprite');
+  const bubble = document.getElementById('sayBubble');
 
-function renderBlock(block, blocks, depth) {
-  if (!block || !block.opcode) return '';
-  const cat = getCategory(block.opcode);
-  const color = COLORS[cat] || '#888';
-  const shape = getBlockShape(block.opcode);
-  const text = getBlockText(block.opcode, block.fields, block.inputs);
-
-  let html = `<div class="block ${shape}" style="background:${color}; margin-left:${depth*4}px">`;
-  html += text;
-  html += '</div>';
-
-  if (shape === 'c-block') {
-    const substack1 = block.inputs && block.inputs.SUBSTACK ? block.inputs.SUBSTACK[1] : null;
-    const substack2 = block.inputs && block.inputs.SUBSTACK2 ? block.inputs.SUBSTACK2[1] : null;
-
-    html += `<div class="substack-container" style="border-left-color:${color}80; margin-left:${depth*4+16}px">`;
-    if (substack1 && typeof substack1 === 'string' && blocks[substack1]) {
-      html += renderChain(substack1, blocks, depth+1);
-    } else {
-      html += '<div class="substack-label">（空）</div>';
-    }
-    if (block.opcode === 'control_if_else') {
-      html += `<div class="else-label" style="color:${color}">否则</div>`;
-      if (substack2 && typeof substack2 === 'string' && blocks[substack2]) {
-        html += renderChain(substack2, blocks, depth+1);
+  activeBlocks.forEach(b => {
+    setTimeout(() => {
+      if (b.opcode.includes('movesteps') || b.opcode.includes('changexby')) {
+        catX += 15;
+        catSvg.style.left = catX + 'px';
+        logMessage('▶ 移动角色 -> x:' + catX);
+      } else if (b.opcode.includes('say')) {
+        bubble.innerText = 'Hello!';
+        bubble.style.display = 'block';
+        logMessage('▶ 说: Hello!');
+        setTimeout(() => bubble.style.display = 'none', 1800);
+      } else if (b.opcode.includes('hide')) {
+        catSvg.style.opacity = '0';
+        logMessage('▶ 隐藏角色');
+      } else if (b.opcode.includes('show')) {
+        catSvg.style.opacity = '1';
+        logMessage('▶ 显示角色');
       } else {
-        html += '<div class="substack-label">（空）</div>';
+        logMessage('▶ 执行: ' + b.opcode);
       }
-    }
-    html += '</div>';
-  }
-
-  if (block.next && blocks[block.next]) {
-    html += renderBlock(blocks[block.next], blocks, depth);
-  }
-
-  return html;
+    }, delay);
+    delay += 600;
+  });
 }
 
-function renderChain(topBlockId, blocks, depth) {
-  const block = blocks[topBlockId];
-  if (!block) return '';
-  return renderBlock(block, blocks, depth || 0);
+function stopScratchBlocks() {
+  catX = 70; catY = 50;
+  const catSvg = document.getElementById('catSprite');
+  catSvg.style.left = catX + 'px';
+  catSvg.style.top = catY + 'px';
+  catSvg.style.opacity = '1';
+  document.getElementById('sayBubble').style.display = 'none';
+  logMessage('🛑 重置舞台完成');
 }
 
-function renderTarget(target) {
-  const blocks = target.blocks || {};
-  const isStage = target.isStage || false;
-  const name = target.name || (isStage ? '舞台' : '未知角色');
-
-  // 判断一个条目是否为真实积木块（排除变量/列表观察者和阴影块）
-  function isRealBlock(b) {
-    if (!b || typeof b !== 'object') return false;
-    if (b.shadow) return false;
-    if (!b.opcode || typeof b.opcode !== 'string') return false;
-    return true;
+function notifyAndroidCodeChange() {
+  if (window.ScratchJsInterface && window.ScratchJsInterface.onCodeChanged) {
+    window.ScratchJsInterface.onCodeChanged();
   }
+}
 
-  // Find top-level blocks: 有 opcode、非 shadow、是顶层（topLevel 为 true/1 或 parent 为 null）
-  const topBlocks = [];
-  for (const id in blocks) {
-    const b = blocks[id];
-    if (!isRealBlock(b)) continue;
-    // topLevel 可能是布尔 true 或数字 1；parent 为 null 也说明是顶层
-    const isTop = (b.topLevel === true || b.topLevel === 1 || b.parent === null || b.parent === undefined || b.parent === '');
-    if (isTop) topBlocks.push(id);
-  }
-
-  // Sort: hat blocks first, then by position
-  topBlocks.sort((a, b) => {
-    const ba = blocks[a], bb = blocks[b];
-    const aHat = getBlockShape(ba.opcode) === 'hat' ? 0 : 1;
-    const bHat = getBlockShape(bb.opcode) === 'hat' ? 0 : 1;
-    if (aHat !== bHat) return aHat - bHat;
-    return (ba.x || 0) - (bb.x || 0);
+// 导出与加载 Scratch 3.0 项目 JSON 数据结构
+window.getProjectJson = function() {
+  const blocksMap = {};
+  activeBlocks.forEach((b, idx) => {
+    blocksMap[b.id] = {
+      opcode: b.opcode,
+      next: activeBlocks[idx+1] ? activeBlocks[idx+1].id : null,
+      parent: activeBlocks[idx-1] ? activeBlocks[idx-1].id : null,
+      inputs: {},
+      fields: {},
+      topLevel: idx === 0
+    };
   });
 
-  // Category stats (只统计真实积木)
-  const catCount = {};
-  for (const id in blocks) {
-    const b = blocks[id];
-    if (!isRealBlock(b)) continue;
-    const c = getCategory(b.opcode);
-    catCount[c] = (catCount[c] || 0) + 1;
-  }
+  const projectObj = {
+    targets: [
+      { isStage: true, name: "Stage", variables: {}, lists: {}, broadcasts: {}, blocks: {} },
+      { isStage: false, name: "Sprite1", variables: {}, lists: {}, broadcasts: {}, blocks: blocksMap }
+    ],
+    meta: { semver: "3.0.0", vm: "0.2.0", agent: "AndroidStarShuttle" }
+  };
+  return JSON.stringify(projectObj);
+};
 
-  let html = '<div class="target-section">';
-  html += `<div class="target-header ${isStage ? 'stage' : 'sprite'}">`;
-  html += `${isStage ? '🖼️ 舞台背景' : '🐱 ' + esc(name)}`;
-  const realBlockCount = Object.keys(blocks).filter(k => isRealBlock(blocks[k])).length;
-  html += `<span style="margin-left:auto;font-size:11px;opacity:0.7">${realBlockCount} 个积木</span>`;
-  html += '</div>';
-
-  // Info
-  if (!isStage) {
-    const info = [];
-    if (target.x !== undefined) info.push(`位置: (${Math.round(target.x)}, ${Math.round(target.y)})`);
-    if (target.size !== undefined) info.push(`大小: ${Math.round(target.size)}%`);
-    if (target.visible !== undefined) info.push(target.visible ? '✅ 可见' : '❌ 隐藏');
-    if (info.length) html += `<div class="target-info">${info.join(' | ')}</div>`;
-  }
-
-  // Costumes / Variables / Lists
-  const extras = [];
-  if (target.costumes && target.costumes.length) {
-    extras.push('🎨 造型: ' + target.costumes.map(c => esc(c.name || c)).join(', '));
-  }
-  if (target.variables && Object.keys(target.variables).length) {
-    const varNames = Object.values(target.variables).map(v => esc(v[0] || ''));
-    extras.push('📦 变量: ' + varNames.join(', '));
-  }
-  if (target.lists && Object.keys(target.lists).length) {
-    const listNames = Object.values(target.lists).map(v => esc(v[0] || ''));
-    extras.push('📋 列表: ' + listNames.join(', '));
-  }
-  if (extras.length) html += `<div class="target-info">${extras.join('<br>')}</div>`;
-
-  // Stats bar
-  if (Object.keys(catCount).length) {
-    html += '<div class="stats-bar">';
-    const sorted = Object.entries(catCount).sort((a,b) => b[1]-a[1]);
-    for (const [cat, count] of sorted) {
-      html += `<span class="category-badge" style="background:${COLORS[cat]||'#888'}">${CAT_CN[cat]||cat} ×${count}</span>`;
-    }
-    html += '</div>';
-  }
-
-  // Block stacks
-  html += '<div class="stacks-area">';
-  if (topBlocks.length === 0) {
-    html += '<div class="empty-msg">（此角色没有积木）</div>';
-  } else {
-    for (const id of topBlocks) {
-      html += '<div class="stack">';
-      html += renderChain(id, blocks, 0);
-      html += '</div>';
-    }
-  }
-  html += '</div></div>';
-
-  return html;
-}
-
-function loadProject(jsonStr) {
+window.loadProject = function(jsonStr) {
   try {
-    const project = JSON.parse(jsonStr);
-    const targets = project.targets || [];
-    let html = '';
-    for (const target of targets) {
-      html += renderTarget(target);
+    const obj = JSON.parse(jsonStr);
+    activeBlocks = [];
+    if (obj.targets) {
+      obj.targets.forEach(t => {
+        if (!t.isStage && t.blocks) {
+          for (let id in t.blocks) {
+            const b = t.blocks[id];
+            if (b.opcode) {
+              const cls = getCategoryClassByOpcode(b.opcode);
+              activeBlocks.push({ id: id, opcode: b.opcode, label: `<span class="${cls}">${b.opcode}</span>` });
+            }
+          }
+        }
+      });
     }
-    document.getElementById('app').innerHTML = html || '<div class="empty-msg">没有找到项目数据</div>';
+    updateWorkspaceUI();
+    logMessage('✅ 导入学生作品代码成功，包含 ' + activeBlocks.length + ' 个积木');
   } catch(e) {
-    document.getElementById('app').innerHTML = '<div class="empty-msg">解析失败: ' + esc(e.message) + '</div>';
+    logMessage('❌ 解析作业 JSON 异常: ' + e.message);
   }
-}
+};
 
-// Android interface
 window.onload = function() {
-  if (window.AndroidBlockViewer) {
-    const data = window.AndroidBlockViewer.getProjectJson();
-    if (data) loadProject(data);
+  renderPalette('motion');
+  
+  // 检查是否在 Android 教师查看器中
+  if (window.AndroidBlockViewer && window.AndroidBlockViewer.getProjectJson) {
+    const json = window.AndroidBlockViewer.getProjectJson();
+    if (json) window.loadProject(json);
+  } else if (window.AndroidProjectLoader && window.AndroidProjectLoader.getProjectData) {
+    const json = window.AndroidProjectLoader.getProjectData();
+    if (json) window.loadProject(json);
   }
 };
 </script>

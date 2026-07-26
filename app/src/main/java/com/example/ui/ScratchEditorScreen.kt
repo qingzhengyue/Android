@@ -320,13 +320,13 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         }
     }
 
-    // Scratch editor mirror URLs: 优先使用国内镜像源，TurboWarp 作为备用
+    // Scratch editor mirror URLs: 优先使用本地离线引擎，国内镜像与 TurboWarp 作为备用
     val mirrors = remember {
         listOf(
-            "https://editor.scratch-cn.cn/",      // 国内镜像 1（优先）
-            "https://scratch3.fun/",              // 国内镜像 2
-            "https://scratch.gitapp.cn/",         // 国内镜像 3
-            "https://turbowarp.org/"              // TurboWarp 国际版（备用）
+            "file:///android_asset/scratch_blocks_viewer.html", // 本地离线引擎（100%秒开免联网）
+            "https://editor.scratch-cn.cn/",                     // 国内镜像 1
+            "https://scratch3.fun/",                             // 国内镜像 2
+            "https://turbowarp.org/"                             // TurboWarp 国际版
         )
     }
     var currentMirrorIndex by remember { mutableStateOf(0) }
@@ -1271,6 +1271,9 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
     val js = """
         (function() {
             try {
+                if (window.addBlockFromAndroid) {
+                    return window.addBlockFromAndroid('$opcode', '$blockText');
+                }
                 var targetVm = typeof vm !== 'undefined' ? vm : (window.vm || window.ScratchVM || (window.editor && window.editor.vm));
                 if (!targetVm) {
                     var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
