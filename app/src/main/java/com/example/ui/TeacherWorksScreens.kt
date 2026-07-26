@@ -313,15 +313,21 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
 
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 4.dp)
                             ) {
                                 val dateStr = SimpleDateFormat("yyyy/MM/dd HH:mm", Locale.getDefault()).format(Date(work.submitTime))
                                 Text(text = "提交时间: $dateStr", fontSize = 11.sp, color = Color.Gray)
 
-                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Button(
                                         onClick = {
                                             viewingDetailTab = "积木视图"
@@ -334,6 +340,8 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                     ) {
                                         Text("🧩 查看作品", fontSize = 11.sp, color = Color.White)
                                     }
+
+                                    Spacer(modifier = Modifier.width(6.dp))
 
                                     Button(
                                         onClick = {
@@ -355,6 +363,8 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                     ) {
                                         Text("🚀 看源程序", fontSize = 11.sp, color = Color.White)
                                     }
+
+                                    Spacer(modifier = Modifier.width(6.dp))
 
                                     Button(
                                         onClick = {

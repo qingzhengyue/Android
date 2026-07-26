@@ -22,6 +22,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -950,13 +951,13 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                             }
                         }
                     }
-                }
 
-                if (userRole == "student") {
-                    StudentHorizontalTabBar(
-                        selectedScreenIndex = selectedScreenIndex,
-                        onTabSelected = { selectedScreenIndex = it }
-                    )
+                    if (userRole == "student") {
+                        StudentHorizontalTabBar(
+                            selectedScreenIndex = selectedScreenIndex,
+                            onTabSelected = { selectedScreenIndex = it }
+                        )
+                    }
                 }
             }
         },
@@ -1002,7 +1003,7 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            if (isWideScreen && !teacherViewingWorkspace) {
+            if (isWideScreen && !teacherViewingWorkspace && !(userRole == "student" && selectedScreenIndex == 0)) {
                 NavigationRail(containerColor = Color(0xFFF1F5F9)) {
                     if (userRole == "student") {
                         NavigationRailItem(
@@ -1112,67 +1113,59 @@ fun StudentHorizontalTabBar(
     selectedScreenIndex: Int,
     onTabSelected: (Int) -> Unit
 ) {
-    Surface(
-        color = Color(0xFF1A237E),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
+    val tabs = listOf(
+        "Scratch编程" to Icons.Default.Code,
+        "开源大厅" to Icons.Default.Explore,
+        "学习任务" to Icons.Default.Assignment,
+        "我的作品" to Icons.Default.Collections,
+        "AI 辅助" to Icons.Default.AutoAwesome,
+        "个人中心" to Icons.Default.Person
+    )
+
+    ScrollableTabRow(
+        selectedTabIndex = selectedScreenIndex.coerceIn(0, tabs.size - 1),
+        containerColor = Color(0xFF1A237E),
+        contentColor = Color.White,
+        edgePadding = 12.dp,
+        indicator = { tabPositions ->
+            val index = selectedScreenIndex.coerceIn(0, tabs.size - 1)
+            if (index in tabPositions.indices) {
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[index]),
+                    height = 3.dp,
+                    color = Color.White
+                )
+            }
+        },
+        divider = {}
     ) {
-        Row(
-            modifier = Modifier.fillMaxSize(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val tabs = listOf(
-                "Scratch编程" to Icons.Default.Code,
-                "学习任务" to Icons.Default.Assignment,
-                "我的作品" to Icons.Default.Collections,
-                "AI 辅助" to Icons.Default.AutoAwesome,
-                "个人中心" to Icons.Default.Person
-            )
-            tabs.forEachIndexed { index, (title, icon) ->
-                val isSelected = selectedScreenIndex == index
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .clickable { onTabSelected(index) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxHeight()
+        tabs.forEachIndexed { index, (title, icon) ->
+            val isSelected = selectedScreenIndex == index
+            Tab(
+                selected = isSelected,
+                onClick = { onTabSelected(index) },
+                text = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = null,
-                                tint = if (isSelected) Color.White else Color(0xFFB0BEC5),
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = title,
-                                fontSize = 13.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isSelected) Color.White else Color(0xFFB0BEC5)
-                            )
-                        }
-                    }
-                    if (isSelected) {
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth(0.9f)
-                                .height(3.dp)
-                                .background(Color.White, shape = RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp))
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = if (isSelected) Color.White else Color(0xFFB0BEC5),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = title,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                            color = if (isSelected) Color.White else Color(0xFFB0BEC5)
                         )
                     }
                 }
-            }
+            )
         }
     }
 }

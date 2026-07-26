@@ -46,13 +46,13 @@ fun TeacherAnalyticsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "📊 教师端少儿编程多维学情大屏",
-                        fontSize = 18.sp,
+                        text = "📊 学情大屏",
+                        fontSize = 16.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF1E3A8A)
                     )
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFEFF6FF))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         }
     ) { padding ->
