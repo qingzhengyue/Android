@@ -491,60 +491,22 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
             },
             confirmButton = {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 查看作品按钮：统一弹窗（积木视图/代码视图切换）
-                    Button(
-                        onClick = {
-                            viewingDetailTab = "积木视图"
-                            viewingWorkDetail = workForReview
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
-                        modifier = Modifier.weight(1f)
+                    // 1. 取消按钮
+                    OutlinedButton(
+                        onClick = { reviewingWork = null },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("🧩 查看作品", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("取消", color = Color(0xFF6B7280), fontSize = 12.sp)
                     }
 
-                    // 看源程序按钮：跳转 Scratch 镜像站加载作品
-                    Button(
-                        onClick = {
-                            try {
-                                val sb3File = java.io.File(context.cacheDir, "view_source_${workForReview.workId}_${System.currentTimeMillis()}.sb3")
-                                sb3File.writeText(workForReview.workCode, Charsets.UTF_8)
-                                viewModel.teacherPendingSb3Path.value = sb3File.absolutePath
-                                reviewingWork = null
-                                sb3SavedPath = sb3File.absolutePath
-                                pendingNavigateToEditor = true
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "保存源文件失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("🚀 看源程序", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-
-                    Button(
-                        onClick = {
-                            val scoreVal = scoreInput.toIntOrNull() ?: 90
-                            viewModel.submitTeacherReview(
-                                workId = workForReview.workId,
-                                status = "已打分",
-                                score = scoreVal,
-                                comment = commentInput
-                            ) { msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                reviewingWork = null
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text("✅ 同意过审打分", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                    }
-
+                    // 2. 打回重做按钮
                     Button(
                         onClick = {
                             val scoreVal = scoreInput.toIntOrNull() ?: 60
@@ -558,18 +520,42 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                 reviewingWork = null
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1.2f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
                     ) {
-                        Text("↩️ 打回重做", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("打回重做", fontSize = 12.sp)
+                    }
+
+                    // 3. 同意过审打分按钮
+                    Button(
+                        onClick = {
+                            val scoreVal = scoreInput.toIntOrNull() ?: 90
+                            viewModel.submitTeacherReview(
+                                workId = workForReview.workId,
+                                status = "已打分",
+                                score = scoreVal,
+                                comment = commentInput
+                            ) { msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                reviewingWork = null
+                            }
+                        },
+                        modifier = Modifier.weight(1.5f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("过审并打分", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { reviewingWork = null }) {
-                    Text("取消", color = Color.Gray)
-                }
-            }
+            dismissButton = null
         )
     }
 
@@ -632,12 +618,13 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
 
                     when (viewingDetailTab) {
                         "积木视图" -> {
-                            Column(
+                            Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White)
                             ) {
-                                // 1. WebView 积木画布预览 (高度占 55%)
                                 AndroidView(
                                     factory = { ctx ->
                                         WebView(ctx).apply {
@@ -651,134 +638,8 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                             loadUrl("file:///android_asset/scratch_blocks_viewer.html")
                                         }
                                     },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(0.55f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color.White)
+                                    modifier = Modifier.fillMaxSize()
                                 )
-
-                                Spacer(modifier = Modifier.height(8.dp))
-
-                                // 2. 闭环批改区：AI 辅助评估 + 分数与评语录入 (可滑动)
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .weight(0.45f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFFF8FAFC))
-                                        .verticalScroll(rememberScrollState())
-                                        .padding(8.dp)
-                                ) {
-                                    val aiReportFlow = remember(detailWork.workId) { viewModel.getReportForWorkFlow(detailWork.workId) }
-                                    val aiReport by aiReportFlow.collectAsState(initial = null)
-
-                                    Surface(
-                                        color = Color(0xFFEFF6FF),
-                                        shape = RoundedCornerShape(6.dp),
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
-                                    ) {
-                                        Column(modifier = Modifier.padding(6.dp)) {
-                                            Text(
-                                                text = aiReport?.let { "🤖 AI综合诊断: ${it.averageScore}分 (语法:${it.grammarScore} | 逻辑:${it.logicScore} | 创意:${it.creativeScore})" } ?: "🤖 AI正在辅助评估代码...",
-                                                fontSize = 11.sp,
-                                                fontWeight = FontWeight.Bold,
-                                                color = Color(0xFF1D4ED8)
-                                            )
-                                            if (aiReport?.optimizationSuggestions?.isNotBlank() == true) {
-                                                Text(
-                                                    text = "💡 AI优化建议: ${aiReport?.optimizationSuggestions}",
-                                                    fontSize = 10.sp,
-                                                    color = Color(0xFF1E40AF),
-                                                    modifier = Modifier.padding(top = 2.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
-                                    ) {
-                                        OutlinedTextField(
-                                            value = scoreInput,
-                                            onValueChange = { scoreInput = it },
-                                            label = { Text("批改得分", fontSize = 10.sp) },
-                                            modifier = Modifier.width(100.dp),
-                                            singleLine = true
-                                        )
-                                        Row(
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                            modifier = Modifier.weight(1f)
-                                        ) {
-                                            listOf("95", "85", "75").forEach { scorePreset ->
-                                                OutlinedButton(
-                                                    onClick = { scoreInput = scorePreset },
-                                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp),
-                                                    modifier = Modifier.weight(1f).height(32.dp)
-                                                ) {
-                                                    Text(scorePreset + "分", fontSize = 10.sp)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    OutlinedTextField(
-                                        value = commentInput,
-                                        onValueChange = { commentInput = it },
-                                        label = { Text("录入教师评语指导", fontSize = 10.sp) },
-                                        placeholder = { Text("录入针对该积木作品的具体评语...", fontSize = 10.sp) },
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                                        minLines = 2,
-                                        maxLines = 3
-                                    )
-
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Button(
-                                            onClick = {
-                                                val scoreVal = scoreInput.toIntOrNull() ?: 90
-                                                viewModel.submitTeacherReview(
-                                                    workId = detailWork.workId,
-                                                    status = "已打分",
-                                                    score = scoreVal,
-                                                    comment = commentInput
-                                                ) { msg ->
-                                                    Toast.makeText(context, "批改提交成功: $msg", Toast.LENGTH_SHORT).show()
-                                                    viewingWorkDetail = null
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF16A34A)),
-                                            modifier = Modifier.weight(1f).height(36.dp),
-                                            contentPadding = PaddingValues(vertical = 2.dp)
-                                        ) {
-                                            Text("✅ 提交批改并过审", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-
-                                        Button(
-                                            onClick = {
-                                                val scoreVal = scoreInput.toIntOrNull() ?: 60
-                                                viewModel.submitTeacherReview(
-                                                    workId = detailWork.workId,
-                                                    status = "打回重做",
-                                                    score = scoreVal,
-                                                    comment = commentInput
-                                                ) { msg ->
-                                                    Toast.makeText(context, "打回操作完成: $msg", Toast.LENGTH_SHORT).show()
-                                                    viewingWorkDetail = null
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFDC2626)),
-                                            modifier = Modifier.weight(1f).height(36.dp),
-                                            contentPadding = PaddingValues(vertical = 2.dp)
-                                        ) {
-                                            Text("↩️ 打回重做", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
                             }
                         }
                         "代码视图" -> {
@@ -809,8 +670,11 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
             },
             confirmButton = {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Button(
                         onClick = {
@@ -823,31 +687,20 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                 Toast.makeText(context, "复制失败: ${e.message}", Toast.LENGTH_SHORT).show()
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("📋 复制代码", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    Button(
-                        onClick = {
-                            // 跳转 Scratch 镜像站加载此作品
-                            try {
-                                val sb3File = java.io.File(context.cacheDir, "view_source_${detailWork.workId}_${System.currentTimeMillis()}.sb3")
-                                sb3File.writeText(detailWork.workCode, Charsets.UTF_8)
-                                viewModel.teacherPendingSb3Path.value = sb3File.absolutePath
-                                viewingWorkDetail = null
-                                sb3SavedPath = sb3File.absolutePath
-                                pendingNavigateToEditor = true
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "跳转失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00897B)),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("🚀 在编辑器中打开", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
-                    Button(
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("复制代码", fontSize = 13.sp)
+                    }
+
+                    OutlinedButton(
                         onClick = { viewingWorkDetail = null },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF757575)),
-                        modifier = Modifier.weight(1f)
-                    ) { Text("关闭", fontSize = 11.sp) }
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("关闭", color = Color.DarkGray, fontSize = 13.sp)
+                    }
                 }
             },
             dismissButton = null,

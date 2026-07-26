@@ -904,28 +904,22 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
             },
             confirmButton = {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = {
-                            val scoreVal = scoreInput.toIntOrNull() ?: 90
-                            viewModel.submitTeacherReview(
-                                workId = workForReview.workId,
-                                status = "已打分",
-                                score = scoreVal,
-                                comment = commentInput
-                            ) { msg ->
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                reviewingWork = null
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4CAF50)),
-                        modifier = Modifier.weight(1f)
+                    // 1. 取消按钮
+                    OutlinedButton(
+                        onClick = { reviewingWork = null },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("✅ 同意过审打分", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Text("取消", color = Color(0xFF6B7280), fontSize = 12.sp)
                     }
 
+                    // 2. 打回重做按钮
                     Button(
                         onClick = {
                             val scoreVal = scoreInput.toIntOrNull() ?: 60
@@ -939,18 +933,42 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                 reviewingWork = null
                             }
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE53935)),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1.2f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFEF4444)),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
                     ) {
-                        Text("↩️ 打回重新修改", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("打回重做", fontSize = 12.sp)
+                    }
+
+                    // 3. 同意过审打分按钮
+                    Button(
+                        onClick = {
+                            val scoreVal = scoreInput.toIntOrNull() ?: 90
+                            viewModel.submitTeacherReview(
+                                workId = workForReview.workId,
+                                status = "已打分",
+                                score = scoreVal,
+                                comment = commentInput
+                            ) { msg ->
+                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                reviewingWork = null
+                            }
+                        },
+                        modifier = Modifier.weight(1.5f),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
+                    ) {
+                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(15.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text("过审并打分", fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { reviewingWork = null }) {
-                    Text("取消", color = Color.Gray)
-                }
-            }
+            dismissButton = null
         )
     }
 

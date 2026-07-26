@@ -41,7 +41,9 @@ fun TeacherAnalyticsScreen(
         }
     }
 
-    Scaffold { padding ->
+    Scaffold(
+        containerColor = Color(0xFFF8FAFC)
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
