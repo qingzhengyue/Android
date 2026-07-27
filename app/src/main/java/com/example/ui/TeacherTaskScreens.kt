@@ -403,10 +403,13 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                         .fillMaxWidth()
                         .weight(1f)
                         .background(Color.White, RoundedCornerShape(12.dp))
-                        .padding(24.dp),
+                        .padding(16.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("您目前还没有发布任何 Scratch 教学任务哦。快去「发布任务」下发一下吧！", color = Color.Gray, fontSize = 13.sp)
+                    EmptyStateView(
+                        title = "暂无教学任务",
+                        subtitle = "您目前还没有发布任何 Scratch 教学任务哦。快去「发布任务」下发新任务吧！"
+                    )
                 }
             } else {
                 LazyColumn(

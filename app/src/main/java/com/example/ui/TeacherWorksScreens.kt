@@ -94,23 +94,37 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
     // 是否在弹窗确认后跳转编辑器
     var pendingNavigateToEditor by remember { mutableStateOf(false) }
     
-    // 班级筛选状态
+    // 班级/年级筛选状态
+    var filterType by remember { mutableIntStateOf(0) } // 0 = 全部班级, 1 = 按年级, 2 = 按具体班级
+    var selectedGradeName by remember { mutableStateOf("全部班级") }
     var selectedClassId by remember { mutableStateOf<Int?>(null) }
+    var selectedClassLabel by remember { mutableStateOf("全部班级") }
     var classDropdownExpanded by remember { mutableStateOf(false) }
-    
-    // 根据选择的班级ID过滤作品
-    val filteredWorks = remember(allWorks, selectedClassId) {
-        if (selectedClassId == null) {
-            allWorks
-        } else {
-            allWorks.filter { it.classId == selectedClassId }
-        }
+
+    // 小学常用年级列表
+    val gradeOptions = remember(classes) {
+        val baseGrades = listOf("三年级", "四年级", "五年级", "六年级")
+        val customGrades = classes.map { it.grade }.filter { it.isNotBlank() }
+        (baseGrades + customGrades).distinct()
     }
-    
-    // 获取选中班级的名称
-    val selectedClassName = remember(selectedClassId, classes) {
-        if (selectedClassId == null) "全部班级" else {
-            classes.find { it.classId == selectedClassId }?.let { "${it.grade} ${it.className}" } ?: "未知班级"
+
+    // 根据年级/班级筛选作品
+    val filteredWorks = remember(allWorks, classes, filterType, selectedGradeName, selectedClassId) {
+        when (filterType) {
+            1 -> { // 按年级过滤
+                val matchingClassIds = classes.filter {
+                    it.grade == selectedGradeName || it.className.contains(selectedGradeName)
+                }.map { it.classId }.toSet()
+                if (matchingClassIds.isNotEmpty()) {
+                    allWorks.filter { it.classId in matchingClassIds }
+                } else {
+                    emptyList()
+                }
+            }
+            2 -> { // 按具体班级过滤
+                if (selectedClassId == null) allWorks else allWorks.filter { it.classId == selectedClassId }
+            }
+            else -> allWorks // 全部班级
         }
     }
 
@@ -149,18 +163,18 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
             Spacer(modifier = Modifier.width(6.dp))
             Text("孩子们最新提交的 Scratch 作品：", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             
-            // 班级筛选下拉框
-            Box(modifier = Modifier.padding(start = 12.dp)) {
+            // 年级/班级筛选下拉框
+            Box(modifier = Modifier.padding(start = 8.dp)) {
                 OutlinedButton(
                     onClick = { classDropdownExpanded = true },
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E88E5)),
                     border = BorderStroke(1.dp, Color(0xFF1E88E5)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(selectedClassName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(selectedClassLabel, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                     Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
                 }
                 DropdownMenu(
@@ -169,28 +183,68 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                 ) {
                     // 全部班级选项
                     DropdownMenuItem(
-                        text = { Text("📋 全部班级 (${allWorks.size}件作品)", fontSize = 13.sp) },
+                        text = {
+                            Text(
+                                "📋 全部班级 (${allWorks.size}件作品)",
+                                fontSize = 13.sp,
+                                fontWeight = if (filterType == 0) FontWeight.Bold else FontWeight.Normal,
+                                color = if (filterType == 0) Color(0xFF1E88E5) else Color.Unspecified
+                            )
+                        },
                         onClick = {
+                            filterType = 0
+                            selectedClassLabel = "全部班级"
                             selectedClassId = null
                             classDropdownExpanded = false
                         }
                     )
-                    Divider()
-                    // 各班级选项
-                    classes.forEach { classEntity ->
-                        val classWorkCount = allWorks.count { it.classId == classEntity.classId }
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // 按年级及下属班级列表
+                    gradeOptions.forEach { gradeName ->
+                        val matchingClasses = classes.filter { it.grade == gradeName || it.className.contains(gradeName) }
+                        val matchingClassIds = matchingClasses.map { it.classId }.toSet()
+                        val gradeWorkCount = allWorks.count { it.classId in matchingClassIds }
+
+                        // 年级整体筛选
                         DropdownMenuItem(
-                            text = { 
+                            text = {
                                 Text(
-                                    "${classEntity.grade} ${classEntity.className} (${classWorkCount}件)", 
-                                    fontSize = 13.sp 
-                                ) 
+                                    "🏫 $gradeName (${gradeWorkCount}件)",
+                                    fontSize = 13.sp,
+                                    fontWeight = if (filterType == 1 && selectedGradeName == gradeName) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (filterType == 1 && selectedGradeName == gradeName) Color(0xFF1E88E5) else Color(0xFF1E293B)
+                                )
                             },
                             onClick = {
-                                selectedClassId = classEntity.classId
+                                filterType = 1
+                                selectedGradeName = gradeName
+                                selectedClassLabel = gradeName
+                                selectedClassId = null
                                 classDropdownExpanded = false
                             }
                         )
+
+                        // 对应具体班级
+                        matchingClasses.forEach { classEntity ->
+                            val classWorkCount = allWorks.count { it.classId == classEntity.classId }
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        "    └ ${classEntity.className} (${classWorkCount}件)",
+                                        fontSize = 12.sp,
+                                        fontWeight = if (filterType == 2 && selectedClassId == classEntity.classId) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (filterType == 2 && selectedClassId == classEntity.classId) Color(0xFF1E88E5) else Color(0xFF475569)
+                                    )
+                                },
+                                onClick = {
+                                    filterType = 2
+                                    selectedClassId = classEntity.classId
+                                    selectedClassLabel = "${classEntity.grade} ${classEntity.className}"
+                                    classDropdownExpanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -202,35 +256,32 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                     .fillMaxWidth()
                     .weight(1f)
                     .background(Color.White, RoundedCornerShape(12.dp))
-                    .padding(24.dp),
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.Inbox,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = Color.LightGray
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = if (selectedClassId == null) 
-                            "目前还没有任何孩子提交作品哦！" 
-                        else 
-                            "【$selectedClassName】目前还没有学生提交作品哦！",
-                        fontSize = 14.sp, 
-                        fontWeight = FontWeight.Bold, 
-                        color = Color.DarkGray
+                    EmptyStateView(
+                        title = "暂无作品提交",
+                        subtitle = if (filterType == 0)
+                            "目前还没有收到任何孩子的作品哦，稍后再来看看吧！"
+                        else
+                            "【$selectedClassLabel】的孩子们还没有提交作品哦，稍后再来看看吧！"
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "💡 提示：您可以退登，使用快捷通道登录「张小帅」写个 Scratch 代码并点击「提作并AI评估」喔，再登回王老师便能在这里对他的做业进行评分批改啦！",
-                        fontSize = 11.sp,
-                        color = Color.Gray,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 16.sp,
+                    Surface(
+                        color = Color(0xFFEFF6FF),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.padding(horizontal = 16.dp)
-                    )
+                    ) {
+                        Text(
+                            text = "💡 提示：您可以退登，使用快捷通道登录「张小帅」写个 Scratch 代码并点击「提作并AI评估」喔，再登回王老师便能在这里对他的作业进行评分批改啦！",
+                            fontSize = 11.sp,
+                            color = Color(0xFF1E88E5),
+                            textAlign = TextAlign.Center,
+                            lineHeight = 16.sp,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
                 }
             }
         } else {
