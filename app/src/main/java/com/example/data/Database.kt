@@ -107,6 +107,30 @@ data class LearningTask(
     val status: String // 发布状态 (如: "未开始", "进行中", "已提交", "已截止")
 )
 
+fun LearningTask.isExpired(): Boolean {
+    val currentTime = System.currentTimeMillis()
+    return try {
+        val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+        val date = sdf.parse(this.deadline)
+        if (date != null) {
+            val cal = java.util.Calendar.getInstance()
+            cal.time = date
+            cal.set(java.util.Calendar.HOUR_OF_DAY, 23)
+            cal.set(java.util.Calendar.MINUTE, 59)
+            cal.set(java.util.Calendar.SECOND, 59)
+            cal.timeInMillis < currentTime
+        } else {
+            this.deadlineTime < currentTime
+        }
+    } catch (e: Exception) {
+        this.deadlineTime < currentTime
+    }
+}
+
+fun LearningTask.getDisplayStatus(): String {
+    return if (this.isExpired()) "已截止" else if (this.status.isBlank() || this.status == "进行中") "进行中" else this.status
+}
+
 // 5. Scratch草稿 (ScratchDraft)
 @Serializable
 @Entity(tableName = "scratch_draft")
@@ -495,6 +519,9 @@ interface AppDao {
 
     @Query("SELECT * FROM scratch_work ORDER BY submitTime DESC")
     fun getAllWorksFlow(): Flow<List<ScratchWork>>
+
+    @Query("SELECT * FROM scratch_work ORDER BY submitTime DESC")
+    suspend fun getAllWorks(): List<ScratchWork>
 
     @Query("SELECT * FROM student")
     fun getAllStudentsFlow(): Flow<List<Student>>

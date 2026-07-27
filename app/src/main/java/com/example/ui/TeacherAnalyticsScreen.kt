@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -31,14 +32,14 @@ fun TeacherAnalyticsScreen(
     viewModel: MainViewModel
 ) {
     val classesList by viewModel.classesList.collectAsStateWithLifecycle()
+    val tasksList by viewModel.tasksList.collectAsStateWithLifecycle()
     val analyticsData by viewModel.classAnalyticsState.collectAsStateWithLifecycle()
-    var selectedClassId by remember { mutableIntStateOf(-1) }
 
-    LaunchedEffect(classesList) {
-        if (classesList.isNotEmpty() && selectedClassId == -1) {
-            selectedClassId = classesList.first().classId
-            viewModel.loadClassAnalytics(selectedClassId)
-        }
+    var selectedClassId by remember { mutableIntStateOf(-1) } // -1 代表全部班级
+    var selectedTaskId by remember { mutableIntStateOf(0) } // 0 代表全部任务
+
+    LaunchedEffect(selectedClassId, selectedTaskId) {
+        viewModel.loadClassAnalytics(selectedClassId, if (selectedTaskId == 0) null else selectedTaskId)
     }
 
     Scaffold(
@@ -50,23 +51,54 @@ fun TeacherAnalyticsScreen(
                 .padding(padding)
                 .background(Color(0xFFF8FAFC))
         ) {
-            // 班级选择器
-            if (classesList.isNotEmpty()) {
-                ScrollableTabRow(
-                    selectedTabIndex = classesList.indexOfFirst { it.classId == selectedClassId }.coerceAtLeast(0),
-                    containerColor = Color.White,
-                    edgePadding = 16.dp
-                ) {
-                    classesList.forEach { clazz ->
-                        Tab(
-                            selected = clazz.classId == selectedClassId,
-                            onClick = {
-                                selectedClassId = clazz.classId
-                                viewModel.loadClassAnalytics(clazz.classId)
-                            },
-                            text = { Text(clazz.className, fontWeight = FontWeight.Bold) }
-                        )
-                    }
+            // 1. 班级切换 Selector
+            ScrollableTabRow(
+                selectedTabIndex = if (selectedClassId == -1) 0 else (classesList.indexOfFirst { it.classId == selectedClassId } + 1).coerceAtLeast(0),
+                containerColor = Color.White,
+                edgePadding = 16.dp
+            ) {
+                Tab(
+                    selected = selectedClassId == -1,
+                    onClick = {
+                        selectedClassId = -1
+                        selectedTaskId = 0
+                    },
+                    text = { Text("📋 全部班级", fontWeight = FontWeight.Bold) }
+                )
+                classesList.forEach { clazz ->
+                    Tab(
+                        selected = clazz.classId == selectedClassId,
+                        onClick = {
+                            selectedClassId = clazz.classId
+                            selectedTaskId = 0
+                        },
+                        text = { Text(clazz.className, fontWeight = FontWeight.Bold) }
+                    )
+                }
+            }
+
+            // 2. 任务筛选器 Filter Row
+            val filteredTasks = remember(tasksList, selectedClassId) {
+                if (selectedClassId == -1) tasksList else tasksList.filter { it.classId == selectedClassId }
+            }
+
+            ScrollableTabRow(
+                selectedTabIndex = if (selectedTaskId == 0) 0 else (filteredTasks.indexOfFirst { it.taskId == selectedTaskId } + 1).coerceAtLeast(0),
+                containerColor = Color(0xFFF1F5F9),
+                edgePadding = 12.dp,
+                divider = {}
+            ) {
+                Tab(
+                    selected = selectedTaskId == 0,
+                    onClick = { selectedTaskId = 0 },
+                    text = { Text("🎯 全部任务", fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+                )
+                filteredTasks.forEach { task ->
+                    Tab(
+                        selected = task.taskId == selectedTaskId,
+                        onClick = { selectedTaskId = task.taskId },
+                        text = { Text(task.taskName, fontSize = 12.sp, fontWeight = FontWeight.Medium) }
+                    )
                 }
             }
 
@@ -91,7 +123,7 @@ fun TeacherAnalyticsScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             MetricCard(
-                                title = "班级总人数",
+                                title = "涉及学生",
                                 value = "${data.totalStudents} 人",
                                 icon = Icons.Default.People,
                                 color = Color(0xFF3B82F6),
@@ -105,7 +137,7 @@ fun TeacherAnalyticsScreen(
                                 modifier = Modifier.weight(1f)
                             )
                             MetricCard(
-                                title = "抄袭预警数",
+                                title = "抄袭预警",
                                 value = "${data.plagiarismRiskCount} 件",
                                 icon = Icons.Default.Warning,
                                 color = Color(0xFFEF4444),
@@ -127,7 +159,7 @@ fun TeacherAnalyticsScreen(
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
-                                    text = "🕸️ 班级 Scratch 核心能力五维雷达图",
+                                    text = "🕸️ Scratch 核心能力五维雷达图",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF1E293B)
@@ -144,11 +176,21 @@ fun TeacherAnalyticsScreen(
 
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "班级平均综合分：${String.format("%.1f", data.avgTotal)} / 100 分",
-                                    fontSize = 14.sp,
+                                    text = "综合平均分：${String.format("%.1f", data.avgTotal)} / 100 分",
+                                    fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF2563EB)
                                 )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+                                HorizontalDivider(color = Color(0xFFF1F5F9))
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // 五维得分对比条
+                                DimensionScoreRow("语法表达", data.avgGrammar, 25f, Color(0xFF3B82F6))
+                                DimensionScoreRow("逻辑结构", data.avgLogic, 30f, Color(0xFF10B981))
+                                DimensionScoreRow("任务契合", data.avgTaskMatch, 25f, Color(0xFFF59E0B))
+                                DimensionScoreRow("创新思维", data.avgCreative, 20f, Color(0xFF8B5CF6))
                             }
                         }
                     }
@@ -200,6 +242,35 @@ fun TeacherAnalyticsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun DimensionScoreRow(name: String, current: Float, max: Float, color: Color) {
+    val percent = (current / max).coerceIn(0f, 1f)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(text = name, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.width(70.dp), color = Color(0xFF475569))
+        LinearProgressIndicator(
+            progress = { percent },
+            modifier = Modifier
+                .weight(1f)
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp)),
+            color = color,
+            trackColor = Color(0xFFF1F5F9)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "${String.format("%.1f", current)} / ${max.toInt()}分",
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = Color(0xFF1E293B)
+        )
     }
 }
 

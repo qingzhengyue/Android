@@ -601,10 +601,17 @@ class AppRepository(private val context: Context) {
         val plagiarismRiskCount: Int
     )
 
-    suspend fun getClassAnalyticsData(classId: Int): ClassAnalyticsData = withContext(Dispatchers.IO) {
-        val students = dao.getStudentsByClass(classId)
-        val works = dao.getWorksByClass(classId)
-        val reports = dao.getAiReportsByClassId(classId)
+    suspend fun getClassAnalyticsData(classId: Int, taskId: Int? = null): ClassAnalyticsData = withContext(Dispatchers.IO) {
+        val students = if (classId == -1) dao.getAllStudents() else dao.getStudentsByClass(classId)
+        var works = if (classId == -1) dao.getAllWorks() else dao.getWorksByClass(classId)
+        if (taskId != null && taskId != 0) {
+            works = works.filter { it.taskId == taskId }
+        }
+        var reports = if (classId == -1) dao.getAllAiReports() else dao.getAiReportsByClassId(classId)
+        if (taskId != null && taskId != 0) {
+            val validWorkIds = works.map { it.workId }.toSet()
+            reports = reports.filter { validWorkIds.contains(it.workId) }
+        }
 
         val totalStudents = students.size
         val submittedCount = works.distinctBy { it.studentId }.size
@@ -619,7 +626,7 @@ class AppRepository(private val context: Context) {
                 avgTaskMatch = 0f,
                 avgCreative = 0f,
                 avgTotal = 0f,
-                commonErrors = listOf("尚未有智能评测数据，待学生提交作业后自动生成"),
+                commonErrors = listOf("尚未有对应任务/班级的智能评测数据，待学生提交作业后自动生成"),
                 plagiarismRiskCount = plagiarismRiskCount
             )
         }

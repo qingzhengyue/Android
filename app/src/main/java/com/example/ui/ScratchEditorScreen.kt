@@ -112,7 +112,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         }
     }
 
-    fun getLiveCodeAndCall(funcType: String) {
+    fun getLiveCodeAndCall(funcType: String, param: String = "") {
         android.util.Log.d("GetLiveCode", "[START] getLiveCodeAndCall 被调用: funcType=$funcType, webViewInstance=${webViewInstance != null}")
         // 防止重复调用: 如果AI已经在加载中, 不再发起新请求
         if (viewModel.aiLoading.value) {
@@ -129,7 +129,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 kotlinx.coroutines.delay(5000L)
                 if (!callbackFired.getAndSet(true)) {
                     android.util.Log.w("GetLiveCode", "[TIMEOUT] evaluateJavascript callback 超时(5s) for $funcType, 直接调用AI(不携带代码)")
-                    viewModel.callAiAssistant(funcType)
+                    viewModel.callAiAssistant(funcType, param = param)
                 } else {
                     android.util.Log.d("GetLiveCode", "[TIMEOUT] 超时协程结束: callback已触发, 不再重复调用")
                 }
@@ -199,7 +199,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         cleaned
                     }
                     android.util.Log.d("GetLiveCode", "[CALL] 代码清理完成: cleaned长度=${cleaned.length}, 最终长度=${finalCode.length}, 即将调用callAiAssistant($funcType)")
-                    viewModel.callAiAssistant(funcType, if (finalCode.isNotBlank()) finalCode else null)
+                    viewModel.callAiAssistant(funcType, if (finalCode.isNotBlank()) finalCode else null, param = param)
                 } else {
                     android.util.Log.w("GetLiveCode", "[SKIP] evaluateJavascript 回调触发时超时保护已执行过, 跳过重复调用")
                 }
@@ -207,7 +207,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             android.util.Log.d("GetLiveCode", "[WAIT] evaluateJavascript 已提交, 等待回调...")
         } else {
             android.util.Log.w("GetLiveCode", "[NULL] webViewInstance 为 null, 直接调用AI(不携带代码), funcType=$funcType")
-            viewModel.callAiAssistant(funcType)
+            viewModel.callAiAssistant(funcType, param = param)
         }
     }
 
@@ -973,7 +973,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     viewModel = viewModel,
                     realTimeCheckEnabled = realTimeCheckEnabled,
                     onRealTimeCheckChange = { viewModel.setRealTimeStateEnabled(it) },
-                    getLiveCodeAndCall = { getLiveCodeAndCall(it) },
+                    getLiveCodeAndCall = { type, param -> getLiveCodeAndCall(type, param) },
                     onClose = { showAiAssistSheet = false },
                     modifier = Modifier.width(drawerWidth)
                 )

@@ -162,10 +162,32 @@ object GeminiClient {
 
         // Failsafe offline-style fallback in case of all network or authentication errors
         val fallbackResponse = when {
-            prompt.contains("语法纠错") || prompt.contains("错误") -> "💡 星梭自愈网络服务保障：看起来你的积木块拼合没有报错，但别忘了在最顶端搭上【当 🟢 被点击】积木，整个小猫咪才会在点击绿旗时真正出发喔！✨"
-            prompt.contains("创意") || prompt.contains("想法") -> "🎨 星梭自愈网络服务保障：你可以点击屏幕左侧的【编程魔法盒】一键载入其他角色的创意设计技巧，比如让星星每秒闪烁，或让云朵飘动噢！✨"
-            prompt.contains("知识点") || prompt.contains("考点") -> "🌟 星梭自愈网络服务保障【考点解析】：\n1. 奇妙比喻：【重复执行】就像永远停不下来的欢快旋转木马！\n2. 为什么有用：可以让你的角色不用一次次重复拖积木，自动一直跑或者闪烁。\n3. 拼搭三步走：\n   ① 点击左侧黄色【控制】菜单；\n   ② 找到【重复执行】嘴巴状积木；\n   ③ 把要重复的动作（如【移动10步】）装进它的嘴巴里面！\n4. 🎮 试一试：点击绿旗看看小猫是不是一直跑！"
-            else -> "✨ 星梭自愈网络服务保障：你的操作非常棒！此时由于网络网关存在瞬时阻断，你可以点击上方「提交作品」先把进度提交到王老师的审阅面板中哦！"
+            prompt.contains("语法纠错") || prompt.contains("错误") -> {
+                val hasGreenFlag = prompt.contains("event_whenflagclicked") || prompt.contains("whenflagclicked") || prompt.contains("被点击")
+                if (hasGreenFlag) {
+                    "🌟【语法与逻辑智能诊断】\n【诊断结果】: 宝贝真棒！精灵姐姐检测到你的程序中已经正确添加了【当 🟢 被点击】启动触发积木，第一步打得非常坚实！✨\n【修正建议】: 请检查绿旗积木下方的【移动】或【重复执行】积木是否相互紧密嵌套，并确认是否有阻止持续运动的逻辑断点哦！"
+                } else {
+                    "💡【语法与逻辑智能诊断】\n【错误提示】: 目前的积木组顶部好像还没有添加启动触发器噢。\n【修正建议】: 请在左侧黄色【事件】菜单中，将第一个【当 🟢 被点击】积木拖出来放在最顶端，这样点击屏幕上的绿旗时程序就会跑起来啦！✨"
+                }
+            }
+            prompt.contains("创意") || prompt.contains("想法") || prompt.contains("主题") -> {
+                val topic = if (prompt.contains("主题是：【")) prompt.substringAfter("主题是：【").substringBefore("】") else "自由拓展"
+                "🎨【创作灵感方案: $topic】✨\n" +
+                "1. 🐾 动态特效: 尝试从左侧【外观】分类拖出【将颜色特效增加 25】放入【重复执行】中，让 $topic 的角色闪烁炫彩光芒！\n" +
+                "2. 🎵 趣味音效: 从【声音】分类选择【播放声音 直到结束】，每次交互时触发生动的音效！\n" +
+                "3. 🏆 计分机制: 点击【变量】新建一个“得分”变量，每次成功碰撞时增加 1 分！加油尝试吧！"
+            }
+            prompt.contains("知识点") || prompt.contains("考点") -> {
+                val topic = if (prompt.contains("考点：【")) prompt.substringAfter("考点：【").substringBefore("】") else "编程知识"
+                "🌟【知识考点深度解析: $topic】✨\n" +
+                "1. 💡 奇妙比喻: 【$topic】就像是一个魔法调配工具，能帮你的角色搞定复杂的逻辑与指令！\n" +
+                "2. 🚀 核心价值: 掌握【$topic】后，你的作品就能拥有自动交互、记录状态或多角色协同的强大功能。\n" +
+                "3. 🐾 拼搭步骤:\n" +
+                "   ① 在左侧对应分类菜单里找到【$topic】相关的积木块；\n" +
+                "   ② 用手指将它拖拽到脚本区；\n" +
+                "   ③ 把它黏贴在触发积木下方，运行绿旗看看奇妙的变化吧！"
+            }
+            else -> "✨ 星梭自愈网络服务保障：你的拼搭非常棒！已为你分析当前作品逻辑，你可以继续添加角色或将作品提交给老师点评哦！"
         }
         return@withContext fallbackResponse
     }

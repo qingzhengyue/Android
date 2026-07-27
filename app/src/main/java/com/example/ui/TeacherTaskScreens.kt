@@ -465,22 +465,23 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                                         }
                                         
                                         // 任务状态
-                                        val statusColor = when (t.status) {
+                                        val displayStatus = t.getDisplayStatus()
+                                        val statusColor = when (displayStatus) {
                                             "已撤销" -> Color(0xFF757575)
-                                            "进行中", null -> Color(0xFF4CAF50)
-                                            else -> Color(0xFFF44336)
+                                            "已截止" -> Color(0xFFD32F2F)
+                                            else -> Color(0xFF2E7D32)
                                         }
-                                        val statusBgColor = when (t.status) {
+                                        val statusBgColor = when (displayStatus) {
                                             "已撤销" -> Color(0xFFE0E0E0)
-                                            "进行中", null -> Color(0xFFE8F5E9)
-                                            else -> Color(0xFFFFEBEE)
+                                            "已截止" -> Color(0xFFFFEBEE)
+                                            else -> Color(0xFFE8F5E9)
                                         }
                                         Card(
                                             colors = CardDefaults.cardColors(containerColor = statusBgColor),
                                             shape = RoundedCornerShape(6.dp)
                                         ) {
                                             Text(
-                                                text = t.status ?: "进行中",
+                                                text = displayStatus,
                                                 fontSize = 10.sp,
                                                 color = statusColor,
                                                 fontWeight = FontWeight.Bold,

@@ -680,6 +680,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onResult("错误：请先登录")
                 return@launch
             }
+            val tid = currentTaskId.value ?: 0
+            if (tid != 0) {
+                val matchedTask = tasksList.value.find { it.taskId == tid }
+                if (matchedTask != null && matchedTask.isExpired()) {
+                    onResult("⚠️ 提交失败：该任务已于【${matchedTask.deadline}】截止，老师已禁止补交作业。")
+                    return@launch
+                }
+            }
             _currentBtnLoading.value = true
             try {
                 val work = ScratchWork(
@@ -746,7 +754,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     // --- AI 实时辅助功能 ---
-    fun callAiAssistant(funcType: String, currentCodeInjected: String? = null) {
+    fun callAiAssistant(funcType: String, currentCodeInjected: String? = null, param: String = "") {
         if (_aiLoading.value) {
             Log.w("AIFlow", "[GUARD] AI调用正在进行中, 忽略重复调用: funcType=$funcType")
             return
@@ -865,25 +873,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 "语法纠错" -> """
                     $systemInstruction
                     
-                    我的 Scratch 积木代码是：$code
+                    我的 Scratch 积木代码 JSON 是：$code
                     请帮我分析这份代码，找出其中的语法错误、逻辑冲突或没对齐没拼好的地方，并按以下标准格式给出诊断指导：
+                    
+                    【极其重要的事实核查规则】：
+                    传入的代码是孩子实时编写的 Scratch 代码 JSON。请认真查验：如果代码中已经包含了 "event_whenflagclicked" 或包含 "whenflagclicked"（代表“当 🟢 被点击”事件积木），绝对不可以诬陷孩子说缺少【当 🟢 被点击】！相反，你要夸奖他已经正确放置了绿旗启动积木，然后再去检查里面的循环、条件、移动或积木连接逻辑！
                     
                     每个发现的问题，必须以两个核心标签起头输出：
                     【错误提示】: (说明在积木何处出现了什么原因 of 逻辑小迷糊/错误)
                     【修正建议】: (教导孩子应该如何拼搭、拖动、或者如何改好积木)
-                    
-                    即使在开头热烈表扬和夸奖学生，也必须在正文中针对检测到的语法 and 逻辑错误严格使用上述两个标记标签！
                 """.trimIndent()
                 
                 "创意引导" -> """
                     $systemInstruction
                     
                     我想在这个作品的基础上进行一些好玩的创意延展。
+                    我这次希望创作的主题是：【${param.ifBlank { "自由拓展与创意优化" }}】。
                     我的 Scratch 积木代码目前是：$code
-                    请给我 2-3 个好玩有趣的、可以让作品画面更动感/更有趣/更好玩的小魔法（创意点子）！
+                    请专门围绕【${param.ifBlank { "自由拓展与创意优化" }}】这个主题，结合我目前的代码，给我 2-3 个符合小学生认知的酷炫 Scratch 魔法创意！
                     每一个小魔法，必须先用一个有趣的名字包装，然后写出具体的积木拼法：
-                    - 分步骤①、②、③说明怎么拖拽哪类积木，把它拼插在哪里，参数改成什么。
-                    - 每个小点子最后，加上一小句甜甜的鼓励，说明这个魔法在别的小游戏（例如打地鼠、接水果等）里面可以怎么用来创造乐趣。
+                    - 分步骤①、②、③说明在左侧什么分类里拖拽哪块积木，把它拼插在哪里，参数改成什么。
+                    - 结尾加上一句鼓励，说明这个魔法在小游戏里能带来什么震撼效果。
                 """.trimIndent()
                 
                 "代码优化建议" -> """
@@ -896,13 +906,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     3. 给出幽默而通俗的比喻，并说明一二三步具体的优化教程。
                 """.trimIndent()
                 
-                "知识点讲解" -> """
+                "知识点讲解", "考点讲解" -> """
                     $systemInstruction
                                     
-                    我现在想学习一个 Scratch 编程知识点。请用最温柔、最有趣的方式给我讲解清楚。
+                    我现在想学习 Scratch 编程的核心知识点/考点：【${param.ifBlank { "变量与广播" }}】。
                     我目前的 Scratch 积木代码是：$code
-                    请结合我当前的代码进度，用小学生能听懂的话，给我讲解这个知识点是什么、为什么有用、以及在我的代码里可以怎么用上它。
-                    记得多用比喻和表情符号，一步步教我怎么操作噢！
+                    请专门围绕【${param.ifBlank { "变量与广播" }}】这个知识点，用最温柔、最通俗易懂的小学生比喻进行讲解：
+                    1. 用童趣十足的比喻说明【${param.ifBlank { "变量与广播" }}】是什么（例如魔法小盒子、信鸽广播等）。
+                    2. 结合我当前的代码进度，告诉我为什么要用到【${param.ifBlank { "变量与广播" }}】。
+                    3. 分步骤①、②、③指导我怎么在左侧积木栏拖出对应的【${param.ifBlank { "变量与广播" }}】积木并拼搭到作品里！
                 """.trimIndent()
                                 
                 else -> "$systemInstruction\n请分析以下Scratch积木代码并给出温暖有爱的具体拼搭指引：$code"
@@ -1845,9 +1857,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 教师多维学情可视化大屏数据 (Task 4)
     val classAnalyticsState = MutableStateFlow<AppRepository.ClassAnalyticsData?>(null)
 
-    fun loadClassAnalytics(classId: Int) {
+    fun loadClassAnalytics(classId: Int, taskId: Int? = null) {
         viewModelScope.launch {
-            val data = repository.getClassAnalyticsData(classId)
+            val data = repository.getClassAnalyticsData(classId, taskId)
             classAnalyticsState.value = data
         }
     }

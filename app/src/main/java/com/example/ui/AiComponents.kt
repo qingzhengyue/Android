@@ -100,7 +100,7 @@ fun AiAssistPanel(
     viewModel: MainViewModel,
     realTimeCheckEnabled: Boolean,
     onRealTimeCheckChange: (Boolean) -> Unit,
-    getLiveCodeAndCall: (String) -> Unit,
+    getLiveCodeAndCall: (String, String) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -256,7 +256,7 @@ fun AiAssistPanel(
 
                                 // Interactive manually trigger button preserved
                                 Button(
-                                    onClick = { getLiveCodeAndCall("语法纠错") },
+                                    onClick = { getLiveCodeAndCall("语法纠错", "") },
                                     colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B)),
                                     shape = RoundedCornerShape(8.dp),
                                     modifier = Modifier.fillMaxWidth().height(36.dp)
@@ -565,13 +565,13 @@ fun AiAssistPanel(
                                 "创意引导" -> {
                                     val liveTheme = creativePromptInput.text
                                     if (liveTheme.isNotBlank()) {
-                                        viewModel.currentDraftName.value = liveTheme
+                                        // viewModel.currentDraftName.value = liveTheme
                                     }
-                                    getLiveCodeAndCall("创意引导")
+                                    getLiveCodeAndCall("创意引导", liveTheme)
                                     creativePromptInput = TextFieldValue("")
                                 }
                                 "考点讲解" -> {
-                                    getLiveCodeAndCall("知识点讲解")
+                                    getLiveCodeAndCall("知识点讲解", kbPromptInput.text.ifBlank { "变量" })
                                     kbPromptInput = TextFieldValue("")
                                 }
                             }

@@ -314,15 +314,16 @@ fun StudentTasksScreen(viewModel: MainViewModel, onGoToCode: () -> Unit) {
                                         modifier = Modifier.weight(1f)
                                     )
 
+                                    val displayStatus = task.getDisplayStatus()
                                     Card(
                                         colors = CardDefaults.cardColors(
-                                            containerColor = if (task.status == "进行中") Color(0xFFE8F5E9) else Color(0xFFFFEBEE)
+                                            containerColor = if (displayStatus == "已截止") Color(0xFFFFEBEE) else Color(0xFFE8F5E9)
                                         )
                                     ) {
                                         Text(
-                                            text = task.status,
+                                            text = displayStatus,
                                             fontSize = 11.sp,
-                                            color = if (task.status == "进行中") Color(0xFF2E7D32) else Color(0xFFC62828),
+                                            color = if (displayStatus == "已截止") Color(0xFFC62828) else Color(0xFF2E7D32),
                                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                                             fontWeight = FontWeight.Bold
                                         )
