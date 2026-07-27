@@ -320,6 +320,24 @@ data class WorkWithReport(
     @Embedded(prefix = "report") val report: WorkAiReport?
 )
 
+// 11. 作品点赞记录 (WorkLikeEntity)
+@Serializable
+@Entity(
+    tableName = "work_likes",
+    primaryKeys = ["workId", "studentId"] // 联合主键，确保唯一性
+)
+data class WorkLikeEntity(
+    @ColumnInfo(name = "workId")
+    @SerialName("work_id")
+    val workId: Int,
+    @ColumnInfo(name = "studentId")
+    @SerialName("student_id")
+    val studentId: String, // 当前登录学生的学号/ID
+    @ColumnInfo(name = "createTime")
+    @SerialName("create_time")
+    val createTime: Long = System.currentTimeMillis()
+)
+
 @Dao
 interface AppDao {
     // --- 教师操作 ---
@@ -524,6 +542,22 @@ interface AppDao {
     @Query("UPDATE scratch_work SET likesCount = likesCount + 1 WHERE workId = :workId")
     suspend fun incrementWorkLikes(workId: Int)
 
+    // --- 点赞记录操作 (Work Like DAO) ---
+    @Query("SELECT COUNT(*) FROM work_likes WHERE workId = :workId AND studentId = :studentId")
+    suspend fun checkIsLiked(workId: Int, studentId: String): Int
+
+    @Query("SELECT workId FROM work_likes WHERE studentId = :studentId")
+    fun getLikedWorkIdsFlow(studentId: String): Flow<List<Int>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertLike(like: WorkLikeEntity)
+
+    @Query("DELETE FROM work_likes WHERE workId = :workId AND studentId = :studentId")
+    suspend fun deleteLike(workId: Int, studentId: String)
+
+    @Query("UPDATE scratch_work SET likesCount = likesCount + :delta WHERE workId = :workId")
+    suspend fun updateWorkLikeCount(workId: Int, delta: Int)
+
     @Query("UPDATE scratch_work SET plagiarismFlag = :flag, similarityScore = :similarity WHERE workId = :workId")
     suspend fun updateWorkPlagiarismStatus(workId: Int, flag: Boolean, similarity: Int)
 
@@ -576,9 +610,10 @@ interface AppDao {
         AiAssistRecord::class,
         ScratchWork::class,
         WorkComment::class,
-        WorkAiReport::class
+        WorkAiReport::class,
+        WorkLikeEntity::class
     ],
-    version = 5, // 升级到版本5，添加开源大厅、互动评论、抄袭检测与离线同步字段
+    version = 6, // 升级到版本6，添加作品点赞关联表 work_likes
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

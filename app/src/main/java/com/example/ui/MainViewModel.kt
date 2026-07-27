@@ -1749,6 +1749,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val popularWorksList: StateFlow<List<ScratchWork>> = repository.getPopularPublicWorksFlow()
         .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val likedWorkIds: StateFlow<Set<Int>> = _currentUserId
+        .flatMapLatest { studentId ->
+            if (studentId != -1) {
+                repository.getLikedWorkIdsFlow(studentId.toString())
+            } else {
+                flowOf(emptyList())
+            }
+        }
+        .map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
+
     fun toggleWorkPublic(workId: Int, isPublic: Boolean) {
         viewModelScope.launch {
             repository.toggleWorkPublicStatus(workId, isPublic)
@@ -1756,8 +1768,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun likeWork(workId: Int) {
+        toggleLikeWork(workId)
+    }
+
+    fun toggleLikeWork(workId: Int, onResult: ((Boolean, String) -> Unit)? = null) {
+        val sId = _currentUserId.value
+        if (sId == -1) {
+            onResult?.invoke(false, "请先登录学生账号再进行点赞哦~")
+            return
+        }
         viewModelScope.launch {
-            repository.likeWork(workId)
+            try {
+                val isLiked = repository.toggleLike(workId, sId.toString())
+                val message = if (isLiked) "♥ 点赞成功！" else "已取消点赞"
+                onResult?.invoke(isLiked, message)
+            } catch (e: Exception) {
+                onResult?.invoke(false, "操作失败: ${e.message}")
+            }
         }
     }
 

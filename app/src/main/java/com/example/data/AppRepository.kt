@@ -492,6 +492,25 @@ class AppRepository(private val context: Context) {
         dao.incrementWorkLikes(workId)
     }
 
+    suspend fun toggleLike(workId: Int, studentId: String): Boolean = withContext(Dispatchers.IO) {
+        val isLiked = dao.checkIsLiked(workId, studentId) > 0
+        if (isLiked) {
+            // 已经点赞 -> 取消点赞
+            dao.deleteLike(workId, studentId)
+            dao.updateWorkLikeCount(workId, -1)
+            // TODO: 异步向 Supabase 发送 DELETE 请求
+            false // 返回当前状态为：未点赞
+        } else {
+            // 未点赞 -> 新增点赞
+            dao.insertLike(WorkLikeEntity(workId = workId, studentId = studentId))
+            dao.updateWorkLikeCount(workId, 1)
+            // TODO: 异步向 Supabase 发送 INSERT 请求
+            true // 返回当前状态为：已点赞
+        }
+    }
+
+    fun getLikedWorkIdsFlow(studentId: String): Flow<List<Int>> = dao.getLikedWorkIdsFlow(studentId)
+
     suspend fun forkWork(sourceWork: ScratchWork, targetStudentId: Int, targetClassId: Int): Long = withContext(Dispatchers.IO) {
         val clonedWork = ScratchWork(
             workName = "${sourceWork.workName} (克隆版)",

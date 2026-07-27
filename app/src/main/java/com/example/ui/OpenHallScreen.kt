@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,6 +23,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.ScratchWork
 import com.example.data.WorkComment
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -35,6 +38,7 @@ fun OpenHallScreen(
     val publicWorks by viewModel.publicWorksList.collectAsStateWithLifecycle()
     val popularWorks by viewModel.popularWorksList.collectAsStateWithLifecycle()
     val myWorks by viewModel.worksList.collectAsStateWithLifecycle()
+    val likedWorkIds by viewModel.likedWorkIds.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0=最新作品, 1=热门推荐, 2=我的作品发布管理
     var activeWorkForComment by remember { mutableStateOf<ScratchWork?>(null) }
@@ -122,8 +126,10 @@ fun OpenHallScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(currentDisplayList, key = { it.workId }) { work ->
+                        val isLikedByMe = likedWorkIds.contains(work.workId)
                         OpenWorkCard(
                             work = work,
+                            isLikedByMe = isLikedByMe,
                             isMyWorkTab = (selectedTab == 2),
                             onFork = {
                                 viewModel.forkWork(work) { success, msg ->
@@ -133,9 +139,10 @@ fun OpenHallScreen(
                                     }
                                 }
                             },
-                            onLike = {
-                                viewModel.likeWork(work.workId)
-                                Toast.makeText(context, "♥ 点赞成功！", Toast.LENGTH_SHORT).show()
+                            onToggleLike = {
+                                viewModel.toggleLikeWork(work.workId) { isLiked, msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
                             },
                             onTogglePublic = { isPub ->
                                 viewModel.toggleWorkPublic(work.workId, isPub)
@@ -164,9 +171,10 @@ fun OpenHallScreen(
 @Composable
 fun OpenWorkCard(
     work: ScratchWork,
+    isLikedByMe: Boolean,
     isMyWorkTab: Boolean,
     onFork: () -> Unit,
-    onLike: () -> Unit,
+    onToggleLike: () -> Unit,
     onTogglePublic: (Boolean) -> Unit,
     onOpenComments: () -> Unit
 ) {
@@ -265,18 +273,11 @@ fun OpenWorkCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onLike) {
-                        Icon(
-                            imageVector = Icons.Default.Favorite,
-                            contentDescription = "点赞",
-                            tint = Color(0xFFEF4444)
-                        )
-                    }
-                    Text(
-                        text = "${work.likesCount}",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF64748B)
+                    // 防抖且支持单账号唯一点赞/取消点赞按钮组件
+                    LikeButton(
+                        isLikedByMe = isLikedByMe,
+                        likeCount = work.likesCount,
+                        onToggleLike = onToggleLike
                     )
 
                     Spacer(modifier = Modifier.width(12.dp))
@@ -313,6 +314,54 @@ fun OpenWorkCard(
                 }
             }
         }
+    }
+}
+
+/**
+ * 任务 5：表现层 (Jetpack Compose)
+ * 独立可复用的 LikeButton 组件，内置 500ms 防抖机制与点赞状态呈现
+ */
+@Composable
+fun LikeButton(
+    isLikedByMe: Boolean, // 当前账号是否已点赞
+    likeCount: Int,       // 总点赞数
+    onToggleLike: () -> Unit // 触发点赞/取消点赞事件
+) {
+    // 使用 rememberCoroutineScope 防抖
+    val scope = rememberCoroutineScope()
+    var isClickable by remember { mutableStateOf(true) }
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clickable(enabled = isClickable) {
+                if (isClickable) {
+                    isClickable = false // 暂时禁用点击
+                    onToggleLike()
+                    
+                    // 延迟 500ms 后恢复可点击状态（防抖）
+                    scope.launch {
+                        delay(500)
+                        isClickable = true
+                    }
+                }
+            }
+            .padding(8.dp)
+    ) {
+        Icon(
+            imageVector = if (isLikedByMe) Icons.Filled.Favorite else Icons.Default.FavoriteBorder,
+            contentDescription = "点赞",
+            // 已点赞显示醒目的红色，未点赞显示默认灰色
+            tint = if (isLikedByMe) Color(0xFFEF4444) else Color.Gray,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(4.dp))
+        Text(
+            text = likeCount.toString(),
+            color = if (isLikedByMe) Color(0xFFEF4444) else Color.Gray,
+            fontWeight = if (isLikedByMe) FontWeight.Bold else FontWeight.Normal,
+            fontSize = 13.sp
+        )
     }
 }
 
