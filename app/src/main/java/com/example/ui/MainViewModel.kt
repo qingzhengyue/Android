@@ -1125,7 +1125,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- 考点讲解: 纯通义千问API问答, 完全不碰WebView和currentDraftCode ---
+    // --- 考点讲解: 深入浅出的少儿编程知识点剖析, 结合学生当前代码 ---
     fun callKnowledgeExplain(topic: String) {
         Log.d("AIFlow", "[考点讲解] 开始, topic=$topic")
         if (_aiLoading.value) {
@@ -1153,12 +1153,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                // 简洁Prompt, 不包含任何代码数据
-                val prompt = "你是小学Scratch编程的'编程精灵姐姐'，说话特别温柔可爱。" +
-                    "请用小学生能听懂的话，讲解【$topic】这个Scratch编程知识点。" +
-                    "要求：①说清楚这个知识点是什么 ②用有趣的比喻说明为什么有用 " +
-                    "一步步教怎么操作（点击哪个菜单、拖什么积木、拼在哪里）" +
-                    "多用表情符号✨🐱💡和鼓励的话。句子要短，用②③标步骤。"
+                val currentCode = currentDraftCode.value
+                val codeContextPrompt = if (currentCode.isNotBlank() && currentCode != "{}") {
+                    "\n\n学生当前的 Scratch 积木代码如下：\n$currentCode\n请在讲解中顺便告诉学生：“在你当前的代码里，这个知识点可以加在...处哦！”"
+                } else ""
+
+                // 深度定制的少儿编程考点讲解提示词
+                val prompt = """
+                    你是一个超级有爱心、说话极其温柔可爱、充满童趣的 Scratch 3.0“编程精灵姐姐”。
+                    请用小学 3-6 年级（8-12岁）小朋友完全能听懂的语言，深度讲解【$topic】这个 Scratch 编程核心知识点。$codeContextPrompt
+
+                    请严格按照以下 4 个结构输出，文字要短小活泼，多用表情符号（✨, 🐱, 💡, 🚀, 🎈, 🎮）：
+
+                    1. 🌟【奇妙比喻】：用生活中的事物（如魔法收纳盒、旋转木马、交通红绿灯、打卡小哨兵等）做生动有趣的比喻，一句话解释它是什么。
+                    2. 💡【为什么有用】：告诉小朋友这个知识点在做游戏/动画时（比如控制得分、让角色跑起来、判断碰撞）能带来什么神奇效果。
+                    3. 🐾【动手拼搭三步走】：
+                       ① 找菜单：点击左侧【什么颜色/分类】菜单（如黄色控制、蓝色运动、橙色变量）；
+                       ② 找积木：拿到【具体积木名称】积木；
+                       ③ 怎么拼：拼插在什么积木里面或下面，参数该填多少。
+                    4. 🎮【一分钟小试身手】：给出一个超级简单有趣的 1 分钟动手尝试小挑战，鼓励孩子立刻去试试！
+                """.trimIndent()
 
                 Log.d("AIFlow", "[考点讲解] 调用API, prompt长度=${prompt.length}")
 
@@ -1167,10 +1181,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         callGeminiWithTimeoutAndRetry(prompt)
                     }
                 } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                    "连接超时，请重试"
+                    "【连接超时啦 ⏰】精灵姐姐刚才可能开小差去采花了，没有在规定时间内赶回来。别着急，我们可以重新点一下考点按钮重试哦！"
                 } catch (e: Exception) {
                     Log.e("AIFlow", "[考点讲解] API异常: ${e.message}")
-                    "网络异常，请检查网络后重试"
+                    "【网络有点小毛病 ☁️】精灵姐姐暂时没有收到信号。别着急，让网络飞一会儿，咱们过 10 秒钟再点一下重试吧！"
                 }
 
                 _aiResult.value = response
