@@ -1,0 +1,6 @@
+{
+  "name": "星梦智学 - Scratch AI 编程助教",
+  "description": "面向小学 3-6 年级 Scratch 编程的生成式 AI 支持下的小型学习智能助手，包含在线编程、草稿管理、任务提交、AI 实时辅助、AI 自动评测等核心模块。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
