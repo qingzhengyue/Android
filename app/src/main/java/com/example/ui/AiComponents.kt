@@ -61,6 +61,157 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 
 @Composable
+fun PromptChipsRow(
+    prompts: List<PromptChipModel>,
+    onChipClick: (String) -> Unit
+) {
+    androidx.compose.foundation.lazy.LazyRow(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxWidth().background(Color(0xFFFFF0F5))
+    ) {
+        item {
+            Text(
+                text = "快捷引导:",
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFFC2185B),
+                modifier = Modifier.padding(top = 8.dp, end = 4.dp)
+            )
+        }
+        items(prompts) { prompt ->
+            val isCloud = prompt.source == PromptSource.CLOUD
+            val containerColor = if (isCloud) Color(0xFFEFF6FF) else MaterialTheme.colorScheme.surface
+            val borderColor = if (isCloud) Color(0xFF3B82F6) else Color(0xFFF8BBD0)
+
+            Surface(
+                onClick = { onChipClick(prompt.text) },
+                shape = RoundedCornerShape(16.dp),
+                color = containerColor,
+                border = BorderStroke(1.dp, borderColor),
+                modifier = Modifier.height(32.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                ) {
+                    Text(text = prompt.icon, modifier = Modifier.padding(end = 4.dp))
+                    Text(
+                        text = prompt.text,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (isCloud) Color(0xFF1D4ED8) else Color(0xFFC2185B)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ChatMessageList(messages: List<ChatMessage>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        reverseLayout = true,
+        contentPadding = PaddingValues(16.dp)
+    ) {
+        items(messages, key = { it.id }) { message ->
+            when (message) {
+                is ChatMessage.TextMessage -> {
+                    NormalTextBubble(message)
+                }
+                is ChatMessage.BlockIntroCardMessage -> {
+                    BlockIntroCard(message)
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+    }
+}
+
+@Composable
+fun NormalTextBubble(message: ChatMessage.TextMessage) {
+    val alignment = if (message.isFromStudent) Alignment.End else Alignment.Start
+    val bgColor = if (message.isFromStudent) Color(0xFFE3F2FD) else Color.White
+    val textColor = if (message.isFromStudent) Color(0xFF1565C0) else Color(0xFFC2185B)
+    
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalAlignment = alignment
+    ) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = bgColor),
+            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+            modifier = Modifier.widthIn(max = 280.dp)
+        ) {
+            Box(modifier = Modifier.padding(12.dp)) {
+                StyledAiResult(message.text)
+            }
+        }
+    }
+}
+
+@Composable
+fun BlockIntroCard(message: ChatMessage.BlockIntroCardMessage) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFF8FAFC)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth(0.85f)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // 头部：积木名称与图标
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Info, 
+                    contentDescription = null,
+                    tint = Color(0xFF3B82F6)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = message.blockName,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF1E293B)
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // 中间：积木图示
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(80.dp)
+                    .background(Color.White, RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("🧩 这里显示积木的 UI 截图", color = Color.Gray)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 底部：文字说明
+            Text(
+                text = message.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF475569)
+            )
+
+            // 交互按钮
+            Spacer(modifier = Modifier.height(12.dp))
+            Button(
+                onClick = { /* 触发一键应用到工程，或跳转到相关练习 */ },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("查看运行案例")
+            }
+        }
+    }
+}
+
+@Composable
 fun StyledAiResult(text: String) {
     val lines = text.split("\n")
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -118,29 +269,17 @@ fun AiAssistPanel(
     
     // Lifted active tab and dialogue history list states (修复1-3)
     val activeTab by viewModel.aiActiveTab.collectAsState()
-    val dialogueHistory by viewModel.dialogueHistoryList.collectAsState()
+    val chatMessages by viewModel.chatMessages.collectAsState()
+    val mergedPrompts by viewModel.mergedPromptsFlow.collectAsState()
 
-    // Capture and automatically append new AI replies into dialogue history
+    // Capture and automatically process new AI replies via JSON protocol
     LaunchedEffect(aiResult) {
         val res = aiResult
-        val type = aiResultType
         if (!res.isNullOrBlank()) {
-            val history = viewModel.dialogueHistoryList.value
-            if (history.none { it.answer == res }) {
-                val q = when (type) {
-                    "创意引导" -> if (creativePromptInput.text.isNotBlank()) "主题: ${creativePromptInput.text}" else "自由扩展与创意优化"
-                    "知识点讲解" -> if (kbPromptInput.text.isNotBlank()) "知识点: ${kbPromptInput.text}" else "知识考点"
-                    "语法纠错" -> "语法与逻辑检测"
-                    else -> "诊断检测"
-                }
-                val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-                val newItem = DialogueHistoryItem(
-                    title = "【$type】",
-                    question = q,
-                    answer = res,
-                    timestamp = timeStr
-                )
-                viewModel.dialogueHistoryList.value = listOf(newItem) + history
+            val historyTextMsg = viewModel.chatMessages.value.filterIsInstance<ChatMessage.TextMessage>().map { it.text }
+            if (historyTextMsg.none { it == res }) {
+                // If the result isn't already a card, try to parse it
+                viewModel.processAiResponse(res)
             }
         }
     }
@@ -210,8 +349,8 @@ fun AiAssistPanel(
                 }
             }
 
-            // Area 2: 中间内容展示区 (Modifier.weight(1f) 占满所有剩余空间、支持完整滚动及点击历史记录展开)
-            LazyColumn(
+            // Area 2: 中间内容展示区 (Modifier.weight(1f) 占满所有剩余空间)
+            Column(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
@@ -219,107 +358,98 @@ fun AiAssistPanel(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // Section: Specific Controls depending on selected tab
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        when (activeTab) {
-                            "语法纠错" -> {
-                                // Switch for Real-time detection
+                when (activeTab) {
+                    "语法纠错" -> {
+                        // Switch for Real-time detection
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(Color.White, RoundedCornerShape(8.dp))
+                                .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFFC2185B), modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("开启实时代码检测", fontSize = 12.sp, color = Color.Black, fontWeight = FontWeight.Medium)
+                            }
+                            Switch(
+                                checked = realTimeCheckEnabled,
+                                onCheckedChange = { onRealTimeCheckChange(it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = Color(0xFFC2185B),
+                                    uncheckedThumbColor = Color.LightGray,
+                                    uncheckedTrackColor = Color.White
+                                ),
+                                modifier = Modifier.scale(0.8f)
+                            )
+                        }
+
+                        // Interactive manually trigger button preserved
+                        Button(
+                            onClick = { getLiveCodeAndCall("语法纠错", "") },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth().height(36.dp)
+                        ) {
+                            Text("🛑 立即手动语法检测", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    "创意引导" -> {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text("💡 创意灵感库介绍", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "不知道怎么搭积木了？没关系！在下方输入一个你喜欢的主题（如“走迷宫”、“极速赛车”），点击发送，精灵姐姐就会利用魔法，根据你目前的进度送给你三大创意巧思哦！✨",
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+                    "考点讲解" -> {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color.White),
+                            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text("🎓 知识点锦囊 (快速点击选择)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(Color.White, RoundedCornerShape(8.dp))
-                                        .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
-                                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Timer, contentDescription = null, tint = Color(0xFFC2185B), modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("开启实时代码检测", fontSize = 12.sp, color = Color.Black, fontWeight = FontWeight.Medium)
-                                    }
-                                    Switch(
-                                        checked = realTimeCheckEnabled,
-                                        onCheckedChange = { onRealTimeCheckChange(it) },
-                                        colors = SwitchDefaults.colors(
-                                            checkedThumbColor = Color.White,
-                                            checkedTrackColor = Color(0xFFC2185B),
-                                            uncheckedThumbColor = Color.LightGray,
-                                            uncheckedTrackColor = Color.White
-                                        ),
-                                        modifier = Modifier.scale(0.8f)
-                                    )
-                                }
-
-                                // Interactive manually trigger button preserved
-                                Button(
-                                    onClick = { getLiveCodeAndCall("语法纠错", "") },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFC2185B)),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.fillMaxWidth().height(36.dp)
-                                ) {
-                                    Text("🛑 立即手动语法检测", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            "创意引导" -> {
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                                    border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(10.dp)) {
-                                        Text("💡 创意灵感库介绍", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = "不知道怎么搭积木了？没关系！在下方输入一个你喜欢的主题（如“走迷宫”、“极速赛车”），点击发送，精灵姐姐就会利用魔法，根据你目前的进度送给你三大创意巧思哦！✨",
-                                            fontSize = 11.sp,
-                                            lineHeight = 15.sp,
-                                            color = Color.Gray
-                                        )
-                                    }
-                                }
-                            }
-                            "考点讲解" -> {
-                                Card(
-                                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                                    border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("🎓 知识点锦囊 (快速点击选择)", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        
-                                        // 【修复】用 Row + horizontalScroll 替代 FlowRow，
-                                        // 避免 FlowRow 在 LazyColumn 内因无限高度约束导致布局测量死循环而卡死
-                                        Row(
+                                    listOf("循环", "变量", "广播", "坐标").forEach { chip ->
+                                        Box(
                                             modifier = Modifier
-                                                .fillMaxWidth()
-                                                .horizontalScroll(rememberScrollState()),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            listOf("循环", "变量", "广播", "坐标").forEach { chip ->
-                                                Box(
-                                                    modifier = Modifier
-                                                        .height(32.dp)
-                                                        .background(Color(0xFFFFEEF0), RoundedCornerShape(12.dp))
-                                                        .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(12.dp))
-                                                        .clickable { 
-                                                            kbPromptInput = TextFieldValue(chip)
-                                                        }
-                                                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(
-                                                        text = "🏷️ $chip",
-                                                        fontSize = 12.sp,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color(0xFFC2185B)
-                                                    )
+                                                .height(32.dp)
+                                                .background(Color(0xFFFFEEF0), RoundedCornerShape(12.dp))
+                                                .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(12.dp))
+                                                .clickable { 
+                                                    kbPromptInput = TextFieldValue(chip)
                                                 }
-                                            }
+                                                .padding(horizontal = 12.dp, vertical = 6.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "🏷️ $chip",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFFC2185B)
+                                            )
                                         }
                                     }
                                 }
@@ -328,193 +458,53 @@ fun AiAssistPanel(
                     }
                 }
 
-                // Current diagnostics AI result & loader
-                item {
-                    val currentTypeShow = when (activeTab) {
-                        "语法纠错" -> "语法纠错"
-                        "创意引导" -> "创意引导"
-                        else -> "知识点讲解"
-                    }
-                    if (aiLoading && aiResultType == currentTypeShow) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                CircularProgressIndicator(color = Color(0xFFC2185B), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
-                                Spacer(modifier = Modifier.height(8.dp))
-                                val loadingMsg = if (aiResultType == "创意引导") {
-                                    "正在分析你的代码，请稍候..."
-                                } else {
-                                    "精灵姐姐正在全力思索中..."
-                                }
-                                Text(loadingMsg, fontSize = 12.sp, color = Color.Gray)
-                            }
-                        }
-                    } else if (aiResult != null && aiResultType == currentTypeShow) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(text = "✨ 当前分析回复：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
-                                Spacer(modifier = Modifier.height(6.dp))
-                                StyledAiResult(aiResult ?: "")
-                            }
-                        }
-                    }
+                // Current diagnostics AI result loader
+                val currentTypeShow = when (activeTab) {
+                    "语法纠错" -> "语法纠错"
+                    "创意引导" -> "创意引导"
+                    else -> "知识点讲解"
                 }
-
-                // Dialogue history section header
-                item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                if (aiLoading && aiResultType == currentTypeShow) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Icon(Icons.Default.History, contentDescription = null, tint = Color(0xFFC2185B), modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "对话历史记录 (随时点击展开/收起)",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF880E4F)
-                        )
-                    }
-                }
-
-                // Interactive Expandable Dialogue history items list (Optimization 4)
-                items(dialogueHistory.size) { index ->
-                    val item = dialogueHistory[index]
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                val updatedList = viewModel.dialogueHistoryList.value.map {
-                                    if (it.id == item.id) it.copy(isExpanded = !it.isExpanded) else it
-                                }
-                                viewModel.dialogueHistoryList.value = updatedList
-                            }
-                            .background(Color.White, RoundedCornerShape(8.dp))
-                            .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
-                            .padding(12.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
                         ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "${item.title} ${item.question}",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFC2185B),
-                                    maxLines = if (item.isExpanded) Int.MAX_VALUE else 1,
-                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                )
-                                Spacer(modifier = Modifier.height(2.dp))
-                                Text(
-                                    text = "历史时间: ${item.timestamp}",
-                                    fontSize = 10.sp,
-                                    color = Color.Gray
-                                )
-                            }
-                            Icon(
-                                imageVector = if (item.isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                contentDescription = null,
-                                tint = Color(0xFFC2185B),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-
-                        if (item.isExpanded) {
+                            CircularProgressIndicator(color = Color(0xFFC2185B), strokeWidth = 2.dp, modifier = Modifier.size(28.dp))
                             Spacer(modifier = Modifier.height(8.dp))
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(1.dp)
-                                    .background(Color(0xFFFCE4EC))
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Text(
-                                text = "提问或检测背景：",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Gray
-                            )
-                            Text(
-                                text = item.question,
-                                fontSize = 12.sp,
-                                color = Color.Black,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            
-                            Text(
-                                text = "最佳辅助回复方案：",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFC2185B)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            StyledAiResult(item.answer)
+                            val loadingMsg = if (aiResultType == "创意引导") {
+                                "正在分析你的代码，请稍候..."
+                            } else {
+                                "精灵姐姐正在全力思索中..."
+                            }
+                            Text(loadingMsg, fontSize = 12.sp, color = Color.Gray)
                         }
                     }
                 }
-            }
 
-            // Area 2.5: 快捷引导芯片 (Shortcut Guidance Chips - 支持本地预设与云端下发)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFFFFF0F5))
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "快捷引导:",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFFC2185B)
-                )
-                val presetChips = listOf(
-                    "🧩 积木介绍",
-                    "💡 创意引导",
-                    "🎓 考点讲解",
-                    "❓ 怎么让角色动起来",
-                    "⚡ 广播发送与接收"
-                )
-                presetChips.forEach { chipText ->
-                    Surface(
-                        onClick = {
-                            val cleanPrompt = chipText.replace(Regex("^[🧩💡🎓❓⚡]\\s*"), "")
-                            when (activeTab) {
-                                "语法纠错" -> customQuestionInput = TextFieldValue(cleanPrompt)
-                                "创意引导" -> creativePromptInput = TextFieldValue(cleanPrompt)
-                                else -> kbPromptInput = TextFieldValue(cleanPrompt)
-                            }
-                        },
-                        shape = RoundedCornerShape(16.dp),
-                        color = Color.White,
-                        border = BorderStroke(1.dp, Color(0xFFF8BBD0))
-                    ) {
-                        Text(
-                            text = chipText,
-                            fontSize = 11.sp,
-                            color = Color(0xFFC2185B),
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                        )
+                // Area 2.5: 快捷引导芯片 (取代了原来的 Area 2.5)
+                PromptChipsRow(
+                    prompts = mergedPrompts,
+                    onChipClick = { chipText ->
+                        val cleanPrompt = chipText.replace(Regex("^[🧩💡🎓❓⚡📦]\\s*"), "")
+                        when (activeTab) {
+                            "语法纠错" -> customQuestionInput = TextFieldValue(cleanPrompt)
+                            "创意引导" -> creativePromptInput = TextFieldValue(cleanPrompt)
+                            else -> kbPromptInput = TextFieldValue(cleanPrompt)
+                        }
                     }
+                )
+
+                // 聊天消息列表 (占用剩余可用空间)
+                Box(modifier = Modifier.weight(1f)) {
+                    ChatMessageList(messages = chatMessages)
                 }
             }
 

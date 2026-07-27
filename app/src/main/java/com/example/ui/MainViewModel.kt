@@ -14,9 +14,89 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+import kotlinx.serialization.json.Json
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AppRepository(application)
     private val context = application.applicationContext
+
+    // 1. 本地写死的固态提示词
+    private val localPromptsFlow = MutableStateFlow(
+        listOf(
+            PromptChipModel("local_1", "常用积木介绍", "🧩", PromptSource.LOCAL),
+            PromptChipModel("local_2", "魔法盒模板", "📦", PromptSource.LOCAL),
+            PromptChipModel("local_3", "给我点创意", "💡", PromptSource.LOCAL)
+        )
+    )
+
+    // 2. 从 Supabase/Room 获取的当前班级动态提示词
+    private val cloudPromptsFlow = MutableStateFlow<List<PromptChipModel>>(emptyList())
+
+    // 3. 核心：合并数据流暴露给 UI
+    val mergedPromptsFlow: StateFlow<List<PromptChipModel>> = combine(
+        localPromptsFlow,
+        cloudPromptsFlow
+    ) { local, cloud ->
+        cloud + local 
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
+
+    val chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
+
+    init {
+        viewModelScope.launch {
+            repository.promptDao.getActiveCloudPrompts("DEFAULT_CLASS").collect { entities ->
+                cloudPromptsFlow.value = entities.map { 
+                    PromptChipModel(it.id, it.text, it.icon, PromptSource.CLOUD) 
+                }
+            }
+        }
+    }
+
+    fun fetchCloudPrompts(classId: String) {
+        viewModelScope.launch {
+            repository.refreshPromptsFromCloud(classId)
+        }
+    }
+
+    fun processAiResponse(rawText: String) {
+        try {
+            val response = Json.decodeFromString<AiResponse>(rawText)
+            when (response.type) {
+                "block_card" -> {
+                    val payload = Json.decodeFromString<BlockCardPayload>(response.data)
+                    val cardMessage = ChatMessage.BlockIntroCardMessage(
+                        id = java.util.UUID.randomUUID().toString(),
+                        blockName = payload.blockName,
+                        description = payload.dynamicDescription,
+                        blockImageUrl = null, 
+                        exampleGifUrl = null
+                    )
+                    chatMessages.value = listOf(cardMessage) + chatMessages.value
+                }
+                else -> {
+                    chatMessages.value = listOf(
+                        ChatMessage.TextMessage(
+                            id = java.util.UUID.randomUUID().toString(),
+                            isFromStudent = false,
+                            text = response.data
+                        )
+                    ) + chatMessages.value
+                }
+            }
+        } catch (e: Exception) {
+            chatMessages.value = listOf(
+                ChatMessage.TextMessage(
+                    id = java.util.UUID.randomUUID().toString(),
+                    isFromStudent = false,
+                    text = rawText
+                )
+            ) + chatMessages.value
+        }
+    }
 
     // --- 用户状态 ---
     private val _isLoggedIn = MutableStateFlow(SharedPreferencesUtil.isLoggedIn(context))

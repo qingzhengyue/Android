@@ -15,6 +15,38 @@ import kotlinx.serialization.json.Json
 class AppRepository(private val context: Context) {
     private val db = AppDatabase.getDatabase(context)
     private val dao = db.appDao
+    val promptDao = db.promptDao
+
+    suspend fun refreshPromptsFromCloud(classId: String) {
+        // Mocking a network call to Supabase
+        withContext(Dispatchers.IO) {
+            try {
+                // Here we would normally call supabaseApi.getPromptsByClassId(classId)
+                // For demonstration, we'll insert a mock cloud prompt for this class
+                val mockRemoteData = listOf(
+                    PromptEntity(
+                        id = "cloud_1",
+                        classId = classId,
+                        text = "本周难点：克隆体控制",
+                        icon = "🎯",
+                        updatedAt = System.currentTimeMillis(),
+                        isDeleted = false
+                    ),
+                    PromptEntity(
+                        id = "cloud_2",
+                        classId = classId,
+                        text = "赛车碰撞检测解析",
+                        icon = "🚗",
+                        updatedAt = System.currentTimeMillis(),
+                        isDeleted = false
+                    )
+                )
+                promptDao.insertAll(mockRemoteData)
+            } catch (e: Exception) {
+                Log.e("PromptSync", "Failed to fetch cloud prompts", e)
+            }
+        }
+    }
 
     // --- Supabase 初始化 (安全 nullable，初始化失败不崩溃) ---
     private val supabase: io.github.jan.supabase.SupabaseClient? by lazy {

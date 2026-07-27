@@ -660,6 +660,21 @@ interface AppDao {
     fun getWorkWithReportFlow(studentId: Int, taskId: Int): Flow<WorkWithReport?>
 }
 
+@Dao
+interface PromptDao {
+    @Query("SELECT * FROM cloud_prompts WHERE classId = :classId AND isDeleted = 0 ORDER BY updatedAt DESC")
+    fun getActiveCloudPrompts(classId: String): Flow<List<PromptEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdatePrompts(prompts: List<PromptEntity>)
+
+    @Query("SELECT * FROM cloud_prompts")
+    fun getAllCloudPrompts(): Flow<List<PromptEntity>>
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(prompts: List<PromptEntity>)
+}
+
 @Database(
     entities = [
         Teacher::class,
@@ -673,13 +688,15 @@ interface AppDao {
         WorkComment::class,
         WorkAiReport::class,
         WorkLikeEntity::class,
-        UserStarredProjects::class
+        UserStarredProjects::class,
+        PromptEntity::class
     ],
-    version = 7, // 升级到版本7，添加作品收藏关联表 user_starred_projects
+    version = 8, // 升级到版本8，添加云端提示词表 cloud_prompts
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract val appDao: AppDao
+    abstract val promptDao: PromptDao
 
     companion object {
         @Volatile
