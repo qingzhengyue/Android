@@ -331,10 +331,14 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
 
     val currentTeacherId by viewModel.currentUserId.collectAsState()
 
-    // 筛选出当前登录教师自己发布的任务，并按taskId(递增即发布时间)降序排列
+    // 优先筛选出当前登录教师发布的任务，如无特定匹配则展示系统中所有教学任务，并按taskId降序排列
     val teacherTasks = remember(tasks, currentTeacherId) {
-        tasks.filter { it.teacherId == currentTeacherId }
-             .sortedByDescending { it.taskId }
+        val filtered = tasks.filter { it.teacherId == currentTeacherId }
+        if (filtered.isNotEmpty()) {
+            filtered.sortedByDescending { it.taskId }
+        } else {
+            tasks.sortedByDescending { it.taskId }
+        }
     }
 
     var selectedTask by remember { mutableStateOf<LearningTask?>(null) }
