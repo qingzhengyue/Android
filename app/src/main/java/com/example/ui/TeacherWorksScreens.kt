@@ -575,6 +575,9 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
         val detailStudent = students.find { it.studentId == detailWork.studentId }
         val detailStudentName = detailStudent?.let { "${it.name} (学号: ${it.studentNumber})" } ?: "学生ID: ${detailWork.studentId}"
 
+        val reportFlow = remember(detailWork.workId) { viewModel.getReportForWorkFlow(detailWork.workId) }
+        val detailReport by reportFlow.collectAsState(initial = null)
+
         val formattedJson = remember(detailWork.workCode) {
             try { org.json.JSONObject(detailWork.workCode).toString(2) } catch (e: Exception) { detailWork.workCode }
         }
@@ -606,7 +609,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                     // 切换标签
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Button(
                             onClick = { viewingDetailTab = "积木视图" },
@@ -614,16 +617,24 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                 containerColor = if (viewingDetailTab == "积木视图") Color(0xFF1E88E5) else Color(0xFFB0BEC5)
                             ),
                             modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                        ) { Text("🧩 积木视图", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) { Text("🧩 积木视图", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                        Button(
+                            onClick = { viewingDetailTab = "AI量化报告" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (viewingDetailTab == "AI量化报告") Color(0xFF10B981) else Color(0xFFB0BEC5)
+                            ),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) { Text("📊 AI量化报告", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
                         Button(
                             onClick = { viewingDetailTab = "代码视图" },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (viewingDetailTab == "代码视图") Color(0xFF6A1B9A) else Color(0xFFB0BEC5)
                             ),
                             modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                        ) { Text("📄 代码视图", fontSize = 11.sp) }
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) { Text("📄 代码视图", fontSize = 10.sp) }
                     }
 
                     when (viewingDetailTab) {
@@ -650,6 +661,63 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
+                            }
+                        }
+                        "AI量化报告" -> {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White)
+                                    .padding(12.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                if (detailReport != null) {
+                                    val rep = detailReport!!
+                                    Column(modifier = Modifier.fillMaxWidth()) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text("综合测评得分", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF374151))
+                                            Text("${rep.averageScore} / 100 分", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2563EB))
+                                        }
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        AnimatedQuantitativeScoreBar("语法表达", rep.grammarScore, 25, Color(0xFF3B82F6))
+                                        AnimatedQuantitativeScoreBar("逻辑结构", rep.logicScore, 30, Color(0xFF10B981))
+                                        AnimatedQuantitativeScoreBar("任务契合", rep.taskMatchScore, 25, Color(0xFFF59E0B))
+                                        AnimatedQuantitativeScoreBar("创新思维", rep.creativeScore, 20, Color(0xFF8B5CF6))
+
+                                        if (rep.optimizationSuggestions.isNotBlank()) {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text("💡 AI 指导建议", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Surface(
+                                                color = Color(0xFFFEF3C7),
+                                                shape = RoundedCornerShape(8.dp),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(
+                                                    text = rep.optimizationSuggestions,
+                                                    fontSize = 12.sp,
+                                                    color = Color(0xFF92400E),
+                                                    lineHeight = 17.sp,
+                                                    modifier = Modifier.padding(10.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("暂无 AI 量化报告数据", color = Color.Gray, fontSize = 13.sp)
+                                    }
+                                }
                             }
                         }
                         "代码视图" -> {
