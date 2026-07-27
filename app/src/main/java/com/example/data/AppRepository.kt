@@ -558,6 +558,40 @@ class AppRepository(private val context: Context) {
 
     fun getCommentsByWorkFlow(workId: Int): Flow<List<WorkComment>> = dao.getCommentsByWorkFlow(workId)
 
+    // --- 收藏项目操作 (Star Projects) ---
+    suspend fun toggleStarWork(workId: Int, studentId: String): Boolean = withContext(Dispatchers.IO) {
+        val count = dao.checkIsStarred(workId, studentId)
+        val isStarred = if (count > 0) {
+            dao.deleteStarredProject(workId, studentId)
+            try {
+                supabase?.from("user_starred_projects")
+                    ?.delete {
+                        filter {
+                            eq("work_id", workId)
+                            eq("student_id", studentId)
+                        }
+                    }
+            } catch (e: Exception) {
+                Log.e("Supabase", "Delete starred project error: ${e.message}")
+            }
+            false
+        } else {
+            val entity = UserStarredProjects(workId = workId, studentId = studentId)
+            dao.insertStarredProject(entity)
+            try {
+                supabase?.from("user_starred_projects")?.upsert(entity)
+            } catch (e: Exception) {
+                Log.e("Supabase", "Upsert starred project error: ${e.message}")
+            }
+            true
+        }
+        isStarred
+    }
+
+    fun getStarredWorkIdsFlow(studentId: String): Flow<List<Int>> = dao.getStarredWorkIdsFlow(studentId)
+
+    fun getStarredWorksFlow(studentId: String): Flow<List<ScratchWork>> = dao.getStarredWorksFlow(studentId)
+
     // --- 抄袭检测 (Task 6) ---
     suspend fun checkAndSetWorkSimilarity(work: ScratchWork): ScratchCodeSimilarity.SimilarityResult = withContext(Dispatchers.IO) {
         val sameTaskWorks = dao.getWorksByTaskId(work.taskId).filter { it.workId != work.workId }

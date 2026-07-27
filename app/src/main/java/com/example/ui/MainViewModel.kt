@@ -1764,6 +1764,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun changeStudentPassword(oldPass: String, newPass: String, onResult: (Boolean, String) -> Unit) {
+        val sId = _currentUserId.value
+        if (sId == -1) {
+            onResult(false, "请先登录学生账号")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val student = repository.getStudentById(sId)
+                if (student == null) {
+                    onResult(false, "找不到对应的学生账号信息")
+                    return@launch
+                }
+                if (student.password != oldPass) {
+                    onResult(false, "原密码输入错误，请核对后重试")
+                    return@launch
+                }
+                repository.updateStudentPassword(sId, newPass)
+                val updatedStudent = repository.getStudentById(sId)
+                currentStudentDetails.value = updatedStudent
+                onResult(true, "密码修改成功！新密码已生效。")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult(false, "密码修改失败: ${e.message}")
+            }
+        }
+    }
+
     // =========================================================================
     // --- 拓展高级模块方法 (Tasks 2, 3, 4, 5, 6) ---
     // =========================================================================
@@ -1786,6 +1814,46 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         .map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val starredWorkIds: StateFlow<Set<Int>> = _currentUserId
+        .flatMapLatest { studentId ->
+            if (studentId != -1) {
+                repository.getStarredWorkIdsFlow(studentId.toString())
+            } else {
+                flowOf(emptyList())
+            }
+        }
+        .map { it.toSet() }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val starredWorksList: StateFlow<List<ScratchWork>> = _currentUserId
+        .flatMapLatest { studentId ->
+            if (studentId != -1) {
+                repository.getStarredWorksFlow(studentId.toString())
+            } else {
+                flowOf(emptyList())
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    fun toggleStarWork(workId: Int, onResult: ((Boolean, String) -> Unit)? = null) {
+        val sId = _currentUserId.value
+        if (sId == -1) {
+            onResult?.invoke(false, "请先登录学生账号再进行收藏哦~")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val isStarred = repository.toggleStarWork(workId, sId.toString())
+                val message = if (isStarred) "⭐ 收藏成功！" else "已取消收藏"
+                onResult?.invoke(isStarred, message)
+            } catch (e: Exception) {
+                onResult?.invoke(false, "操作失败: ${e.message}")
+            }
+        }
+    }
 
     fun toggleWorkPublic(workId: Int, isPublic: Boolean) {
         viewModelScope.launch {

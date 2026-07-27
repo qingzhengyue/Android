@@ -39,6 +39,7 @@ fun OpenHallScreen(
     val popularWorks by viewModel.popularWorksList.collectAsStateWithLifecycle()
     val myWorks by viewModel.worksList.collectAsStateWithLifecycle()
     val likedWorkIds by viewModel.likedWorkIds.collectAsStateWithLifecycle()
+    val starredWorkIds by viewModel.starredWorkIds.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0=最新作品, 1=热门推荐, 2=我的作品发布管理
     var activeWorkForComment by remember { mutableStateOf<ScratchWork?>(null) }
@@ -127,9 +128,11 @@ fun OpenHallScreen(
                 ) {
                     items(currentDisplayList, key = { it.workId }) { work ->
                         val isLikedByMe = likedWorkIds.contains(work.workId)
+                        val isStarredByMe = starredWorkIds.contains(work.workId)
                         OpenWorkCard(
                             work = work,
                             isLikedByMe = isLikedByMe,
+                            isStarredByMe = isStarredByMe,
                             isMyWorkTab = (selectedTab == 2),
                             onFork = {
                                 viewModel.forkWork(work) { success, msg ->
@@ -141,6 +144,11 @@ fun OpenHallScreen(
                             },
                             onToggleLike = {
                                 viewModel.toggleLikeWork(work.workId) { isLiked, msg ->
+                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onToggleStar = {
+                                viewModel.toggleStarWork(work.workId) { isStarred, msg ->
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 }
                             },
@@ -172,9 +180,11 @@ fun OpenHallScreen(
 fun OpenWorkCard(
     work: ScratchWork,
     isLikedByMe: Boolean,
+    isStarredByMe: Boolean = false,
     isMyWorkTab: Boolean,
     onFork: () -> Unit,
     onToggleLike: () -> Unit,
+    onToggleStar: () -> Unit = {},
     onTogglePublic: (Boolean) -> Unit,
     onOpenComments: () -> Unit
 ) {
@@ -273,14 +283,26 @@ fun OpenWorkCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 防抖且支持单账号唯一点赞/取消点赞按钮组件
+                    // 防抖点赞按钮组件
                     LikeButton(
                         isLikedByMe = isLikedByMe,
                         likeCount = work.likesCount,
                         onToggleLike = onToggleLike
                     )
 
-                    Spacer(modifier = Modifier.width(12.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    // ⭐ Star / 收藏按钮组件
+                    IconButton(onClick = onToggleStar) {
+                        Icon(
+                            imageVector = if (isStarredByMe) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = "收藏",
+                            tint = if (isStarredByMe) Color(0xFFFFB300) else Color.Gray,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(4.dp))
 
                     IconButton(onClick = onOpenComments) {
                         Icon(
@@ -289,11 +311,6 @@ fun OpenWorkCard(
                             tint = Color(0xFF3B82F6)
                         )
                     }
-                    Text(
-                        text = "互动评论",
-                        fontSize = 13.sp,
-                        color = Color(0xFF64748B)
-                    )
                 }
 
                 if (!isMyWorkTab) {
@@ -309,7 +326,7 @@ fun OpenWorkCard(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Fork 克隆源码", fontSize = 12.sp)
+                        Text("Fork 克隆", fontSize = 12.sp)
                     }
                 }
             }

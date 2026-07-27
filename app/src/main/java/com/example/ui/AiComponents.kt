@@ -471,6 +471,53 @@ fun AiAssistPanel(
                 }
             }
 
+            // Area 2.5: 快捷引导芯片 (Shortcut Guidance Chips - 支持本地预设与云端下发)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFFFFF0F5))
+                    .horizontalScroll(rememberScrollState())
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "快捷引导:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFC2185B)
+                )
+                val presetChips = listOf(
+                    "🧩 积木介绍",
+                    "💡 创意引导",
+                    "🎓 考点讲解",
+                    "❓ 怎么让角色动起来",
+                    "⚡ 广播发送与接收"
+                )
+                presetChips.forEach { chipText ->
+                    Surface(
+                        onClick = {
+                            val cleanPrompt = chipText.replace(Regex("^[🧩💡🎓❓⚡]\\s*"), "")
+                            when (activeTab) {
+                                "语法纠错" -> customQuestionInput = TextFieldValue(cleanPrompt)
+                                "创意引导" -> creativePromptInput = TextFieldValue(cleanPrompt)
+                                else -> kbPromptInput = TextFieldValue(cleanPrompt)
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.White,
+                        border = BorderStroke(1.dp, Color(0xFFF8BBD0))
+                    ) {
+                        Text(
+                            text = chipText,
+                            fontSize = 11.sp,
+                            color = Color(0xFFC2185B),
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+
             // Area 3: 固定底部输入区 (Spacing of 16dp, Outlined input box 48dp height with automatic context-aware placeholders in Optimization 3)
             Row(
                 modifier = Modifier
