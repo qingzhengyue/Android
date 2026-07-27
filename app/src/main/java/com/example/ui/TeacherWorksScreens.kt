@@ -156,64 +156,130 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
         }
 
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(Icons.Default.People, contentDescription = null, tint = Color(0xFF1E88E5))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("孩子们最新提交的 Scratch 作品：", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
+                Icon(Icons.Default.People, contentDescription = null, tint = Color(0xFF3B82F6))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("孩子们最新提交的 Scratch 作品：", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
             
-            // 年级/班级筛选下拉框
-            Box(modifier = Modifier.padding(start = 8.dp)) {
+            // 年级/班级筛选下拉框 (参考双行蓝字 OutlinedButton 与扁平树状缩进菜单)
+            Box(modifier = Modifier.padding(start = 4.dp)) {
                 OutlinedButton(
                     onClick = { classDropdownExpanded = true },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E88E5)),
-                    border = BorderStroke(1.dp, Color(0xFF1E88E5)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFF3B82F6)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFF3B82F6)),
                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(selectedClassLabel, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = when (filterType) {
+                                1 -> selectedGradeName
+                                2 -> selectedGradeName
+                                else -> "全部班级"
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF3B82F6)
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FilterList,
+                                contentDescription = null,
+                                modifier = Modifier.size(13.dp),
+                                tint = Color(0xFF3B82F6)
+                            )
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text(
+                                text = when (filterType) {
+                                    1 -> "全部班级"
+                                    2 -> selectedClassLabel
+                                    else -> "全部作品"
+                                },
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Normal,
+                                color = Color(0xFF3B82F6)
+                            )
+                        }
+                    }
                 }
+
                 DropdownMenu(
                     expanded = classDropdownExpanded,
-                    onDismissRequest = { classDropdownExpanded = false }
+                    onDismissRequest = { classDropdownExpanded = false },
+                    modifier = Modifier
+                        .background(Color.White)
+                        .width(220.dp)
                 ) {
                     // 全部班级选项
                     DropdownMenuItem(
                         text = {
                             Text(
-                                "📋 全部班级 (${allWorks.size}件作品)",
+                                text = "全部班级 (${allWorks.size}件作品)",
                                 fontSize = 13.sp,
-                                fontWeight = if (filterType == 0) FontWeight.Bold else FontWeight.Normal,
-                                color = if (filterType == 0) Color(0xFF1E88E5) else Color.Unspecified
+                                fontWeight = if (filterType == 0) FontWeight.Bold else FontWeight.Medium,
+                                color = if (filterType == 0) Color(0xFF3B82F6) else Color(0xFF1E293B)
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = Icons.Default.Inbox,
+                                contentDescription = null,
+                                tint = if (filterType == 0) Color(0xFF3B82F6) else Color(0xFF64748B),
+                                modifier = Modifier.size(18.dp)
                             )
                         },
                         onClick = {
                             filterType = 0
+                            selectedGradeName = "全部班级"
                             selectedClassLabel = "全部班级"
                             selectedClassId = null
                             classDropdownExpanded = false
                         }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
-                    // 按年级及下属班级列表
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color(0xFFF1F5F9))
+
+                    // 按年级及下属班级列表（树状扁平带缩进）
                     gradeOptions.forEach { gradeName ->
                         val matchingClasses = classes.filter { it.grade == gradeName || it.className.contains(gradeName) }
                         val matchingClassIds = matchingClasses.map { it.classId }.toSet()
                         val gradeWorkCount = allWorks.count { it.classId in matchingClassIds }
 
-                        // 年级整体筛选
+                        // 年级整体筛选选项
                         DropdownMenuItem(
                             text = {
                                 Text(
-                                    "🏫 $gradeName (${gradeWorkCount}件)",
+                                    text = "$gradeName (${gradeWorkCount}件)",
                                     fontSize = 13.sp,
-                                    fontWeight = if (filterType == 1 && selectedGradeName == gradeName) FontWeight.Bold else FontWeight.Medium,
-                                    color = if (filterType == 1 && selectedGradeName == gradeName) Color(0xFF1E88E5) else Color(0xFF1E293B)
+                                    fontWeight = if (filterType == 1 && selectedGradeName == gradeName) FontWeight.Bold else FontWeight.Bold,
+                                    color = if (filterType == 1 && selectedGradeName == gradeName) Color(0xFF3B82F6) else Color(0xFF1E293B)
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.School,
+                                    contentDescription = null,
+                                    tint = Color(0xFFE53935),
+                                    modifier = Modifier.size(18.dp)
                                 )
                             },
                             onClick = {
@@ -225,22 +291,32 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                             }
                         )
 
-                        // 对应具体班级
+                        // 对应具体班级选项 (带有 └─ 字符和 start padding 缩进)
                         matchingClasses.forEach { classEntity ->
                             val classWorkCount = allWorks.count { it.classId == classEntity.classId }
+                            val isSelected = filterType == 2 && selectedClassId == classEntity.classId
                             DropdownMenuItem(
                                 text = {
-                                    Text(
-                                        "    └ ${classEntity.className} (${classWorkCount}件)",
-                                        fontSize = 12.sp,
-                                        fontWeight = if (filterType == 2 && selectedClassId == classEntity.classId) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (filterType == 2 && selectedClassId == classEntity.classId) Color(0xFF1E88E5) else Color(0xFF475569)
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = "└─ ",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF94A3B8)
+                                        )
+                                        Text(
+                                            text = "${classEntity.className} (${classWorkCount}件)",
+                                            fontSize = 12.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                            color = if (isSelected) Color(0xFF3B82F6) else Color(0xFF475569)
+                                        )
+                                    }
                                 },
+                                modifier = Modifier.padding(start = 20.dp),
                                 onClick = {
                                     filterType = 2
+                                    selectedGradeName = classEntity.grade.ifEmpty { gradeName }
                                     selectedClassId = classEntity.classId
-                                    selectedClassLabel = "${classEntity.grade} ${classEntity.className}"
+                                    selectedClassLabel = classEntity.className
                                     classDropdownExpanded = false
                                 }
                             )
