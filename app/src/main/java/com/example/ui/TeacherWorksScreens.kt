@@ -609,7 +609,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                     // 切换标签
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Button(
                             onClick = { viewingDetailTab = "积木视图" },
@@ -617,7 +617,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                 containerColor = if (viewingDetailTab == "积木视图") Color(0xFF1E88E5) else Color(0xFFB0BEC5)
                             ),
                             modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         ) { Text("🧩 积木视图", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                         Button(
                             onClick = { viewingDetailTab = "代码视图" },
@@ -625,8 +625,16 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                 containerColor = if (viewingDetailTab == "代码视图") Color(0xFF6A1B9A) else Color(0xFFB0BEC5)
                             ),
                             modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
                         ) { Text("📄 代码视图", fontSize = 11.sp) }
+                        Button(
+                            onClick = { viewingDetailTab = "AI 评测" },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (viewingDetailTab == "AI 评测") Color(0xFF00897B) else Color(0xFFB0BEC5)
+                            ),
+                            modifier = Modifier.weight(1f),
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+                        ) { Text("🤖 AI 评测", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                     }
 
                     when (viewingDetailTab) {
@@ -686,6 +694,99 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                         .horizontalScroll(rememberScrollState())
                                         .padding(8.dp)
                                 )
+                            }
+                        }
+                        "AI 评测" -> {
+                            val reportFlow = remember(detailWork.workId) { viewModel.getReportForWorkFlow(detailWork.workId) }
+                            val rep by reportFlow.collectAsState(initial = null)
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFFAFAFA))
+                                    .padding(10.dp)
+                            ) {
+                                if (rep != null) {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState())
+                                    ) {
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFE8EAF6)),
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(bottom = 12.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(12.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                Text("AI 综合评测得分", fontSize = 11.sp, color = Color.Gray)
+                                                Row(verticalAlignment = Alignment.Bottom) {
+                                                    Text(text = "${rep!!.averageScore}", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF3F51B5))
+                                                    Text(text = " / 100 分", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(bottom = 4.dp))
+                                                }
+                                                val badge = when {
+                                                    rep!!.averageScore >= 90 -> "卓越五星 ⭐⭐⭐⭐⭐"
+                                                    rep!!.averageScore >= 80 -> "四星优秀 ⭐⭐⭐⭐"
+                                                    rep!!.averageScore >= 70 -> "三星良好 ⭐⭐⭐"
+                                                    else -> "持续加油 ⭐⭐"
+                                                }
+                                                Text(badge, fontWeight = FontWeight.Bold, color = Color(0xFFD97706), fontSize = 12.sp)
+                                            }
+                                        }
+
+                                        Text("多维度量化评测结果：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        AnimatedQuantitativeScoreBar(dimensionName = "语法合规性", score = rep!!.grammarScore, maxScore = 25, themeColor = Color(0xFF10B981))
+                                        AnimatedQuantitativeScoreBar(dimensionName = "逻辑完整性", score = rep!!.logicScore, maxScore = 30, themeColor = Color(0xFF3B82F6))
+                                        AnimatedQuantitativeScoreBar(dimensionName = "任务匹配度", score = rep!!.taskMatchScore, maxScore = 25, themeColor = Color(0xFFF59E0B))
+                                        AnimatedQuantitativeScoreBar(dimensionName = "创意实现度", score = rep!!.creativeScore, maxScore = 20, themeColor = Color(0xFF8B5CF6))
+
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Text("💡 AI 精细优化指引：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFD97706))
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Card(
+                                            colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBEB)),
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = rep!!.optimizationSuggestions,
+                                                fontSize = 11.sp,
+                                                lineHeight = 16.sp,
+                                                color = Color(0xFF78350F),
+                                                modifier = Modifier.padding(10.dp)
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.SmartToy,
+                                            contentDescription = null,
+                                            tint = Color(0xFF00897B),
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "🤖 正在检索该作品的 AI 评测报告...",
+                                            fontSize = 13.sp,
+                                            color = Color.Gray,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
