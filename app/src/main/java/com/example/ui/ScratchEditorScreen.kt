@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -235,6 +236,12 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         }
     }
 
+    LaunchedEffect(draftCode) {
+        if (draftCode.isNotBlank()) {
+            projectLoaderInterface?.setProjectData(draftCode)
+        }
+    }
+
     // 手动触发 .sb3 加载（教师点击"载入作品积木"按钮时，页面已加载完毕，需延迟注入等待 VM 就绪）
     // 【修复】通过 @JavascriptInterface 接口传递数据，而非字符串拼接注入（大 JSON 字符串拼接会导致 JS 解析失败）
     // 【关键修复】将 webViewInstance 也作为 key，否则首次组合时 webViewInstance 为 null 直接 return，后续 WebView 创建后 effect 不会重跑
@@ -331,10 +338,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             "https://turbowarp.org/"                             // TurboWarp 国际版
         )
     }
-    var currentMirrorIndex by remember { mutableStateOf(0) }
+    var currentMirrorIndex by rememberSaveable { mutableStateOf(0) }
     var scratchUrl by remember { mutableStateOf(mirrors[0]) }
     
-    var isPageLoading by remember { mutableStateOf(true) }
+    var isPageLoading by rememberSaveable { mutableStateOf(true) }
     var isAllFailed by remember { mutableStateOf(false) }
     var loadingMessage by remember { mutableStateOf("正在加载 Scratch 编辑器 (1/${mirrors.size})...") }
 
