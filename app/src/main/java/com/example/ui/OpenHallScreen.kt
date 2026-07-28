@@ -27,11 +27,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
-import coil.compose.AsyncImage
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
-import com.example.R
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,7 +39,6 @@ fun OpenHallScreen(
     val popularWorks by viewModel.popularWorksList.collectAsStateWithLifecycle()
     val myWorks by viewModel.worksList.collectAsStateWithLifecycle()
     val likedWorkIds by viewModel.likedWorkIds.collectAsStateWithLifecycle()
-    val starredWorkIds by viewModel.starredWorkIds.collectAsStateWithLifecycle()
 
     var selectedTab by remember { mutableIntStateOf(0) } // 0=最新作品, 1=热门推荐, 2=我的作品发布管理
     var activeWorkForComment by remember { mutableStateOf<ScratchWork?>(null) }
@@ -133,11 +127,9 @@ fun OpenHallScreen(
                 ) {
                     items(currentDisplayList, key = { it.workId }) { work ->
                         val isLikedByMe = likedWorkIds.contains(work.workId)
-                        val isStarredByMe = starredWorkIds.contains(work.workId)
                         OpenWorkCard(
                             work = work,
                             isLikedByMe = isLikedByMe,
-                            isStarredByMe = isStarredByMe,
                             isMyWorkTab = (selectedTab == 2),
                             onFork = {
                                 viewModel.forkWork(work) { success, msg ->
@@ -149,11 +141,6 @@ fun OpenHallScreen(
                             },
                             onToggleLike = {
                                 viewModel.toggleLikeWork(work.workId) { isLiked, msg ->
-                                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            onToggleStar = {
-                                viewModel.toggleStarWork(work.workId) { isStarred, msg ->
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 }
                             },
@@ -185,11 +172,9 @@ fun OpenHallScreen(
 fun OpenWorkCard(
     work: ScratchWork,
     isLikedByMe: Boolean,
-    isStarredByMe: Boolean = false,
     isMyWorkTab: Boolean,
     onFork: () -> Unit,
     onToggleLike: () -> Unit,
-    onToggleStar: () -> Unit = {},
     onTogglePublic: (Boolean) -> Unit,
     onOpenComments: () -> Unit
 ) {
@@ -253,56 +238,38 @@ fun OpenWorkCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 真实的预览图
-            if (work.coverUrl.isNullOrEmpty()) {
-                val presetIcons = listOf(
-                    Icons.Default.Pets,
-                    Icons.Default.RocketLaunch,
-                    Icons.Default.CrueltyFree,
-                    Icons.Default.SmartToy,
-                    Icons.Default.SportsEsports,
-                    Icons.Default.BugReport,
-                    Icons.Default.Colorize,
-                    Icons.Default.Brush
-                )
-                val presetColors = listOf(
-                    Color(0xFFE3F2FD), Color(0xFFF3E5F5), Color(0xFFE8F5E9), Color(0xFFFFF3E0),
-                    Color(0xFFFFEBEE), Color(0xFFE0F7FA), Color(0xFFFFF8E1), Color(0xFFFCE4EC)
-                )
-                val iconTints = listOf(
-                    Color(0xFF2196F3), Color(0xFF9C27B0), Color(0xFF4CAF50), Color(0xFFFF9800),
-                    Color(0xFFF44336), Color(0xFF00BCD4), Color(0xFFFFC107), Color(0xFFE91E63)
-                )
-                val hash = kotlin.math.abs(work.workId.hashCode())
-                val index = hash % presetIcons.size
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(presetColors[index]),
-                    contentAlignment = Alignment.Center
-                ) {
+            // 语义主题风格封面画廊
+            val coverConfig = getSemanticCoverConfig(work.workName, work.workId)
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(110.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(coverConfig.backgroundColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = presetIcons[index],
-                        contentDescription = "作品默认封面",
-                        tint = iconTints[index],
-                        modifier = Modifier.size(48.dp)
+                        imageVector = coverConfig.icon,
+                        contentDescription = null,
+                        tint = coverConfig.primaryColor,
+                        modifier = Modifier.size(36.dp)
                     )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = work.workName,
+                            color = coverConfig.primaryColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Scratch 3.0 逻辑作品",
+                            color = Color(0xFF64748B),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
-            } else {
-                AsyncImage(
-                    model = work.coverUrl,
-                    contentDescription = "作品预览",
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(110.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop,
-                    placeholder = painterResource(R.drawable.placeholder_image),
-                    error = painterResource(R.drawable.error_image)
-                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -314,26 +281,14 @@ fun OpenWorkCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    // 防抖点赞按钮组件
+                    // 防抖且支持单账号唯一点赞/取消点赞按钮组件
                     LikeButton(
                         isLikedByMe = isLikedByMe,
                         likeCount = work.likesCount,
                         onToggleLike = onToggleLike
                     )
 
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    // ⭐ Star / 收藏按钮组件
-                    IconButton(onClick = onToggleStar) {
-                        Icon(
-                            imageVector = if (isStarredByMe) Icons.Default.Star else Icons.Default.StarBorder,
-                            contentDescription = "收藏",
-                            tint = if (isStarredByMe) Color(0xFFFFB300) else Color.Gray,
-                            modifier = Modifier.size(22.dp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
 
                     IconButton(onClick = onOpenComments) {
                         Icon(
@@ -342,6 +297,11 @@ fun OpenWorkCard(
                             tint = Color(0xFF3B82F6)
                         )
                     }
+                    Text(
+                        text = "互动评论",
+                        fontSize = 13.sp,
+                        color = Color(0xFF64748B)
+                    )
                 }
 
                 if (!isMyWorkTab) {
@@ -357,7 +317,7 @@ fun OpenWorkCard(
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Fork 克隆", fontSize = 12.sp)
+                        Text("Fork 克隆源码", fontSize = 12.sp)
                     }
                 }
             }
@@ -538,6 +498,42 @@ fun CommentItemRow(comment: WorkComment) {
                 fontSize = 13.sp,
                 color = Color(0xFF334155)
             )
+        }
+    }
+}
+
+data class CoverConfig(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val primaryColor: Color,
+    val backgroundColor: Color
+)
+
+fun getSemanticCoverConfig(workName: String, workId: Int): CoverConfig {
+    val titleLower = workName.lowercase()
+    return when {
+        titleLower.contains("猫") || titleLower.contains("cat") || titleLower.contains("狗") || titleLower.contains("宠") -> 
+            CoverConfig(Icons.Default.Pets, Color(0xFFFF6B6B), Color(0xFFFFE3E3))
+            
+        titleLower.contains("星") || titleLower.contains("太空") || titleLower.contains("迷宫") || titleLower.contains("space") || titleLower.contains("rocket") -> 
+            CoverConfig(Icons.Default.RocketLaunch, Color(0xFF4D96FF), Color(0xFFE3F2FD))
+            
+        titleLower.contains("游戏") || titleLower.contains("球") || titleLower.contains("跑") || titleLower.contains("game") -> 
+            CoverConfig(Icons.Default.SportsEsports, Color(0xFF6BCB77), Color(0xFFE8F5E9))
+            
+        titleLower.contains("音") || titleLower.contains("乐") || titleLower.contains("舞") || titleLower.contains("歌") || titleLower.contains("music") -> 
+            CoverConfig(Icons.Default.MusicNote, Color(0xFFFFD93D), Color(0xFFFFFDE7))
+            
+        titleLower.contains("画") || titleLower.contains("艺") || titleLower.contains("色") || titleLower.contains("draw") -> 
+            CoverConfig(Icons.Default.Palette, Color(0xFF9B51E0), Color(0xFFF3E5F5))
+            
+        else -> {
+            val fallbackThemes = listOf(
+                CoverConfig(Icons.Default.Code, Color(0xFF0EA5E9), Color(0xFFF0F9FF)),
+                CoverConfig(Icons.Default.AutoAwesome, Color(0xFF8B5CF6), Color(0xFFF5F3FF)),
+                CoverConfig(Icons.Default.Psychology, Color(0xFF10B981), Color(0xFFECFDF5)),
+                CoverConfig(Icons.Default.Widgets, Color(0xFFF59E0B), Color(0xFFFFFBEB))
+            )
+            fallbackThemes[kotlin.math.abs(workId) % fallbackThemes.size]
         }
     }
 }

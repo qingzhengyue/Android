@@ -222,13 +222,15 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     LaunchedEffect(workspaceLoadEvent, webViewInstance) {
         val code = workspaceLoadEvent
         val webView = webViewInstance
-        if (code != null && webView != null) {
-            // 【修复】如果教师正在通过 @JavascriptInterface 接口加载学生作品，跳过不可靠的字符串拼接方式
-            if (viewModel.teacherPendingSb3Path.value != null) {
-                viewModel.workspaceLoadEvent.value = null
-            } else {
-                loadProjectIntoWebView(webView, code, context)
-                viewModel.workspaceLoadEvent.value = null
+        if (code != null) {
+            projectLoaderInterface?.setProjectData(code)
+            if (webView != null) {
+                if (viewModel.teacherPendingSb3Path.value != null) {
+                    viewModel.workspaceLoadEvent.value = null
+                } else {
+                    loadProjectIntoWebView(webView, code, context)
+                    viewModel.workspaceLoadEvent.value = null
+                }
             }
         }
     }
@@ -786,8 +788,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         domStorageEnabled = true
                         databaseEnabled = true
                         allowFileAccess = true
-                        allowFileAccessFromFileURLs = true
-                        allowUniversalAccessFromFileURLs = true
                         allowContentAccess = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         useWideViewPort = true
@@ -829,12 +829,13 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     }
                     
                     // 【修复】保存 JavascriptInterface 实例引用，以便后续通过接口传递项目数据
-                    val loaderInterface = ScratchProjectLoaderInterface()
+                    val loaderInterface = ScratchProjectLoaderInterface(draftCode)
                     projectLoaderInterface = loaderInterface
                     addJavascriptInterface(ScratchJsInterface {
                         scratchChangeCounter++
                     }, "AndroidWorkspace")
                     addJavascriptInterface(loaderInterface, "AndroidProjectLoader")
+                    addJavascriptInterface(loaderInterface, "AndroidBlockViewer")
                     
                     webViewInstance = this
                     loadUrl(scratchUrl)
@@ -1390,6 +1391,10 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
     val js = """
         (function() {
             try {
+                if (window.loadProject) {
+                    window.loadProject('$cleanJson');
+                    return "Loaded via window.loadProject";
+                }
                 var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
                 if (!targetVm) {
                     var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
@@ -1518,15 +1523,18 @@ class ScratchJsInterface(private val onChanged: () -> Unit) {
 
 
 
-class ScratchProjectLoaderInterface {
-    private var projectData: String = ""
-    
+class ScratchProjectLoaderInterface(private var projectData: String = "") {
     fun setProjectData(data: String) {
         projectData = data
     }
     
     @android.webkit.JavascriptInterface
     fun getProjectData(): String {
+        return projectData
+    }
+
+    @android.webkit.JavascriptInterface
+    fun getProjectJson(): String {
         return projectData
     }
 }

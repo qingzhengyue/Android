@@ -2,6 +2,7 @@ package com.example.ui
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -94,37 +95,23 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
     // 是否在弹窗确认后跳转编辑器
     var pendingNavigateToEditor by remember { mutableStateOf(false) }
     
-    // 班级/年级筛选状态
-    var filterType by remember { mutableIntStateOf(0) } // 0 = 全部班级, 1 = 按年级, 2 = 按具体班级
-    var selectedGradeName by remember { mutableStateOf("全部班级") }
+    // 班级筛选状态
     var selectedClassId by remember { mutableStateOf<Int?>(null) }
-    var selectedClassLabel by remember { mutableStateOf("全部班级") }
     var classDropdownExpanded by remember { mutableStateOf(false) }
-
-    // 小学常用年级列表
-    val gradeOptions = remember(classes) {
-        val baseGrades = listOf("三年级", "四年级", "五年级", "六年级")
-        val customGrades = classes.map { it.grade }.filter { it.isNotBlank() }
-        (baseGrades + customGrades).distinct()
+    
+    // 根据选择的班级ID过滤作品
+    val filteredWorks = remember(allWorks, selectedClassId) {
+        if (selectedClassId == null) {
+            allWorks
+        } else {
+            allWorks.filter { it.classId == selectedClassId }
+        }
     }
-
-    // 根据年级/班级筛选作品
-    val filteredWorks = remember(allWorks, classes, filterType, selectedGradeName, selectedClassId) {
-        when (filterType) {
-            1 -> { // 按年级过滤
-                val matchingClassIds = classes.filter {
-                    it.grade == selectedGradeName || it.className.contains(selectedGradeName)
-                }.map { it.classId }.toSet()
-                if (matchingClassIds.isNotEmpty()) {
-                    allWorks.filter { it.classId in matchingClassIds }
-                } else {
-                    emptyList()
-                }
-            }
-            2 -> { // 按具体班级过滤
-                if (selectedClassId == null) allWorks else allWorks.filter { it.classId == selectedClassId }
-            }
-            else -> allWorks // 全部班级
+    
+    // 获取选中班级的名称
+    val selectedClassName = remember(selectedClassId, classes) {
+        if (selectedClassId == null) "全部班级" else {
+            classes.find { it.classId == selectedClassId }?.let { "${it.grade} ${it.className}" } ?: "未知班级"
         }
     }
 
@@ -156,171 +143,55 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(bottom = 8.dp)
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f, fill = false)
-            ) {
-                Icon(Icons.Default.People, contentDescription = null, tint = Color(0xFF3B82F6))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("孩子们最新提交的 Scratch 作品：", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            }
+            Icon(Icons.Default.People, contentDescription = null, tint = Color(0xFF1E88E5))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("孩子们最新提交的 Scratch 作品：", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             
-            // 年级/班级筛选下拉框 (参考双行蓝字 OutlinedButton 与扁平树状缩进菜单)
-            Box(modifier = Modifier.padding(start = 4.dp)) {
+            // 班级筛选下拉框
+            Box(modifier = Modifier.padding(start = 12.dp)) {
                 OutlinedButton(
                     onClick = { classDropdownExpanded = true },
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        containerColor = Color.White,
-                        contentColor = Color(0xFF3B82F6)
-                    ),
-                    border = BorderStroke(1.dp, Color(0xFF3B82F6)),
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E88E5)),
+                    border = BorderStroke(1.dp, Color(0xFF1E88E5)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = when (filterType) {
-                                1 -> selectedGradeName
-                                2 -> selectedGradeName
-                                else -> "全部班级"
-                            },
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF3B82F6)
-                        )
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.FilterList,
-                                contentDescription = null,
-                                modifier = Modifier.size(13.dp),
-                                tint = Color(0xFF3B82F6)
-                            )
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text(
-                                text = when (filterType) {
-                                    1 -> "全部班级"
-                                    2 -> selectedClassLabel
-                                    else -> "全部作品"
-                                },
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Normal,
-                                color = Color(0xFF3B82F6)
-                            )
-                        }
-                    }
+                    Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(selectedClassName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
                 }
-
                 DropdownMenu(
                     expanded = classDropdownExpanded,
-                    onDismissRequest = { classDropdownExpanded = false },
-                    modifier = Modifier
-                        .background(Color.White)
-                        .width(220.dp)
+                    onDismissRequest = { classDropdownExpanded = false }
                 ) {
                     // 全部班级选项
                     DropdownMenuItem(
-                        text = {
-                            Text(
-                                text = "全部班级 (${allWorks.size}件作品)",
-                                fontSize = 13.sp,
-                                fontWeight = if (filterType == 0) FontWeight.Bold else FontWeight.Medium,
-                                color = if (filterType == 0) Color(0xFF3B82F6) else Color(0xFF1E293B)
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Inbox,
-                                contentDescription = null,
-                                tint = if (filterType == 0) Color(0xFF3B82F6) else Color(0xFF64748B),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        },
+                        text = { Text("📋 全部班级 (${allWorks.size}件作品)", fontSize = 13.sp) },
                         onClick = {
-                            filterType = 0
-                            selectedGradeName = "全部班级"
-                            selectedClassLabel = "全部班级"
                             selectedClassId = null
                             classDropdownExpanded = false
                         }
                     )
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = Color(0xFFF1F5F9))
-
-                    // 按年级及下属班级列表（树状扁平带缩进）
-                    gradeOptions.forEach { gradeName ->
-                        val matchingClasses = classes.filter { it.grade == gradeName || it.className.contains(gradeName) }
-                        val matchingClassIds = matchingClasses.map { it.classId }.toSet()
-                        val gradeWorkCount = allWorks.count { it.classId in matchingClassIds }
-
-                        // 年级整体筛选选项
+                    Divider()
+                    // 各班级选项
+                    classes.forEach { classEntity ->
+                        val classWorkCount = allWorks.count { it.classId == classEntity.classId }
                         DropdownMenuItem(
-                            text = {
+                            text = { 
                                 Text(
-                                    text = "$gradeName (${gradeWorkCount}件)",
-                                    fontSize = 13.sp,
-                                    fontWeight = if (filterType == 1 && selectedGradeName == gradeName) FontWeight.Bold else FontWeight.Bold,
-                                    color = if (filterType == 1 && selectedGradeName == gradeName) Color(0xFF3B82F6) else Color(0xFF1E293B)
-                                )
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.School,
-                                    contentDescription = null,
-                                    tint = Color(0xFFE53935),
-                                    modifier = Modifier.size(18.dp)
-                                )
+                                    "${classEntity.grade} ${classEntity.className} (${classWorkCount}件)", 
+                                    fontSize = 13.sp 
+                                ) 
                             },
                             onClick = {
-                                filterType = 1
-                                selectedGradeName = gradeName
-                                selectedClassLabel = gradeName
-                                selectedClassId = null
+                                selectedClassId = classEntity.classId
                                 classDropdownExpanded = false
                             }
                         )
-
-                        // 对应具体班级选项 (带有 └─ 字符和 start padding 缩进)
-                        matchingClasses.forEach { classEntity ->
-                            val classWorkCount = allWorks.count { it.classId == classEntity.classId }
-                            val isSelected = filterType == 2 && selectedClassId == classEntity.classId
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
-                                            text = "└─ ",
-                                            fontSize = 12.sp,
-                                            color = Color(0xFF94A3B8)
-                                        )
-                                        Text(
-                                            text = "${classEntity.className} (${classWorkCount}件)",
-                                            fontSize = 12.sp,
-                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                            color = if (isSelected) Color(0xFF3B82F6) else Color(0xFF475569)
-                                        )
-                                    }
-                                },
-                                modifier = Modifier.padding(start = 20.dp),
-                                onClick = {
-                                    filterType = 2
-                                    selectedGradeName = classEntity.grade.ifEmpty { gradeName }
-                                    selectedClassId = classEntity.classId
-                                    selectedClassLabel = classEntity.className
-                                    classDropdownExpanded = false
-                                }
-                            )
-                        }
                     }
                 }
             }
@@ -332,32 +203,35 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                     .fillMaxWidth()
                     .weight(1f)
                     .background(Color.White, RoundedCornerShape(12.dp))
-                    .padding(16.dp),
+                    .padding(24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    EmptyStateView(
-                        title = "暂无作品提交",
-                        subtitle = if (filterType == 0)
-                            "目前还没有收到任何孩子的作品哦，稍后再来看看吧！"
-                        else
-                            "【$selectedClassLabel】的孩子们还没有提交作品哦，稍后再来看看吧！"
+                    Icon(
+                        imageVector = Icons.Default.Inbox,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = Color.LightGray
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (selectedClassId == null) 
+                            "目前还没有任何孩子提交作品哦！" 
+                        else 
+                            "【$selectedClassName】目前还没有学生提交作品哦！",
+                        fontSize = 14.sp, 
+                        fontWeight = FontWeight.Bold, 
+                        color = Color.DarkGray
                     )
                     Spacer(modifier = Modifier.height(4.dp))
-                    Surface(
-                        color = Color(0xFFEFF6FF),
-                        shape = RoundedCornerShape(8.dp),
+                    Text(
+                        text = "💡 提示：您可以退登，使用快捷通道登录「张小帅」写个 Scratch 代码并点击「提作并AI评估」喔，再登回王老师便能在这里对他的做业进行评分批改啦！",
+                        fontSize = 11.sp,
+                        color = Color.Gray,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp,
                         modifier = Modifier.padding(horizontal = 16.dp)
-                    ) {
-                        Text(
-                            text = "💡 提示：您可以退登，使用快捷通道登录「张小帅」写个 Scratch 代码并点击「提作并AI评估」喔，再登回王老师便能在这里对他的作业进行评分批改啦！",
-                            fontSize = 11.sp,
-                            color = Color(0xFF1E88E5),
-                            textAlign = TextAlign.Center,
-                            lineHeight = 16.sp,
-                            modifier = Modifier.padding(10.dp)
-                        )
-                    }
+                    )
                 }
             }
         } else {
@@ -702,17 +576,17 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
         val detailStudent = students.find { it.studentId == detailWork.studentId }
         val detailStudentName = detailStudent?.let { "${it.name} (学号: ${it.studentNumber})" } ?: "学生ID: ${detailWork.studentId}"
 
-        val reportFlow = remember(detailWork.workId) { viewModel.getReportForWorkFlow(detailWork.workId) }
-        val detailReport by reportFlow.collectAsState(initial = null)
-
         val formattedJson = remember(detailWork.workCode) {
             try { org.json.JSONObject(detailWork.workCode).toString(2) } catch (e: Exception) { detailWork.workCode }
         }
 
         // JavascriptInterface 传递项目数据给 WebView
-        class BlockViewerJsInterface2(private val json: String) {
-            @android.webkit.JavascriptInterface
-            fun getProjectJson(): String = json
+        class TeacherBlockViewerInterface(private val projectData: String) {
+            @JavascriptInterface
+            fun getProjectJson(): String = projectData
+
+            @JavascriptInterface
+            fun getProjectData(): String = projectData
         }
 
         AlertDialog(
@@ -736,7 +610,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                     // 切换标签
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Button(
                             onClick = { viewingDetailTab = "积木视图" },
@@ -744,24 +618,16 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                 containerColor = if (viewingDetailTab == "积木视图") Color(0xFF1E88E5) else Color(0xFFB0BEC5)
                             ),
                             modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                        ) { Text("🧩 积木视图", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
-                        Button(
-                            onClick = { viewingDetailTab = "AI量化报告" },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (viewingDetailTab == "AI量化报告") Color(0xFF10B981) else Color(0xFFB0BEC5)
-                            ),
-                            modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                        ) { Text("📊 AI量化报告", fontSize = 10.sp, fontWeight = FontWeight.Bold) }
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) { Text("🧩 积木视图", fontSize = 11.sp, fontWeight = FontWeight.Bold) }
                         Button(
                             onClick = { viewingDetailTab = "代码视图" },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = if (viewingDetailTab == "代码视图") Color(0xFF6A1B9A) else Color(0xFFB0BEC5)
                             ),
                             modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
-                        ) { Text("📄 代码视图", fontSize = 10.sp) }
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                        ) { Text("📄 代码视图", fontSize = 11.sp) }
                     }
 
                     when (viewingDetailTab) {
@@ -783,70 +649,21 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                             settings.allowUniversalAccessFromFileURLs = true
                                             settings.builtInZoomControls = true
                                             settings.displayZoomControls = false
-                                            webViewClient = WebViewClient()
-                                            addJavascriptInterface(BlockViewerJsInterface2(detailWork.workCode), "AndroidBlockViewer")
+                                            webViewClient = object : WebViewClient() {
+                                                override fun onPageFinished(view: WebView?, url: String?) {
+                                                    super.onPageFinished(view, url)
+                                                    val cleanJson = detailWork.workCode.replace("'", "\\'").replace("\n", " ").replace("\r", " ")
+                                                    view?.evaluateJavascript("if(window.loadProject){ window.loadProject('$cleanJson'); }", null)
+                                                }
+                                            }
+                                            val jsInterface = TeacherBlockViewerInterface(detailWork.workCode)
+                                            addJavascriptInterface(jsInterface, "AndroidBlockViewer")
+                                            addJavascriptInterface(jsInterface, "AndroidProjectLoader")
                                             loadUrl("file:///android_asset/scratch_blocks_viewer.html")
                                         }
                                     },
                                     modifier = Modifier.fillMaxSize()
                                 )
-                            }
-                        }
-                        "AI量化报告" -> {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(Color.White)
-                                    .padding(12.dp)
-                                    .verticalScroll(rememberScrollState())
-                            ) {
-                                if (detailReport != null) {
-                                    val rep = detailReport!!
-                                    Column(modifier = Modifier.fillMaxWidth()) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text("综合测评得分", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color(0xFF374151))
-                                            Text("${rep.averageScore} / 100 分", fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, color = Color(0xFF2563EB))
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-
-                                        AnimatedQuantitativeScoreBar("语法表达", rep.grammarScore, 25, Color(0xFF3B82F6))
-                                        AnimatedQuantitativeScoreBar("逻辑结构", rep.logicScore, 30, Color(0xFF10B981))
-                                        AnimatedQuantitativeScoreBar("任务契合", rep.taskMatchScore, 25, Color(0xFFF59E0B))
-                                        AnimatedQuantitativeScoreBar("创新思维", rep.creativeScore, 20, Color(0xFF8B5CF6))
-
-                                        if (rep.optimizationSuggestions.isNotBlank()) {
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            Text("💡 AI 指导建议", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1E293B))
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Surface(
-                                                color = Color(0xFFFEF3C7),
-                                                shape = RoundedCornerShape(8.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(
-                                                    text = rep.optimizationSuggestions,
-                                                    fontSize = 12.sp,
-                                                    color = Color(0xFF92400E),
-                                                    lineHeight = 17.sp,
-                                                    modifier = Modifier.padding(10.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("暂无 AI 量化报告数据", color = Color.Gray, fontSize = 13.sp)
-                                    }
-                                }
                             }
                         }
                         "代码视图" -> {

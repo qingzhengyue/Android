@@ -601,10 +601,10 @@ fun StudentWorksScreen(viewModel: MainViewModel) {
                         // 细分子项目雷达直条图
                         Text("多维度教学要素测算：", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
 
-                        EvaluationProgressRow(label = "语法合规性", score = rep.grammarScore, maxScore = 25, color = Color(0xFF10B981))
-                        EvaluationProgressRow(label = "逻辑完整性", score = rep.logicScore, maxScore = 30, color = Color(0xFF3B82F6))
-                        EvaluationProgressRow(label = "任务匹配度", score = rep.taskMatchScore, maxScore = 25, color = Color(0xFFF59E0B))
-                        EvaluationProgressRow(label = "创意实现度", score = rep.creativeScore, maxScore = 20, color = Color(0xFF8B5CF6))
+                        EvaluationProgressRow(label = "1. 语法合规性 (检测积木完整拼接)", score = rep.grammarScore, maxScore = 25, color = Color(0xFF4CAF50))
+                        EvaluationProgressRow(label = "2. 逻辑完整性 (检测逻辑环嵌套等)", score = rep.logicScore, maxScore = 30, color = Color(0xFF2196F3))
+                        EvaluationProgressRow(label = "3. 任务匹配度 (检测任务目标要素)", score = rep.taskMatchScore, maxScore = 25, color = Color(0xFFFF9800))
+                        EvaluationProgressRow(label = "4. 创意实现度 (分析交互及原创想法)", score = rep.creativeScore, maxScore = 20, color = Color(0xFF9C27B0))
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -639,12 +639,25 @@ fun StudentWorksScreen(viewModel: MainViewModel) {
 
 @Composable
 fun EvaluationProgressRow(label: String, score: Int, maxScore: Int, color: Color) {
-    AnimatedQuantitativeScoreBar(
-        dimensionName = label,
-        score = score,
-        maxScore = maxScore,
-        themeColor = color
-    )
+    val progressRatio = score.toFloat() / maxScore.toFloat()
+    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(label, fontSize = 11.sp, color = Color.Gray)
+            Text("$score / $maxScore 分", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
+        }
+        LinearProgressIndicator(
+            progress = { progressRatio },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .clip(RoundedCornerShape(4.dp)),
+            color = color,
+            trackColor = Color(0xFFEEEEEE)
+        )
+    }
 }
 
 @Composable

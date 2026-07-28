@@ -14,89 +14,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-import kotlinx.serialization.json.Json
-
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = AppRepository(application)
     private val context = application.applicationContext
-
-    // 1. 本地写死的固态提示词
-    private val localPromptsFlow = MutableStateFlow(
-        listOf(
-            PromptChipModel("local_1", "常用积木介绍", "🧩", PromptSource.LOCAL),
-            PromptChipModel("local_2", "魔法盒模板", "📦", PromptSource.LOCAL),
-            PromptChipModel("local_3", "给我点创意", "💡", PromptSource.LOCAL)
-        )
-    )
-
-    // 2. 从 Supabase/Room 获取的当前班级动态提示词
-    private val cloudPromptsFlow = MutableStateFlow<List<PromptChipModel>>(emptyList())
-
-    // 3. 核心：合并数据流暴露给 UI
-    val mergedPromptsFlow: StateFlow<List<PromptChipModel>> = combine(
-        localPromptsFlow,
-        cloudPromptsFlow
-    ) { local, cloud ->
-        cloud + local 
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = emptyList()
-    )
-
-    val chatMessages = MutableStateFlow<List<ChatMessage>>(emptyList())
-
-    init {
-        viewModelScope.launch {
-            repository.promptDao.getActiveCloudPrompts("DEFAULT_CLASS").collect { entities ->
-                cloudPromptsFlow.value = entities.map { 
-                    PromptChipModel(it.id, it.text, it.icon, PromptSource.CLOUD) 
-                }
-            }
-        }
-    }
-
-    fun fetchCloudPrompts(classId: String) {
-        viewModelScope.launch {
-            repository.refreshPromptsFromCloud(classId)
-        }
-    }
-
-    fun processAiResponse(rawText: String) {
-        try {
-            val response = Json.decodeFromString<AiResponse>(rawText)
-            when (response.type) {
-                "block_card" -> {
-                    val payload = Json.decodeFromString<BlockCardPayload>(response.data)
-                    val cardMessage = ChatMessage.BlockIntroCardMessage(
-                        id = java.util.UUID.randomUUID().toString(),
-                        blockName = payload.blockName,
-                        description = payload.dynamicDescription,
-                        blockImageUrl = null, 
-                        exampleGifUrl = null
-                    )
-                    chatMessages.value = listOf(cardMessage) + chatMessages.value
-                }
-                else -> {
-                    chatMessages.value = listOf(
-                        ChatMessage.TextMessage(
-                            id = java.util.UUID.randomUUID().toString(),
-                            isFromStudent = false,
-                            text = response.data
-                        )
-                    ) + chatMessages.value
-                }
-            }
-        } catch (e: Exception) {
-            chatMessages.value = listOf(
-                ChatMessage.TextMessage(
-                    id = java.util.UUID.randomUUID().toString(),
-                    isFromStudent = false,
-                    text = rawText
-                )
-            ) + chatMessages.value
-        }
-    }
 
     // --- 用户状态 ---
     private val _isLoggedIn = MutableStateFlow(SharedPreferencesUtil.isLoggedIn(context))
@@ -1844,34 +1764,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun changeStudentPassword(oldPass: String, newPass: String, onResult: (Boolean, String) -> Unit) {
-        val sId = _currentUserId.value
-        if (sId == -1) {
-            onResult(false, "请先登录学生账号")
-            return
-        }
-        viewModelScope.launch {
-            try {
-                val student = repository.getStudentById(sId)
-                if (student == null) {
-                    onResult(false, "找不到对应的学生账号信息")
-                    return@launch
-                }
-                if (student.password != oldPass) {
-                    onResult(false, "原密码输入错误，请核对后重试")
-                    return@launch
-                }
-                repository.updateStudentPassword(sId, newPass)
-                val updatedStudent = repository.getStudentById(sId)
-                currentStudentDetails.value = updatedStudent
-                onResult(true, "密码修改成功！新密码已生效。")
-            } catch (e: Exception) {
-                e.printStackTrace()
-                onResult(false, "密码修改失败: ${e.message}")
-            }
-        }
-    }
-
     // =========================================================================
     // --- 拓展高级模块方法 (Tasks 2, 3, 4, 5, 6) ---
     // =========================================================================
@@ -1894,46 +1786,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         .map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
-
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val starredWorkIds: StateFlow<Set<Int>> = _currentUserId
-        .flatMapLatest { studentId ->
-            if (studentId != -1) {
-                repository.getStarredWorkIdsFlow(studentId.toString())
-            } else {
-                flowOf(emptyList())
-            }
-        }
-        .map { it.toSet() }
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptySet())
-
-    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val starredWorksList: StateFlow<List<ScratchWork>> = _currentUserId
-        .flatMapLatest { studentId ->
-            if (studentId != -1) {
-                repository.getStarredWorksFlow(studentId.toString())
-            } else {
-                flowOf(emptyList())
-            }
-        }
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-
-    fun toggleStarWork(workId: Int, onResult: ((Boolean, String) -> Unit)? = null) {
-        val sId = _currentUserId.value
-        if (sId == -1) {
-            onResult?.invoke(false, "请先登录学生账号再进行收藏哦~")
-            return
-        }
-        viewModelScope.launch {
-            try {
-                val isStarred = repository.toggleStarWork(workId, sId.toString())
-                val message = if (isStarred) "⭐ 收藏成功！" else "已取消收藏"
-                onResult?.invoke(isStarred, message)
-            } catch (e: Exception) {
-                onResult?.invoke(false, "操作失败: ${e.message}")
-            }
-        }
-    }
 
     fun toggleWorkPublic(workId: Int, isPublic: Boolean) {
         viewModelScope.launch {
@@ -1974,7 +1826,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val newId = repository.forkWork(sourceWork, sId, cId)
                 currentDraftCode.value = sourceWork.workCode
                 currentDraftName.value = "${sourceWork.workName} (克隆自 ${sourceWork.studentId})"
-                workspaceLoadEvent.value = sourceWork.workCode
                 onResult(true, "🎉 克隆二次开发成功！已导入工作台，新作品 ID: $newId")
             } catch (e: Exception) {
                 onResult(false, "克隆失败: ${e.message}")

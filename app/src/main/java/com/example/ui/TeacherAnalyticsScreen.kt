@@ -186,11 +186,11 @@ fun TeacherAnalyticsScreen(
                                 HorizontalDivider(color = Color(0xFFF1F5F9))
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                // 四维量化得分对比条
-                                AnimatedQuantitativeScoreBar("语法表达", data.avgGrammar, 25f, Color(0xFF3B82F6))
-                                AnimatedQuantitativeScoreBar("逻辑结构", data.avgLogic, 30f, Color(0xFF10B981))
-                                AnimatedQuantitativeScoreBar("任务契合", data.avgTaskMatch, 25f, Color(0xFFF59E0B))
-                                AnimatedQuantitativeScoreBar("创新思维", data.avgCreative, 20f, Color(0xFF8B5CF6))
+                                // 五维得分对比条
+                                DimensionScoreRow("语法表达", data.avgGrammar, 25f, Color(0xFF3B82F6))
+                                DimensionScoreRow("逻辑结构", data.avgLogic, 30f, Color(0xFF10B981))
+                                DimensionScoreRow("任务契合", data.avgTaskMatch, 25f, Color(0xFFF59E0B))
+                                DimensionScoreRow("创新思维", data.avgCreative, 20f, Color(0xFF8B5CF6))
                             }
                         }
                     }

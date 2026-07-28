@@ -357,33 +357,6 @@ window.getProjectJson = function() {
   return JSON.stringify(projectObj);
 };
 
-function getLabelByOpcode(opcode) {
-  for (let cat in PALETTE) {
-    for (let b of PALETTE[cat]) {
-      if (b.opcode === opcode) return b.label;
-    }
-  }
-  // Try partial match for motion, sound etc
-  if (opcode.includes('movesteps')) return '移动 <span class="param">10</span> 步';
-  if (opcode.includes('turnright')) return '右转 ↻ <span class="param">15</span> 度';
-  if (opcode.includes('turnleft')) return '左转 ↺ <span class="param">15</span> 度';
-  if (opcode.includes('gotoxy')) return '移到 x: <span class="param">0</span> y: <span class="param">0</span>';
-  if (opcode.includes('say')) return '说 <span class="param">你好!</span>';
-  if (opcode.includes('hide')) return '隐藏';
-  if (opcode.includes('show')) return '显示';
-  if (opcode.includes('play')) return '播放声音 <span class="param">喵</span>';
-  if (opcode.includes('stopall')) return '停止所有声音';
-  if (opcode.includes('whenflagclicked')) return '当 🟢 被点击';
-  if (opcode.includes('whenkeypressed')) return '当按下 <span class="param">空格</span> 键';
-  if (opcode.includes('whenthisspriteclicked')) return '当角色被点击';
-  if (opcode.includes('wait')) return '等待 <span class="param">1</span> 秒';
-  if (opcode.includes('repeat')) return '重复执行 <span class="param">10</span> 次';
-  if (opcode.includes('forever')) return '重复执行 [循环]';
-  if (opcode.includes('if')) return '如果 <span class="param">条件</span> 那么';
-  
-  return opcode;
-}
-
 window.loadProject = function(jsonStr) {
   try {
     const obj = JSON.parse(jsonStr);
@@ -395,8 +368,7 @@ window.loadProject = function(jsonStr) {
             const b = t.blocks[id];
             if (b.opcode) {
               const cls = getCategoryClassByOpcode(b.opcode);
-              const labelText = getLabelByOpcode(b.opcode);
-              activeBlocks.push({ id: id, opcode: b.opcode, label: `<span class="${cls}">${labelText}</span>` });
+              activeBlocks.push({ id: id, opcode: b.opcode, label: `<span class="${cls}">${b.opcode}</span>` });
             }
           }
         }
