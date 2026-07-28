@@ -228,6 +228,9 @@ data class ScratchWork(
     @ColumnInfo(name = "workCode") 
     @SerialName("work_code")
     val workCode: String, // Scratch作品代码 (JSON)
+    @ColumnInfo(name = "coverUrl")
+    @SerialName("cover_url")
+    val coverUrl: String? = null, // 作品封面
     @ColumnInfo(name = "studentId") 
     @SerialName("student_id")
     val studentId: Int, // 提交学生ID
@@ -691,7 +694,7 @@ interface PromptDao {
         UserStarredProjects::class,
         PromptEntity::class
     ],
-    version = 8, // 升级到版本8，添加云端提示词表 cloud_prompts
+    version = 9, // 升级到版本8，添加云端提示词表 cloud_prompts
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
