@@ -92,6 +92,114 @@ data class DialogueHistoryItem(
     val isExpanded: Boolean = false
 )
 
+/**
+ * 拟人化气泡对话组件 (ChatGPT 风格)
+ * 区别“我”的提问（右侧蓝色/绿底气泡）与“精灵姐姐”的回答（左侧粉红/白底气泡 + 专属头像）
+ */
+@Composable
+fun AiChatBubble(
+    isFromUser: Boolean,
+    title: String? = null,
+    message: String,
+    timestamp: String,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = if (isFromUser) Arrangement.End else Arrangement.Start,
+        verticalAlignment = Alignment.Top
+    ) {
+        if (!isFromUser) {
+            // 精灵姐姐头像
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFFC2185B)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = "精灵姐姐",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(6.dp))
+        }
+
+        Column(
+            horizontalAlignment = if (isFromUser) Alignment.End else Alignment.Start,
+            modifier = Modifier.widthIn(max = 260.dp)
+        ) {
+            // 角色名称与时间戳
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = if (isFromUser) Arrangement.End else Arrangement.Start
+            ) {
+                Text(
+                    text = if (isFromUser) "我的提问 🙋‍♂️" else (title ?: "精灵姐姐 👩‍💻"),
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isFromUser) Color(0xFF1565C0) else Color(0xFFC2185B)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = timestamp,
+                    fontSize = 9.sp,
+                    color = Color.Gray
+                )
+            }
+
+            Spacer(modifier = Modifier.height(2.dp))
+
+            // 气泡卡片
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isFromUser) Color(0xFFE3F2FD) else Color.White
+                ),
+                shape = if (isFromUser) RoundedCornerShape(14.dp, 2.dp, 14.dp, 14.dp) else RoundedCornerShape(2.dp, 14.dp, 14.dp, 14.dp),
+                border = BorderStroke(1.dp, if (isFromUser) Color(0xFF90CAF9) else Color(0xFFF8BBD0)),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Box(modifier = Modifier.padding(10.dp)) {
+                    if (isFromUser) {
+                        Text(
+                            text = message,
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            color = Color(0xFF0D47A1)
+                        )
+                    } else {
+                        StyledAiResult(message)
+                    }
+                }
+            }
+        }
+
+        if (isFromUser) {
+            Spacer(modifier = Modifier.width(6.dp))
+            // 用户头像
+            Box(
+                modifier = Modifier
+                    .size(30.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF1E88E5)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "我",
+                    tint = Color.White,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
@@ -359,16 +467,16 @@ fun AiAssistPanel(
                             }
                         }
                     } else if (aiResult != null && aiResultType == currentTypeShow) {
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color.White),
-                            border = BorderStroke(1.dp, Color(0xFFF8BBD0)),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(text = "✨ 当前分析回复：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
-                                Spacer(modifier = Modifier.height(6.dp))
-                                StyledAiResult(aiResult ?: "")
-                            }
+                        val nowTime = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(text = "✨ 最新 AI 对话分析：", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color(0xFFC2185B))
+                            Spacer(modifier = Modifier.height(4.dp))
+                            AiChatBubble(
+                                isFromUser = false,
+                                title = "精灵姐姐 👩‍💻",
+                                message = aiResult ?: "",
+                                timestamp = nowTime
+                            )
                         }
                     }
                 }
@@ -402,8 +510,8 @@ fun AiAssistPanel(
                                 }
                                 viewModel.dialogueHistoryList.value = updatedList
                             }
-                            .background(Color.White, RoundedCornerShape(8.dp))
-                            .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(8.dp))
+                            .background(Color.White, RoundedCornerShape(12.dp))
+                            .border(1.dp, Color(0xFFF8BBD0), RoundedCornerShape(12.dp))
                             .padding(12.dp)
                     ) {
                         Row(
@@ -444,28 +552,21 @@ fun AiAssistPanel(
                                     .background(Color(0xFFFCE4EC))
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            
-                            Text(
-                                text = "提问或检测背景：",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Gray
+
+                            // 渲染我的提问气泡
+                            AiChatBubble(
+                                isFromUser = true,
+                                message = item.question,
+                                timestamp = item.timestamp
                             )
-                            Text(
-                                text = item.question,
-                                fontSize = 12.sp,
-                                color = Color.Black,
-                                modifier = Modifier.padding(bottom = 8.dp)
+
+                            // 渲染精灵姐姐解答气泡
+                            AiChatBubble(
+                                isFromUser = false,
+                                title = "精灵姐姐 ${item.title}",
+                                message = item.answer,
+                                timestamp = item.timestamp
                             )
-                            
-                            Text(
-                                text = "最佳辅助回复方案：",
-                                fontSize = 11.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color(0xFFC2185B)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            StyledAiResult(item.answer)
                         }
                     }
                 }

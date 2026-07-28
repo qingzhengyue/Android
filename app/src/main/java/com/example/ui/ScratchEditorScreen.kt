@@ -477,23 +477,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     containerColor = Color(0xFFF57C00) // Deep warm amber
                 )
 
-                // 4. Manual Fallback Switch Mirror
-                TopBarActionButton(
-                    onClick = {
-                        if (currentMirrorIndex < mirrors.size - 1) {
-                            currentMirrorIndex++
-                        } else {
-                            currentMirrorIndex = 0
-                        }
-                        scratchUrl = mirrors[currentMirrorIndex]
-                        android.widget.Toast.makeText(context, "已手动切换到第 ${currentMirrorIndex + 1} 个极速镜像 ⚡", android.widget.Toast.LENGTH_SHORT).show()
-                    },
-                    icon = Icons.Default.Language,
-                    text = "手动换源 ⚡",
-                    containerColor = Color(0xFF2E7D32) // Soft forest green
-                )
-
-                // 5. 智能精灵姐姐 Button
+                // 4. 智能精灵姐姐 Button
                 TopBarActionButton(
                     onClick = {
                         showAiAssistSheet = !showAiAssistSheet
@@ -506,7 +490,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     containerColor = Color(0xFFC2185B) // Deep rose ruby
                 )
 
-                // 6. 提交作品 Button (学生专属作品提交通道)
+                // 5. 提交作品 Button (学生专属作品提交通道)
                 val userRole by viewModel.currentUserRole.collectAsState()
                 if (userRole == "student") {
                     TopBarActionButton(
@@ -519,74 +503,115 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         containerColor = Color(0xFF1E88E5) // Nice blue
                     )
                 }
-                                
-                // 7. 载入作品积木 Button (教师专用，通过@JavascriptInterface加载到编辑器)
+
+                // 6. “更多 🛠️” 下拉二级菜单 (折叠非核心功能，提升屏占比)
+                var showMoreTopMenu by remember { mutableStateOf(false) }
                 val teacherViewingWorkspace by viewModel.teacherViewingWorkspace.collectAsState()
-                if (teacherViewingWorkspace && draftCode.isNotBlank()) {
+
+                Box {
                     TopBarActionButton(
-                        onClick = {
-                            try {
-                                // 【修复】通过 @JavascriptInterface 接口直接传递数据，避免写文件再读取的间接方式
-                                val loader = projectLoaderInterface
-                                if (loader != null && webViewInstance != null) {
-                                    loader.setProjectData(draftCode)
-                                    val loadJs = """
-                                        (function() {
-                                            var attempts = 0, maxAttempts = 60;
-                                            function findVm() {
-                                                if (window.vm && window.vm.loadProject) return window.vm;
-                                                var frames = document.querySelectorAll('iframe');
-                                                for (var i = 0; i < frames.length; i++) {
-                                                    try {
-                                                        if (frames[i].contentWindow && frames[i].contentWindow.vm && frames[i].contentWindow.vm.loadProject)
-                                                            return frames[i].contentWindow.vm;
-                                                    } catch(e) {}
-                                                }
-                                                if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
-                                                return null;
-                                            }
-                                            function tryLoad() {
-                                                attempts++;
-                                                var vm = findVm();
-                                                if (!vm) return false;
-                                                try {
-                                                    var raw = window.AndroidProjectLoader.getProjectData();
-                                                    if (!raw || raw.length === 0) return false;
-                                                    var obj = JSON.parse(raw);
-                                                    if (!obj.meta) { obj = { meta: { semver: '3.0.0', vm: '0.2.0', agent: 'Android' }, targets: obj.targets || obj } }
-                                                    vm.loadProject(obj).then(function() {
-                                                        console.log('ManualLoader: SUCCESS');
-                                                        if (vm.emitWorkspaceUpdate) vm.emitWorkspaceUpdate();
-                                                        if (vm.runtime && vm.runtime.targets) vm.emit('targetsUpdate');
-                                                    }).catch(function(err) { console.error('ManualLoader: FAILED: ' + err); });
-                                                } catch(e) { console.error('ManualLoader: parse FAILED: ' + e.message); }
-                                                return true;
-                                            }
-                                            if (!tryLoad()) {
-                                                var itv = setInterval(function() {
-                                                    if (tryLoad() || attempts >= maxAttempts) clearInterval(itv);
-                                                }, 500);
-                                            }
-                                            return 'ManualLoader started';
-                                        })();
-                                    """.trimIndent()
-                                    webViewInstance?.evaluateJavascript(loadJs, null)
-                                    android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
-                                } else {
-                                    // 降级方案：写文件方式
-                                    val sb3File = java.io.File(context.cacheDir, "manual_load_${'$'}{System.currentTimeMillis()}.sb3")
-                                    sb3File.writeText(draftCode, Charsets.UTF_8)
-                                    viewModel.teacherPendingSb3Path.value = sb3File.absolutePath
-                                    android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            } catch (e: Exception) {
-                                android.widget.Toast.makeText(context, "载入失败: ${'$'}{e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        icon = Icons.Default.Refresh,
-                        text = "载入作品积木 🧩",
-                        containerColor = Color(0xFF9C27B0) // Purple for teacher tool
+                        onClick = { showMoreTopMenu = true },
+                        icon = Icons.Default.MoreVert,
+                        text = "更多 🛠️",
+                        containerColor = Color(0xFF455A64) // Slate grey
                     )
+
+                    DropdownMenu(
+                        expanded = showMoreTopMenu,
+                        onDismissRequest = { showMoreTopMenu = false }
+                    ) {
+                        // 手动换源
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Language, contentDescription = null, tint = Color(0xFF2E7D32), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("手动换源 ⚡ (当前源: ${currentMirrorIndex + 1})", fontSize = 13.sp)
+                                }
+                            },
+                            onClick = {
+                                showMoreTopMenu = false
+                                if (currentMirrorIndex < mirrors.size - 1) {
+                                    currentMirrorIndex++
+                                } else {
+                                    currentMirrorIndex = 0
+                                }
+                                scratchUrl = mirrors[currentMirrorIndex]
+                                android.widget.Toast.makeText(context, "已手动切换到第 ${currentMirrorIndex + 1} 个极速镜像 ⚡", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        )
+
+                        // 载入作品积木 (教师专用)
+                        if (teacherViewingWorkspace && draftCode.isNotBlank()) {
+                            DropdownMenuItem(
+                                text = {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF9C27B0), modifier = Modifier.size(18.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text("载入作品积木 🧩", fontSize = 13.sp)
+                                    }
+                                },
+                                onClick = {
+                                    showMoreTopMenu = false
+                                    try {
+                                        val loader = projectLoaderInterface
+                                        if (loader != null && webViewInstance != null) {
+                                            loader.setProjectData(draftCode)
+                                            val loadJs = """
+                                                (function() {
+                                                    var attempts = 0, maxAttempts = 60;
+                                                    function findVm() {
+                                                        if (window.vm && window.vm.loadProject) return window.vm;
+                                                        var frames = document.querySelectorAll('iframe');
+                                                        for (var i = 0; i < frames.length; i++) {
+                                                            try {
+                                                                if (frames[i].contentWindow && frames[i].contentWindow.vm && frames[i].contentWindow.vm.loadProject)
+                                                                    return frames[i].contentWindow.vm;
+                                                            } catch(e) {}
+                                                        }
+                                                        if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
+                                                        return null;
+                                                    }
+                                                    function tryLoad() {
+                                                        attempts++;
+                                                        var vm = findVm();
+                                                        if (!vm) return false;
+                                                        try {
+                                                            var raw = window.AndroidProjectLoader.getProjectData();
+                                                            if (!raw || raw.length === 0) return false;
+                                                            var obj = JSON.parse(raw);
+                                                            if (!obj.meta) { obj = { meta: { semver: '3.0.0', vm: '0.2.0', agent: 'Android' }, targets: obj.targets || obj } }
+                                                            vm.loadProject(obj).then(function() {
+                                                                console.log('ManualLoader: SUCCESS');
+                                                                if (vm.emitWorkspaceUpdate) vm.emitWorkspaceUpdate();
+                                                                if (vm.runtime && vm.runtime.targets) vm.emit('targetsUpdate');
+                                                            }).catch(function(err) { console.error('ManualLoader: FAILED: ' + err); });
+                                                        } catch(e) { console.error('ManualLoader: parse FAILED: ' + e.message); }
+                                                        return true;
+                                                    }
+                                                    if (!tryLoad()) {
+                                                        var itv = setInterval(function() {
+                                                            if (tryLoad() || attempts >= maxAttempts) clearInterval(itv);
+                                                        }, 500);
+                                                    }
+                                                    return 'ManualLoader started';
+                                                })();
+                                            """.trimIndent()
+                                            webViewInstance?.evaluateJavascript(loadJs, null)
+                                            android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
+                                        } else {
+                                            val sb3File = java.io.File(context.cacheDir, "manual_load_${'$'}{System.currentTimeMillis()}.sb3")
+                                            sb3File.writeText(draftCode, Charsets.UTF_8)
+                                            viewModel.teacherPendingSb3Path.value = sb3File.absolutePath
+                                            android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
+                                        }
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "载入失败: ${'$'}{e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
