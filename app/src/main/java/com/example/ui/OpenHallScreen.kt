@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -238,33 +239,54 @@ fun OpenWorkCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 语义主题风格封面画廊
-            val coverConfig = getSemanticCoverConfig(work.workName, work.workId)
+            // 占位预览画廊
+            val coverConfig = remember(work.workId, work.workName) {
+                val name = work.workName.lowercase()
+                when {
+                    name.contains("猫") || name.contains("宠") || name.contains("cat") -> 
+                        Triple(Icons.Default.Pets, "Scratch 角色动画舞台", listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5)))
+                    name.contains("太空") || name.contains("火箭") || name.contains("星") || name.contains("space") -> 
+                        Triple(Icons.Default.RocketLaunch, "太空探索与物理逻辑", listOf(Color(0xFFEFF6FF), Color(0xFFDBEAFE)))
+                    name.contains("游戏") || name.contains("迷宫") || name.contains("捕获") || name.contains("game") -> 
+                        Triple(Icons.Default.SportsEsports, "交互游戏与按键控制", listOf(Color(0xFFF0FDF4), Color(0xFFDCFCE7)))
+                    name.contains("音") || name.contains("琴") || name.contains("歌") || name.contains("music") -> 
+                        Triple(Icons.Default.MusicNote, "声音与音乐积木应用", listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF)))
+                    else -> {
+                        val bgList = when (kotlin.math.abs(work.workId.hashCode()) % 4) {
+                            0 -> listOf(Color(0xFFEFF6FF), Color(0xFFE0F2FE))
+                            1 -> listOf(Color(0xFFF0FDF4), Color(0xFFE0E7FF))
+                            2 -> listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5))
+                            else -> listOf(Color(0xFFFDF2F8), Color(0xFFFCE7F3))
+                        }
+                        Triple(Icons.Default.Code, "Scratch 3.0 逻辑积木作品", bgList)
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(110.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(coverConfig.backgroundColor),
+                    .background(Brush.linearGradient(coverConfig.third)),
                 contentAlignment = Alignment.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = coverConfig.icon,
+                        imageVector = coverConfig.first,
                         contentDescription = null,
-                        tint = coverConfig.primaryColor,
-                        modifier = Modifier.size(36.dp)
+                        tint = Color(0xFF2563EB),
+                        modifier = Modifier.size(32.dp)
                     )
                     Spacer(modifier = Modifier.width(10.dp))
                     Column {
                         Text(
-                            text = work.workName,
-                            color = coverConfig.primaryColor,
-                            fontSize = 14.sp,
+                            text = coverConfig.second,
+                            color = Color(0xFF1E293B),
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Scratch 3.0 逻辑作品",
+                            text = "点击 Fork 可在编辑器中一键克隆此作品",
                             color = Color(0xFF64748B),
                             fontSize = 11.sp
                         )
@@ -498,42 +520,6 @@ fun CommentItemRow(comment: WorkComment) {
                 fontSize = 13.sp,
                 color = Color(0xFF334155)
             )
-        }
-    }
-}
-
-data class CoverConfig(
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val primaryColor: Color,
-    val backgroundColor: Color
-)
-
-fun getSemanticCoverConfig(workName: String, workId: Int): CoverConfig {
-    val titleLower = workName.lowercase()
-    return when {
-        titleLower.contains("猫") || titleLower.contains("cat") || titleLower.contains("狗") || titleLower.contains("宠") -> 
-            CoverConfig(Icons.Default.Pets, Color(0xFFFF6B6B), Color(0xFFFFE3E3))
-            
-        titleLower.contains("星") || titleLower.contains("太空") || titleLower.contains("迷宫") || titleLower.contains("space") || titleLower.contains("rocket") -> 
-            CoverConfig(Icons.Default.RocketLaunch, Color(0xFF4D96FF), Color(0xFFE3F2FD))
-            
-        titleLower.contains("游戏") || titleLower.contains("球") || titleLower.contains("跑") || titleLower.contains("game") -> 
-            CoverConfig(Icons.Default.SportsEsports, Color(0xFF6BCB77), Color(0xFFE8F5E9))
-            
-        titleLower.contains("音") || titleLower.contains("乐") || titleLower.contains("舞") || titleLower.contains("歌") || titleLower.contains("music") -> 
-            CoverConfig(Icons.Default.MusicNote, Color(0xFFFFD93D), Color(0xFFFFFDE7))
-            
-        titleLower.contains("画") || titleLower.contains("艺") || titleLower.contains("色") || titleLower.contains("draw") -> 
-            CoverConfig(Icons.Default.Palette, Color(0xFF9B51E0), Color(0xFFF3E5F5))
-            
-        else -> {
-            val fallbackThemes = listOf(
-                CoverConfig(Icons.Default.Code, Color(0xFF0EA5E9), Color(0xFFF0F9FF)),
-                CoverConfig(Icons.Default.AutoAwesome, Color(0xFF8B5CF6), Color(0xFFF5F3FF)),
-                CoverConfig(Icons.Default.Psychology, Color(0xFF10B981), Color(0xFFECFDF5)),
-                CoverConfig(Icons.Default.Widgets, Color(0xFFF59E0B), Color(0xFFFFFBEB))
-            )
-            fallbackThemes[kotlin.math.abs(workId) % fallbackThemes.size]
         }
     }
 }

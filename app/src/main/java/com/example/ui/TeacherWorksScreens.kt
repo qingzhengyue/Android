@@ -2,7 +2,6 @@ package com.example.ui
 
 import android.app.Activity
 import android.content.pm.ActivityInfo
-import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -582,10 +581,10 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
 
         // JavascriptInterface 传递项目数据给 WebView
         class TeacherBlockViewerInterface(private val projectData: String) {
-            @JavascriptInterface
+            @android.webkit.JavascriptInterface
             fun getProjectJson(): String = projectData
 
-            @JavascriptInterface
+            @android.webkit.JavascriptInterface
             fun getProjectData(): String = projectData
         }
 

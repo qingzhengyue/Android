@@ -223,15 +223,14 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     LaunchedEffect(workspaceLoadEvent, webViewInstance) {
         val code = workspaceLoadEvent
         val webView = webViewInstance
-        if (code != null) {
+        if (code != null && webView != null) {
             projectLoaderInterface?.setProjectData(code)
-            if (webView != null) {
-                if (viewModel.teacherPendingSb3Path.value != null) {
-                    viewModel.workspaceLoadEvent.value = null
-                } else {
-                    loadProjectIntoWebView(webView, code, context)
-                    viewModel.workspaceLoadEvent.value = null
-                }
+            // 【修复】如果教师正在通过 @JavascriptInterface 接口加载学生作品，跳过不可靠的字符串拼接方式
+            if (viewModel.teacherPendingSb3Path.value != null) {
+                viewModel.workspaceLoadEvent.value = null
+            } else {
+                loadProjectIntoWebView(webView, code, context)
+                viewModel.workspaceLoadEvent.value = null
             }
         }
     }
@@ -668,65 +667,67 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             super.onPageFinished(view, url)
                             isPageLoading = false
                             
-                            // 注入口：通过给HTML注入自定义Viewport限制双指缩放范围并屏蔽三方冗余登录弹窗
-                            val viewportJs = """
-                                (function() {
-                                    var meta = document.createElement('meta');
-                                    meta.name = 'viewport';
-                                    meta.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes';
-                                    var head = document.getElementsByTagName('head')[0];
-                                    if (head) {
-                                        var existingViewports = document.querySelectorAll('meta[name="viewport"]');
-                                        existingViewports.forEach(function(el) { el.remove(); });
-                                        head.appendChild(meta);
-                                        
-                                        // 注入自定义 CSS 屏蔽三方冗余登录对话框与顶栏多余按钮
-                                        var css = '[class*="modal_modal-overlay"], [class*="login-modal"], [class*="login-dialog"], [class*="prompt_prompt-"], [class*="alert_alert"], [class*="alert_alert-container"], div[class*="modal_modal-content"], div[class*="prompt_prompt-overlay"], .react-modal-sheet-container, .login-dialog, #login-dialog, .login-modal, .alert-container, [class*="menu-bar_account-info-group"], [class*="menu-bar_login-button"], [class*="menu-bar_mystuff-button"], div[class*="menu-bar_account-info-group"], div[class*="menu-bar_mystuff-button"] { display: none !important; }';
-                                        var style = document.createElement('style');
-                                        style.type = 'text/css';
-                                        style.appendChild(document.createTextNode(css));
-                                        head.appendChild(style);
-                                    }
-                                    
-                                    function tryAttach() {
-                                        var ws = null;
-                                        if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
-                                            ws = Blockly.getMainWorkspace();
-                                        } else if (typeof Blockly !== 'undefined' && Blockly.mainWorkspace) {
-                                            ws = Blockly.mainWorkspace;
+                            if (url != null && !url.startsWith("file:///")) {
+                                // 注入口：通过给HTML注入自定义Viewport限制双指缩放范围并屏蔽三方冗余登录弹窗
+                                val viewportJs = """
+                                    (function() {
+                                        var meta = document.createElement('meta');
+                                        meta.name = 'viewport';
+                                        meta.content = 'width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=2.0, user-scalable=yes';
+                                        var head = document.getElementsByTagName('head')[0];
+                                        if (head) {
+                                            var existingViewports = document.querySelectorAll('meta[name="viewport"]');
+                                            existingViewports.forEach(function(el) { el.remove(); });
+                                            head.appendChild(meta);
+                                            
+                                            // 注入自定义 CSS 屏蔽三方冗余登录对话框与顶栏多余按钮
+                                            var css = '[class*="modal_modal-overlay"], [class*="login-modal"], [class*="login-dialog"], [class*="prompt_prompt-"], [class*="alert_alert"], [class*="alert_alert-container"], div[class*="modal_modal-content"], div[class*="prompt_prompt-overlay"], .react-modal-sheet-container, .login-dialog, #login-dialog, .login-modal, .alert-container, [class*="menu-bar_account-info-group"], [class*="menu-bar_login-button"], [class*="menu-bar_mystuff-button"], div[class*="menu-bar_account-info-group"], div[class*="menu-bar_mystuff-button"] { display: none !important; }';
+                                            var style = document.createElement('style');
+                                            style.type = 'text/css';
+                                            style.appendChild(document.createTextNode(css));
+                                            head.appendChild(style);
                                         }
-                                        if (ws) {
-                                            ws.addChangeListener(function(event) {
-                                                if (event.type === 'move' || event.type === 'create' || event.type === 'delete' || event.type === 'change') {
+                                        
+                                        function tryAttach() {
+                                            var ws = null;
+                                            if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
+                                                ws = Blockly.getMainWorkspace();
+                                            } else if (typeof Blockly !== 'undefined' && Blockly.mainWorkspace) {
+                                                ws = Blockly.mainWorkspace;
+                                            }
+                                            if (ws) {
+                                                ws.addChangeListener(function(event) {
+                                                    if (event.type === 'move' || event.type === 'create' || event.type === 'delete' || event.type === 'change') {
+                                                        if (window.AndroidWorkspace) {
+                                                            window.AndroidWorkspace.onCodeChanged();
+                                                        }
+                                                    }
+                                                });
+                                                return true;
+                                            }
+                                            var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
+                                            if (targetVm) {
+                                                targetVm.on('workspaceUpdate', function() {
                                                     if (window.AndroidWorkspace) {
                                                         window.AndroidWorkspace.onCodeChanged();
                                                     }
-                                                }
-                                            });
-                                            return true;
-                                        }
-                                        var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
-                                        if (targetVm) {
-                                            targetVm.on('workspaceUpdate', function() {
-                                                if (window.AndroidWorkspace) {
-                                                    window.AndroidWorkspace.onCodeChanged();
-                                                }
-                                            });
-                                            return true;
-                                        }
-                                        return false;
-                                    }
-                                    var attached = tryAttach();
-                                    if (!attached) {
-                                        var interval = setInterval(function() {
-                                            if (tryAttach()) {
-                                                clearInterval(interval);
+                                                });
+                                                return true;
                                             }
-                                        }, 1000);
-                                    }
-                                })();
-                            """.trimIndent()
-                            view?.evaluateJavascript(viewportJs, null)
+                                            return false;
+                                        }
+                                        var attached = tryAttach();
+                                        if (!attached) {
+                                            var interval = setInterval(function() {
+                                                if (tryAttach()) {
+                                                    clearInterval(interval);
+                                                }
+                                            }, 1000);
+                                        }
+                                    })();
+                                """.trimIndent()
+                                view?.evaluateJavascript(viewportJs, null)
+                            }
 
                             // 【修复】移除 onPageFinished 中的重复 sb3 加载逻辑，统一由 LaunchedEffect(pendingTeacherSb3Path) 处理
                             // 避免 onPageFinished 和 LaunchedEffect 竞争导致文件被提前删除
