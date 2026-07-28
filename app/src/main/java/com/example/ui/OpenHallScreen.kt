@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -239,54 +240,164 @@ fun OpenWorkCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 占位预览画廊
+            // 主题精确匹配的开源大厅作品封面
             val coverConfig = remember(work.workId, work.workName) {
                 val name = work.workName.lowercase()
                 when {
-                    name.contains("猫") || name.contains("宠") || name.contains("cat") -> 
-                        Triple(Icons.Default.Pets, "Scratch 角色动画舞台", listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5)))
-                    name.contains("太空") || name.contains("火箭") || name.contains("星") || name.contains("space") -> 
-                        Triple(Icons.Default.RocketLaunch, "太空探索与物理逻辑", listOf(Color(0xFFEFF6FF), Color(0xFFDBEAFE)))
-                    name.contains("游戏") || name.contains("迷宫") || name.contains("捕获") || name.contains("game") -> 
-                        Triple(Icons.Default.SportsEsports, "交互游戏与按键控制", listOf(Color(0xFFF0FDF4), Color(0xFFDCFCE7)))
-                    name.contains("音") || name.contains("琴") || name.contains("歌") || name.contains("music") -> 
-                        Triple(Icons.Default.MusicNote, "声音与音乐积木应用", listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF)))
-                    else -> {
-                        val bgList = when (kotlin.math.abs(work.workId.hashCode()) % 4) {
-                            0 -> listOf(Color(0xFFEFF6FF), Color(0xFFE0F2FE))
-                            1 -> listOf(Color(0xFFF0FDF4), Color(0xFFE0E7FF))
-                            2 -> listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5))
-                            else -> listOf(Color(0xFFFDF2F8), Color(0xFFFCE7F3))
-                        }
-                        Triple(Icons.Default.Code, "Scratch 3.0 逻辑积木作品", bgList)
-                    }
+                    // 1. 电子琴 / 音乐 / 音效
+                    name.contains("琴") || name.contains("音") || name.contains("歌") || name.contains("music") ->
+                        HallThemeCover(
+                            icon = Icons.Default.MusicNote,
+                            themeTag = "🎵 音乐音效",
+                            title = "电子琴与按键音效交互",
+                            desc = "键盘映射与声音积木联动组合",
+                            iconTint = Color(0xFF7C3AED),
+                            iconBg = Color(0xFFF3E8FF),
+                            bgGradient = listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF))
+                        )
+                    // 2. 水果 / 接水果 / 捕获
+                    name.contains("水果") || name.contains("果") || name.contains("捕获") || name.contains("fruit") ->
+                        HallThemeCover(
+                            icon = Icons.Default.Fastfood,
+                            themeTag = "🍎 接水果",
+                            title = "趣味接水果与碰撞侦测",
+                            desc = "掉落物理与按键位移得分机制",
+                            iconTint = Color(0xFF16A34A),
+                            iconBg = Color(0xFFDCFCE7),
+                            bgGradient = listOf(Color(0xFFF0FDF4), Color(0xFFDCFCE7))
+                        )
+                    // 3. 迷宫 / 反弹 / 逃跑
+                    name.contains("迷宫") || name.contains("反弹") || name.contains("maze") ->
+                        HallThemeCover(
+                            icon = Icons.Default.SportsEsports,
+                            themeTag = "🎮 迷宫游戏",
+                            title = "迷宫地图与颜色碰撞侦测",
+                            desc = "方向按键控制与壁障反弹逻辑",
+                            iconTint = Color(0xFF0284C7),
+                            iconBg = Color(0xFFE0F2FE),
+                            bgGradient = listOf(Color(0xFFF0F9FF), Color(0xFFE0F2FE))
+                        )
+                    // 4. 猫咪 / 宠物 / 步态 / 摇摆
+                    name.contains("猫") || name.contains("宠") || name.contains("摇摆") || name.contains("cat") ->
+                        HallThemeCover(
+                            icon = Icons.Default.Pets,
+                            themeTag = "🐱 角色动画",
+                            title = "猫咪角色动画与舞台步态",
+                            desc = "边缘反弹与多造型连续播放",
+                            iconTint = Color(0xFFEA580C),
+                            iconBg = Color(0xFFFFEDD5),
+                            bgGradient = listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5))
+                        )
+                    // 5. 太空 / 火箭 / 星球 / 宇宙
+                    name.contains("太空") || name.contains("火箭") || name.contains("星") || name.contains("space") ->
+                        HallThemeCover(
+                            icon = Icons.Default.RocketLaunch,
+                            themeTag = "🚀 太空探索",
+                            title = "太空飞行与物理坐标碰撞",
+                            desc = "星际探险与运动控制积木",
+                            iconTint = Color(0xFF2563EB),
+                            iconBg = Color(0xFFDBEAFE),
+                            bgGradient = listOf(Color(0xFFEFF6FF), Color(0xFFDBEAFE))
+                        )
+                    // 6. 画笔 / 绘制 / 几何 / 艺术
+                    name.contains("画") || name.contains("笔") || name.contains("draw") || name.contains("paint") ->
+                        HallThemeCover(
+                            icon = Icons.Default.Palette,
+                            themeTag = "🎨 几何画笔",
+                            title = "算法画笔与几何艺术绘制",
+                            desc = "画笔扩展与多重循环图案",
+                            iconTint = Color(0xFFDB2777),
+                            iconBg = Color(0xFFFCE7F3),
+                            bgGradient = listOf(Color(0xFFFDF2F8), Color(0xFFFCE7F3))
+                        )
+                    // 7. 通用 Scratch 积木
+                    else ->
+                        HallThemeCover(
+                            icon = Icons.Default.Code,
+                            themeTag = "🧩 积木编程",
+                            title = "Scratch 3.0 逻辑积木作品",
+                            desc = "事件驱动与变量控制逻辑",
+                            iconTint = Color(0xFF0D9488),
+                            iconBg = Color(0xFFCCFBF1),
+                            bgGradient = listOf(Color(0xFFF0FDFA), Color(0xFFCCFBF1))
+                        )
                 }
             }
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(110.dp)
+                    .height(115.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Brush.linearGradient(coverConfig.third)),
-                contentAlignment = Alignment.Center
+                    .background(Brush.linearGradient(coverConfig.bgGradient))
+                    .padding(12.dp)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = coverConfig.first,
-                        contentDescription = null,
-                        tint = Color(0xFF2563EB),
-                        modifier = Modifier.size(32.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Column {
+                // 水印背景 Icon
+                Icon(
+                    imageVector = coverConfig.icon,
+                    contentDescription = null,
+                    tint = coverConfig.iconTint.copy(alpha = 0.12f),
+                    modifier = Modifier
+                        .size(90.dp)
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 10.dp, y = 10.dp)
+                )
+
+                // 主体内容
+                Row(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = coverConfig.iconBg,
+                        shadowElevation = 1.dp
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(10.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = coverConfig.icon,
+                                contentDescription = null,
+                                tint = coverConfig.iconTint,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = coverConfig.iconTint.copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = coverConfig.themeTag,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = coverConfig.iconTint,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
                         Text(
-                            text = coverConfig.second,
+                            text = coverConfig.title,
                             color = Color(0xFF1E293B),
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
                         )
+
                         Text(
-                            text = "点击 Fork 可在编辑器中一键克隆此作品",
+                            text = coverConfig.desc,
                             color = Color(0xFF64748B),
                             fontSize = 11.sp
                         )
@@ -523,3 +634,13 @@ fun CommentItemRow(comment: WorkComment) {
         }
     }
 }
+
+private data class HallThemeCover(
+    val icon: ImageVector,
+    val themeTag: String,
+    val title: String,
+    val desc: String,
+    val iconTint: Color,
+    val iconBg: Color,
+    val bgGradient: List<Color>
+)

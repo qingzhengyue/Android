@@ -227,7 +227,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                 text = "孩子们最新提交的 Scratch 作品：",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1F2937)
+                color = Color.Black
             )
         }
 
