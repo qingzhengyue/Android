@@ -786,6 +786,8 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         domStorageEnabled = true
                         databaseEnabled = true
                         allowFileAccess = true
+                        allowFileAccessFromFileURLs = true
+                        allowUniversalAccessFromFileURLs = true
                         allowContentAccess = true
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         useWideViewPort = true

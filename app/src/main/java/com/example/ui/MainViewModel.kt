@@ -1974,6 +1974,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val newId = repository.forkWork(sourceWork, sId, cId)
                 currentDraftCode.value = sourceWork.workCode
                 currentDraftName.value = "${sourceWork.workName} (克隆自 ${sourceWork.studentId})"
+                workspaceLoadEvent.value = sourceWork.workCode
                 onResult(true, "🎉 克隆二次开发成功！已导入工作台，新作品 ID: $newId")
             } catch (e: Exception) {
                 onResult(false, "克隆失败: ${e.message}")

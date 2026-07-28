@@ -547,17 +547,33 @@ class AppRepository(private val context: Context) {
         val clonedWork = ScratchWork(
             workName = "${sourceWork.workName} (克隆版)",
             workCode = sourceWork.workCode,
+            coverUrl = sourceWork.coverUrl,
             studentId = targetStudentId,
             classId = targetClassId,
             taskId = sourceWork.taskId,
             submitCount = 1,
             submitTime = System.currentTimeMillis(),
-            reviewStatus = "待审核",
+            reviewStatus = sourceWork.reviewStatus, // Inherit status
+            teacherScore = sourceWork.teacherScore, // Inherit score
+            teacherComment = sourceWork.teacherComment, // Inherit comment
+            teacherReviewTime = sourceWork.teacherReviewTime, // Inherit review time
             isPublic = false,
             forkFromId = sourceWork.workId,
             syncStatus = 0
         )
         val newId = dao.insertWork(clonedWork)
+        
+        // Clone AI report if exists
+        val originalReport = dao.getReportByWorkId(sourceWork.workId)
+        if (originalReport != null) {
+            val clonedReport = originalReport.copy(
+                reportId = 0, // Auto generate new ID
+                workId = newId.toInt(),
+                studentId = targetStudentId
+            )
+            dao.insertAiReport(clonedReport)
+        }
+        
         newId
     }
 

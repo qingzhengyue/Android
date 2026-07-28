@@ -779,6 +779,8 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                             settings.javaScriptEnabled = true
                                             settings.domStorageEnabled = true
                                             settings.allowFileAccess = true
+                                            settings.allowFileAccessFromFileURLs = true
+                                            settings.allowUniversalAccessFromFileURLs = true
                                             settings.builtInZoomControls = true
                                             settings.displayZoomControls = false
                                             webViewClient = WebViewClient()

@@ -254,17 +254,56 @@ fun OpenWorkCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             // 真实的预览图
-            AsyncImage(
-                model = work.coverUrl ?: "https://picsum.photos/seed/${work.workId}/400/300", // Fallback if no coverUrl
-                contentDescription = "作品预览",
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(110.dp)
-                    .clip(RoundedCornerShape(12.dp)),
-                contentScale = ContentScale.Crop,
-                placeholder = painterResource(R.drawable.placeholder_image), // 加载中的占位图
-                error = painterResource(R.drawable.error_image) // 加载失败显示的图
-            )
+            if (work.coverUrl.isNullOrEmpty()) {
+                val presetIcons = listOf(
+                    Icons.Default.Pets,
+                    Icons.Default.RocketLaunch,
+                    Icons.Default.CrueltyFree,
+                    Icons.Default.SmartToy,
+                    Icons.Default.SportsEsports,
+                    Icons.Default.BugReport,
+                    Icons.Default.Colorize,
+                    Icons.Default.Brush
+                )
+                val presetColors = listOf(
+                    Color(0xFFE3F2FD), Color(0xFFF3E5F5), Color(0xFFE8F5E9), Color(0xFFFFF3E0),
+                    Color(0xFFFFEBEE), Color(0xFFE0F7FA), Color(0xFFFFF8E1), Color(0xFFFCE4EC)
+                )
+                val iconTints = listOf(
+                    Color(0xFF2196F3), Color(0xFF9C27B0), Color(0xFF4CAF50), Color(0xFFFF9800),
+                    Color(0xFFF44336), Color(0xFF00BCD4), Color(0xFFFFC107), Color(0xFFE91E63)
+                )
+                val hash = kotlin.math.abs(work.workId.hashCode())
+                val index = hash % presetIcons.size
+                
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(presetColors[index]),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = presetIcons[index],
+                        contentDescription = "作品默认封面",
+                        tint = iconTints[index],
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
+            } else {
+                AsyncImage(
+                    model = work.coverUrl,
+                    contentDescription = "作品预览",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(110.dp)
+                        .clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop,
+                    placeholder = painterResource(R.drawable.placeholder_image),
+                    error = painterResource(R.drawable.error_image)
+                )
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
 
