@@ -94,26 +94,23 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
     // 是否在弹窗确认后跳转编辑器
     var pendingNavigateToEditor by remember { mutableStateOf(false) }
     
-    // 班级与学生筛选状态
+    // 班级筛选状态
     var selectedClassId by remember { mutableStateOf<Int?>(null) }
-    var selectedStudentId by remember { mutableStateOf<Int?>(null) }
+    var classDropdownExpanded by remember { mutableStateOf(false) }
     
-    // 根据选择的班级ID和学生ID过滤作品
-    val filteredWorks = remember(allWorks, selectedClassId, selectedStudentId) {
-        allWorks.filter { work ->
-            (selectedClassId == null || work.classId == selectedClassId) &&
-            (selectedStudentId == null || work.studentId == selectedStudentId)
+    // 根据选择的班级ID过滤作品
+    val filteredWorks = remember(allWorks, selectedClassId) {
+        if (selectedClassId == null) {
+            allWorks
+        } else {
+            allWorks.filter { it.classId == selectedClassId }
         }
     }
     
-    // 获取选中筛选条件的名称
-    val selectedClassName = remember(selectedClassId, selectedStudentId, classes, students) {
+    // 获取选中班级的名称
+    val selectedClassName = remember(selectedClassId, classes) {
         if (selectedClassId == null) "全部班级" else {
-            val cName = classes.find { it.classId == selectedClassId }?.let { "${it.grade} ${it.className}" } ?: "未知班级"
-            if (selectedStudentId == null) cName else {
-                val sName = students.find { it.studentId == selectedStudentId }?.name ?: "未知学生"
-                "$cName - $sName"
-            }
+            classes.find { it.classId == selectedClassId }?.let { "${it.grade} ${it.className}" } ?: "未知班级"
         }
     }
 
@@ -152,17 +149,51 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
             Spacer(modifier = Modifier.width(6.dp))
             Text("孩子们最新提交的 Scratch 作品：", fontSize = 14.sp, fontWeight = FontWeight.Bold)
             
-            // 伪树状扁平化筛选菜单 (PseudoTreeFilterMenu)
-            PseudoTreeFilterMenu(
-                selectedClassName = selectedClassName,
-                classes = classes,
-                students = students,
-                allWorks = allWorks,
-                onSelectFilter = { cId, sId ->
-                    selectedClassId = cId
-                    selectedStudentId = sId
+            // 班级筛选下拉框
+            Box(modifier = Modifier.padding(start = 12.dp)) {
+                OutlinedButton(
+                    onClick = { classDropdownExpanded = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E88E5)),
+                    border = BorderStroke(1.dp, Color(0xFF1E88E5)),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(selectedClassName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
                 }
-            )
+                DropdownMenu(
+                    expanded = classDropdownExpanded,
+                    onDismissRequest = { classDropdownExpanded = false }
+                ) {
+                    // 全部班级选项
+                    DropdownMenuItem(
+                        text = { Text("📋 全部班级 (${allWorks.size}件作品)", fontSize = 13.sp) },
+                        onClick = {
+                            selectedClassId = null
+                            classDropdownExpanded = false
+                        }
+                    )
+                    Divider()
+                    // 各班级选项
+                    classes.forEach { classEntity ->
+                        val classWorkCount = allWorks.count { it.classId == classEntity.classId }
+                        DropdownMenuItem(
+                            text = { 
+                                Text(
+                                    "${classEntity.grade} ${classEntity.className} (${classWorkCount}件)", 
+                                    fontSize = 13.sp 
+                                ) 
+                            },
+                            onClick = {
+                                selectedClassId = classEntity.classId
+                                classDropdownExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
         }
 
         if (filteredWorks.isEmpty()) {
@@ -851,126 +882,4 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
     }
 }
 
-/**
- * “伪树状”扁平化筛选菜单 (PseudoTreeFilterMenu)
- * 支持 年级/班级 -> 学生 层级展开，一维 List 管理，padding 计算层级视觉缩进
- */
-@Composable
-fun PseudoTreeFilterMenu(
-    selectedClassName: String,
-    classes: List<ClassEntity>,
-    students: List<Student>,
-    allWorks: List<ScratchWork>,
-    onSelectFilter: (classId: Int?, studentId: Int?) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    var expandedClassIds by remember { mutableStateOf(setOf<Int>()) }
-
-    Box(modifier = Modifier.padding(start = 12.dp)) {
-        OutlinedButton(
-            onClick = { expanded = true },
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E88E5)),
-            border = BorderStroke(1.dp, Color(0xFF1E88E5)),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-            shape = RoundedCornerShape(8.dp)
-        ) {
-            Icon(Icons.Default.AccountTree, contentDescription = null, modifier = Modifier.size(16.dp))
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(selectedClassName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-            Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.widthIn(min = 220.dp, max = 280.dp)
-        ) {
-            // 全部班级 (depth = 0)
-            DropdownMenuItem(
-                text = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Inbox, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFF1E88E5))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("📋 全部班级 (${allWorks.size}件作品)", fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                    }
-                },
-                onClick = {
-                    onSelectFilter(null, null)
-                    expanded = false
-                }
-            )
-            Divider(modifier = Modifier.padding(vertical = 4.dp))
-
-            classes.forEach { classEntity ->
-                val classWorks = allWorks.filter { it.classId == classEntity.classId }
-                val classStudents = students.filter { it.classId == classEntity.classId }
-                val isClassExpanded = expandedClassIds.contains(classEntity.classId)
-
-                // 班级节点 (depth = 0)
-                DropdownMenuItem(
-                    text = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color(0xFFF57C00))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "${classEntity.grade} ${classEntity.className} (${classWorks.size}件)",
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
-                            }
-                            if (classStudents.isNotEmpty()) {
-                                Icon(
-                                    imageVector = if (isClassExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = Color.Gray
-                                )
-                            }
-                        }
-                    },
-                    onClick = {
-                        if (classStudents.isNotEmpty()) {
-                            expandedClassIds = if (isClassExpanded) {
-                                expandedClassIds - classEntity.classId
-                            } else {
-                                expandedClassIds + classEntity.classId
-                            }
-                        }
-                        onSelectFilter(classEntity.classId, null)
-                    }
-                )
-
-                // 学生节点 (depth = 1, 利用 20.dp padding 实现伪树视觉缩进)
-                AnimatedVisibility(visible = isClassExpanded) {
-                    Column {
-                        classStudents.forEach { student ->
-                            val studentWorksCount = classWorks.count { it.studentId == student.studentId }
-                            DropdownMenuItem(
-                                text = {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        modifier = Modifier.padding(start = 20.dp)
-                                    ) {
-                                        Icon(Icons.Default.Person, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF7C4DFF))
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text("${student.name} (${studentWorksCount}件)", fontSize = 11.sp, color = Color.DarkGray)
-                                    }
-                                },
-                                onClick = {
-                                    onSelectFilter(classEntity.classId, student.studentId)
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
