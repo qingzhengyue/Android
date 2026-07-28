@@ -141,59 +141,94 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
             }
         }
 
+        // 顶部全局班级筛选器 (吸顶作为列表内容的前置条件，采用低饱和度柔和胶囊 Chip 风格)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 12.dp)
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // "全部班级" Chip
+            val isAllSelected = selectedClassId == null
+            Surface(
+                onClick = { selectedClassId = null },
+                shape = CircleShape,
+                color = if (isAllSelected) Color(0xFFE3F2FD) else Color(0xFFF1F5F9),
+                border = BorderStroke(
+                    1.dp,
+                    if (isAllSelected) Color(0xFF90CAF9) else Color(0xFFE2E8F0)
+                )
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Inbox,
+                        contentDescription = null,
+                        modifier = Modifier.size(14.dp),
+                        tint = if (isAllSelected) Color(0xFF1565C0) else Color(0xFF64748B)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "全部班级 (${allWorks.size})",
+                        fontSize = 12.sp,
+                        fontWeight = if (isAllSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isAllSelected) Color(0xFF1565C0) else Color(0xFF475569)
+                    )
+                }
+            }
+
+            // 各班级 Chips
+            classes.forEach { classEntity ->
+                val isSelected = selectedClassId == classEntity.classId
+                val classWorkCount = allWorks.count { it.classId == classEntity.classId }
+                Surface(
+                    onClick = { selectedClassId = classEntity.classId },
+                    shape = CircleShape,
+                    color = if (isSelected) Color(0xFFE3F2FD) else Color(0xFFF1F5F9),
+                    border = BorderStroke(
+                        1.dp,
+                        if (isSelected) Color(0xFF90CAF9) else Color(0xFFE2E8F0)
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.School,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = if (isSelected) Color(0xFF1565C0) else Color(0xFF64748B)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "${classEntity.grade} ${classEntity.className} (${classWorkCount})",
+                            fontSize = 12.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) Color(0xFF1565C0) else Color(0xFF475569)
+                        )
+                    }
+                }
+            }
+        }
+
+        // 下方列表标题
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(bottom = 8.dp)
         ) {
             Icon(Icons.Default.People, contentDescription = null, tint = Color(0xFF1E88E5))
             Spacer(modifier = Modifier.width(6.dp))
-            Text("孩子们最新提交的 Scratch 作品：", fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            
-            // 班级筛选下拉框
-            Box(modifier = Modifier.padding(start = 12.dp)) {
-                OutlinedButton(
-                    onClick = { classDropdownExpanded = true },
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1E88E5)),
-                    border = BorderStroke(1.dp, Color(0xFF1E88E5)),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Icon(Icons.Default.FilterList, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(selectedClassName, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, modifier = Modifier.size(16.dp))
-                }
-                DropdownMenu(
-                    expanded = classDropdownExpanded,
-                    onDismissRequest = { classDropdownExpanded = false }
-                ) {
-                    // 全部班级选项
-                    DropdownMenuItem(
-                        text = { Text("📋 全部班级 (${allWorks.size}件作品)", fontSize = 13.sp) },
-                        onClick = {
-                            selectedClassId = null
-                            classDropdownExpanded = false
-                        }
-                    )
-                    Divider()
-                    // 各班级选项
-                    classes.forEach { classEntity ->
-                        val classWorkCount = allWorks.count { it.classId == classEntity.classId }
-                        DropdownMenuItem(
-                            text = { 
-                                Text(
-                                    "${classEntity.grade} ${classEntity.className} (${classWorkCount}件)", 
-                                    fontSize = 13.sp 
-                                ) 
-                            },
-                            onClick = {
-                                selectedClassId = classEntity.classId
-                                classDropdownExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
+            Text(
+                text = "孩子们最新提交的 Scratch 作品：",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color(0xFF1F2937)
+            )
         }
 
         if (filteredWorks.isEmpty()) {
