@@ -362,6 +362,24 @@ data class WorkLikeEntity(
     val createTime: Long = System.currentTimeMillis()
 )
 
+// 12. 作品收藏记录 (UserStarredProjects)
+@Serializable
+@Entity(
+    tableName = "user_starred_projects",
+    primaryKeys = ["workId", "studentId"]
+)
+data class UserStarredProjects(
+    @ColumnInfo(name = "workId")
+    @SerialName("work_id")
+    val workId: Int,
+    @ColumnInfo(name = "studentId")
+    @SerialName("student_id")
+    val studentId: String,
+    @ColumnInfo(name = "createTime")
+    @SerialName("create_time")
+    val createTime: Long = System.currentTimeMillis()
+)
+
 @Dao
 interface AppDao {
     // --- 教师操作 ---
@@ -582,6 +600,22 @@ interface AppDao {
     @Query("DELETE FROM work_likes WHERE workId = :workId AND studentId = :studentId")
     suspend fun deleteLike(workId: Int, studentId: String)
 
+    // --- 收藏记录操作 (Starred Projects DAO) ---
+    @Query("SELECT COUNT(*) FROM user_starred_projects WHERE workId = :workId AND studentId = :studentId")
+    suspend fun checkIsStarred(workId: Int, studentId: String): Int
+
+    @Query("SELECT workId FROM user_starred_projects WHERE studentId = :studentId")
+    fun getStarredWorkIdsFlow(studentId: String): Flow<List<Int>>
+
+    @Query("SELECT scratch_work.* FROM scratch_work INNER JOIN user_starred_projects ON scratch_work.workId = user_starred_projects.workId WHERE user_starred_projects.studentId = :studentId ORDER BY user_starred_projects.createTime DESC")
+    fun getStarredWorksFlow(studentId: String): Flow<List<ScratchWork>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertStarredProject(starred: UserStarredProjects)
+
+    @Query("DELETE FROM user_starred_projects WHERE workId = :workId AND studentId = :studentId")
+    suspend fun deleteStarredProject(workId: Int, studentId: String)
+
     @Query("UPDATE scratch_work SET likesCount = likesCount + :delta WHERE workId = :workId")
     suspend fun updateWorkLikeCount(workId: Int, delta: Int)
 
@@ -626,6 +660,21 @@ interface AppDao {
     fun getWorkWithReportFlow(studentId: Int, taskId: Int): Flow<WorkWithReport?>
 }
 
+@Dao
+interface PromptDao {
+    @Query("SELECT * FROM cloud_prompts WHERE classId = :classId AND isDeleted = 0 ORDER BY updatedAt DESC")
+    fun getActiveCloudPrompts(classId: String): Flow<List<PromptEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdatePrompts(prompts: List<PromptEntity>)
+
+    @Query("SELECT * FROM cloud_prompts")
+    fun getAllCloudPrompts(): Flow<List<PromptEntity>>
+    
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(prompts: List<PromptEntity>)
+}
+
 @Database(
     entities = [
         Teacher::class,
@@ -638,13 +687,16 @@ interface AppDao {
         ScratchWork::class,
         WorkComment::class,
         WorkAiReport::class,
-        WorkLikeEntity::class
+        WorkLikeEntity::class,
+        UserStarredProjects::class,
+        PromptEntity::class
     ],
-    version = 6, // 升级到版本6，添加作品点赞关联表 work_likes
+    version = 8, // 升级到版本8，添加云端提示词表 cloud_prompts
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract val appDao: AppDao
+    abstract val promptDao: PromptDao
 
     companion object {
         @Volatile
