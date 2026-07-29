@@ -1365,9 +1365,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
     val js = """
         (function() {
             try {
-                // ★ 【终极修复1：废弃全局死锁，采用 Job ID 机制】
-                // 每次载入都生成一个全新的任务编号。旧的定时器如果发现编号变了，会自动静默自杀。
-                // 彻底解决之前因为“死锁”导致“普通源永远无法再次载入”的致命 Bug！
+                // 1. 任务 ID 防治并发与重入重载
                 window.__scratch_job_id = (window.__scratch_job_id || 0) + 1;
                 var currentJobId = window.__scratch_job_id;
 
@@ -1391,25 +1389,14 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     try { buffer = base64ToArrayBuffer(base64Data); } catch(e) {}
                 }
 
-                // ==========================================
-                // 🚀 轨道一：TurboWarp 极速专属通道 (第三源完美保留)
-                // ==========================================
-                if (window.loadProject && typeof window.loadProject === 'function' && buffer) {
-                    window.loadProject(buffer);
-                    console.log("Success: TurboWarp Fast Path executed instantly.");
-                    return "TurboWarp Path";
-                }
-
-                // ==========================================
-                // 🐢 轨道二：标准 Scratch 3.0 终极 React 欺骗通道
-                // ==========================================
                 var attempts = 0;
-                var maxAttempts = 100; // 50秒弹性轮询
-                var readyCount = 0; // 空闲稳定器
+                var maxAttempts = 120; // 60秒最大轮询
+                var readyCount = 0;
 
                 function getVm() {
                     if (window.vm) return window.vm;
                     if (window.scratch && window.scratch.vm) return window.scratch.vm;
+                    // 兼容某些套壳 iframe
                     var frames = document.querySelectorAll('iframe');
                     for (var i = 0; i < frames.length; i++) {
                         try { if (frames[i].contentWindow && frames[i].contentWindow.vm) return frames[i].contentWindow.vm; } catch(e) {}
@@ -1418,22 +1405,36 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 }
 
                 function tryInject() {
-                    // 如果任务编号已经更新，说明有了新的载入请求，旧探针立刻自毁
+                    // 如果有新的加载任务进入，立刻静默终止当前老任务
                     if (window.__scratch_job_id !== currentJobId) return true; 
                     attempts++;
-                    
+
+                    // ==========================================
+                    // 🚀 轨道一：TurboWarp 极速通道 (★ 必须放在循环内！)
+                    // ==========================================
+                    if (window.loadProject && typeof window.loadProject === 'function') {
+                        // TurboWarp 专属 API 直接加载
+                        window.loadProject(buffer ? buffer : JSON.parse(rawData));
+                        console.log("Success: Injected via TurboWarp API.");
+                        return true; 
+                    }
+
+                    // ==========================================
+                    // 🐢 轨道二：标准 Scratch 底层 VM 强插通道
+                    // ==========================================
                     var targetVm = getVm();
                     
-                    // 1. 基础就绪检测：必须等默认的小猫出现
+                    // 状态检测1：VM 必须初始化完成，且自带的默认小猫必须出现
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         readyCount = 0; return false; 
                     }
+                    
                     var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
                     if (!blocklyReady) {
                         readyCount = 0; return false;
                     }
 
-                    // 2. 加载遮罩检测：确保网络彻底空闲
+                    // 状态检测2：网页加载遮罩必须彻底消失
                     var loaderVisible = false;
                     var loaders = document.querySelectorAll('[class*="loader_fullscreen"], [class*="loader_background"]');
                     for (var i = 0; i < loaders.length; i++) {
@@ -1445,77 +1446,58 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         readyCount = 0; return false;
                     }
 
-                    // 3. 空闲稳定器倒计时：确保 React 彻底完成初始化
+                    // 状态检测3：空闲稳定器。等小猫落地后，强行再等 4 个周期(约 2 秒)
+                    // 这是彻底解决普通版 Scratch“加载冲突被原版反向覆盖”导致白屏的唯一物理防线！
                     readyCount++;
-                    if (readyCount < 3) {
+                    if (readyCount < 4) {
+                        console.log("Waiting for Standard Scratch to settle... (" + readyCount + "/4)");
                         return false; 
                     }
 
-                    console.log("Standard Scratch IDLE. Executing perfect React hack.");
+                    console.log("Standard Scratch Target IDLE. Executing VM load.");
 
                     try {
-                        // ★ 【终极修复2：完美触发 React 官方原生文件上传逻辑】
-                        // 我们直接找出官方隐藏的 <input type="file">，把我们的 sb3 文件强行塞给它！
-                        // 这样 React 就会乖乖走官方流程，完美加载我们的学生作品，不留任何白屏残影！
-                        var fileInputs = document.querySelectorAll('input[type="file"]');
-                        if (buffer && fileInputs.length > 0) {
-                            var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
-                            var dt = new DataTransfer();
-                            dt.items.add(file);
-                            
-                            var success = false;
-                            for (var i = 0; i < fileInputs.length; i++) {
-                                var input = fileInputs[i];
-                                // 安全绕过 React 属性只读限制的双重打法
-                                try { input.files = dt.files; } catch(e) {}
-                                try {
-                                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "files").set;
-                                    if (nativeSetter) nativeSetter.call(input, dt.files);
-                                } catch(e) {}
-                                
-                                // 抛出 change 事件，呼叫 React 处理
-                                input.dispatchEvent(new Event('change', { bubbles: true }));
-                                success = true;
-                            }
-                            if (success) {
-                                console.log("Injected via Native React Input bypass.");
-                                return true; 
-                            }
-                        }
-
-                        // 兜底方案：如果真有极限精简版连 input 都删了，才回退到 VM 强插模式
+                        // 抛弃所有不稳定的 UI 模拟点击，回归最本源的 VM 数据灌注
                         var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
+                        
                         loadPromise.then(function() {
                             setTimeout(function() {
                                 if (window.__scratch_job_id !== currentJobId) return;
+                                
+                                // 发送渲染更新信号
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
                                 
+                                // 闪电切换角色：强制 React 抛弃旧状态，渲染最新注入的积木
                                 var targets = targetVm.runtime.targets;
                                 if (targets && targets.length > 0 && targetVm.setEditingTarget) {
                                     var stage = targets.find(function(t) { return t.isStage; });
                                     var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
+                                    
                                     if (stage) targetVm.setEditingTarget(stage.id);
                                     setTimeout(function() {
                                         if (window.__scratch_job_id !== currentJobId) return;
                                         targetVm.setEditingTarget(sprite.id);
                                         window.dispatchEvent(new Event('resize'));
+                                        console.log("Standard Scratch injection fully completed!");
                                     }, 50);
                                 } else {
                                     window.dispatchEvent(new Event('resize'));
                                 }
                             }, 100);
-                        }).catch(function(e) {});
+                        }).catch(function(e) { 
+                            console.error("VM load error:", e); 
+                        });
                         
                         return true;
                     } catch(e) {
                         console.error("Injection error:", e);
-                        readyCount = 0;
+                        readyCount = 0; // 发生异常则复位稳定器重试
                         return false;
                     }
                 }
 
-                // 启动轮询探针
+                // 启动 500ms 间隔的隐形探针
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts || window.__scratch_job_id !== currentJobId) {
@@ -1523,9 +1505,9 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         }
                     }, 500);
                 }
-                return "Started universal React-Bypass Job ID: " + currentJobId;
+                return "Polling Started for Job: " + currentJobId;
             } catch(e) {
-                return "Error: " + e.message;
+                return "Fatal Error: " + e.message;
             }
         })();
     """.trimIndent()
