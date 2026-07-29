@@ -86,7 +86,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var showSubmitDialog by remember { mutableStateOf(false) }
     var submitWorkName by remember { mutableStateOf("") }
     
-    // Draggable and foldable floating console state
     var isExpanded by remember { mutableStateOf(false) }
     var selectedTab by remember { mutableStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
@@ -98,14 +97,12 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var hasInitializedPosition by remember { mutableStateOf(false) }
 
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
-    // 【终极重构：增强型 Bridge 接口】
     var projectLoaderInterface by remember { mutableStateOf<ScratchProjectLoaderInterface?>(null) }
-    
     val pendingTeacherSb3Path by viewModel.teacherPendingSb3Path.collectAsState()
     val realTimeCheckEnabled by viewModel.realTimeStateEnabled.collectAsState()
     var scratchChangeCounter by remember { mutableStateOf(0) }
 
-    // Task 5: 2秒防抖离线自动保存与断点续传
+    // Task 5: 2秒防抖离线自动保存
     LaunchedEffect(draftCode, draftName) {
         if (draftCode.isNotBlank() && draftCode != "{}") {
             delay(2000L)
@@ -114,14 +111,11 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     }
 
     fun getLiveCodeAndCall(funcType: String, param: String = "") {
-        android.util.Log.d("GetLiveCode", "[START] getLiveCodeAndCall 被调用: funcType=$funcType, webViewInstance=${webViewInstance != null}")
-        if (viewModel.aiLoading.value) {
-            return
-        }
+        android.util.Log.d("GetLiveCode", "[START] getLiveCodeAndCall 被调用")
+        if (viewModel.aiLoading.value) return
         val webView = webViewInstance
         if (webView != null) {
             val callbackFired = java.util.concurrent.atomic.AtomicBoolean(false)
-            
             coroutineScope.launch {
                 kotlinx.coroutines.delay(5000L)
                 if (!callbackFired.getAndSet(true)) {
@@ -204,52 +198,57 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
     val workspaceLoadEvent by viewModel.workspaceLoadEvent.collectAsState()
 
-    // 统一计算核心代码，防止无限死循环
-    val activeProjectCode: String = remember(pendingTeacherSb3Path, workspaceLoadEvent, draftCode) {
-        var code = ""
-        if (!pendingTeacherSb3Path.isNullOrBlank()) {
-            try {
-                val file = java.io.File(pendingTeacherSb3Path!!)
-                if (file.exists()) {
-                    code = file.readText(Charsets.UTF_8)
-                }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
-        }
-        if (code.isBlank() && !workspaceLoadEvent.isNullOrBlank()) {
-            code = workspaceLoadEvent!!
-        }
-        if (code.isBlank()) {
-            code = draftCode
-        }
-        code
-    }
+    // ★ 【完美修复】处理复杂作品载入流程：如果是真实的 sb3 文件，绝不当作 UTF-8 读取
+    fun handleCodeInjection(codeOrPath: String, isFilePath: Boolean = false) {
+        val webView = webViewInstance ?: return
+        var finalJson = "{}"
+        var finalBase64 = ""
 
-    // ★ 关键重构：将生成 Sb3 放到 Android 协程安全区，直接赋给接口内存，彻底绕开 JS 字符串拦截！
-    LaunchedEffect(activeProjectCode, projectLoaderInterface, webViewInstance) {
-        if (activeProjectCode.isNotBlank()) {
-            viewModel.currentDraftCode.value = activeProjectCode
-            val sb3Base64 = try {
-                com.example.data.Sb3Generator.createSb3Base64(activeProjectCode)
-            } catch (e: Exception) { "" }
-            
-            projectLoaderInterface?.setProjectData(activeProjectCode, sb3Base64)
-            val webView = webViewInstance
-            if (webView != null) {
+        try {
+            if (isFilePath) {
+                // 1. 如果是文件路径（如教师下发的作品），这是二进制 ZIP 包，必须读取为 Bytes
+                val file = java.io.File(codeOrPath)
+                if (file.exists()) {
+                    val bytes = file.readBytes()
+                    finalBase64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+                    viewModel.currentDraftCode.value = finalBase64
+                }
+            } else {
+                // 2. 如果是代码文本，判断它是 JSON 还是已编码的 Base64 压缩包
+                if (codeOrPath.trim().startsWith("{")) {
+                    finalJson = codeOrPath
+                    finalBase64 = try { com.example.data.Sb3Generator.createSb3Base64(codeOrPath) } catch (e: Exception) { "" }
+                } else {
+                    finalBase64 = codeOrPath
+                }
+                viewModel.currentDraftCode.value = codeOrPath
+            }
+
+            if (finalJson.isNotBlank() || finalBase64.isNotBlank()) {
+                projectLoaderInterface?.setProjectData(finalJson, finalBase64)
                 loadProjectIntoWebView(webView)
             }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // 教师下发或特定任务载入时，单次触发
+    LaunchedEffect(pendingTeacherSb3Path) {
+        if (!pendingTeacherSb3Path.isNullOrBlank()) {
+            handleCodeInjection(pendingTeacherSb3Path!!, isFilePath = true)
+        }
+    }
+
+    // 内部事件要求载入时，单次触发
+    LaunchedEffect(workspaceLoadEvent) {
+        if (!workspaceLoadEvent.isNullOrBlank()) {
+            handleCodeInjection(workspaceLoadEvent!!, isFilePath = false)
         }
     }
 
     var showMagicBoxDrawer by remember { mutableStateOf(false) }
     var localInputName by remember { mutableStateOf(draftName) }
-
-    val coerceInSafe = remember {
-        { value: Float, min: Float, max: Float ->
-            if (max < min) min else value.coerceIn(min, max)
-        }
-    }
 
     LaunchedEffect(Unit) {
         android.widget.Toast.makeText(context, "双指捏合可缩放画布 🔍", android.widget.Toast.LENGTH_LONG).show()
@@ -334,8 +333,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                modifier = Modifier
-                    .weight(1f),
+                modifier = Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
@@ -462,15 +460,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             },
                             onClick = {
                                 showMoreTopMenu = false
-                                val webView = webViewInstance
-                                val codeToLoad = draftCode 
-                                if (webView != null && codeToLoad.isNotBlank()) {
-                                    val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(codeToLoad) } catch (e: Exception) { "" }
-                                    projectLoaderInterface?.setProjectData(codeToLoad, sb3)
-                                    loadProjectIntoWebView(webView)
+                                if (webViewInstance != null) {
+                                    handleCodeInjection(draftCode, false)
                                     android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
-                                } else {
-                                    android.widget.Toast.makeText(context, "当前工作区暂无可载入的代码", android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             }
                         )
@@ -562,11 +554,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             super.onPageFinished(view, url)
                             isPageLoading = false
                             
-                            val codeToLoad = activeProjectCode
-                            if (codeToLoad.isNotBlank()) {
-                                val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(codeToLoad) } catch(e:Exception){""}
-                                projectLoaderInterface?.setProjectData(codeToLoad, sb3)
-                                loadProjectIntoWebView(view)
+                            // 页面刚加载好，推一次草稿代码
+                            if (draftCode.isNotBlank()) {
+                                handleCodeInjection(draftCode, false)
                             }
                             
                             if (url != null && !url.startsWith("file:///")) {
@@ -726,8 +716,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         false
                     }
                     
-                    // 【修复】保存 JavascriptInterface 实例引用，包含强壮的 Base64 桥接功能！
-                    val loaderInterface = ScratchProjectLoaderInterface(draftCode)
+                    val loaderInterface = ScratchProjectLoaderInterface()
                     projectLoaderInterface = loaderInterface
                     addJavascriptInterface(ScratchJsInterface {
                         scratchChangeCounter++
@@ -1021,11 +1010,8 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             Card(
                                 onClick = {
                                     viewModel.loadDraftToWorkspace(draft)
-                                    val webView = webViewInstance
-                                    if (webView != null && draft.blockCode.isNotBlank()) {
-                                        val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(draft.blockCode) } catch(e:Exception){""}
-                                        projectLoaderInterface?.setProjectData(draft.blockCode, sb3)
-                                        loadProjectIntoWebView(webView)
+                                    if (webViewInstance != null && draft.blockCode.isNotBlank()) {
+                                        handleCodeInjection(draft.blockCode, false)
                                     }
                                     showLoadDraftDialog = false
                                     Toast.makeText(context, "成功恢复草稿进度：${draft.draftName}", Toast.LENGTH_SHORT).show()
@@ -1080,11 +1066,8 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             Card(
                                 onClick = {
                                     viewModel.loadWorkToWorkspace(work)
-                                    val webView = webViewInstance
-                                    if (webView != null && work.workCode.isNotBlank()) {
-                                        val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(work.workCode) } catch(e:Exception){""}
-                                        projectLoaderInterface?.setProjectData(work.workCode, sb3)
-                                        loadProjectIntoWebView(webView)
+                                    if (webViewInstance != null && work.workCode.isNotBlank()) {
+                                        handleCodeInjection(work.workCode, false)
                                     }
                                     showLoadWorkDialog = false
                                     Toast.makeText(context, "成功恢复已提交作品：${work.workName}", Toast.LENGTH_SHORT).show()
@@ -1160,15 +1143,21 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
         blockText.contains("询问") -> "sensing_askandwait"
         
         blockText.contains("+") -> "operator_add"
-        blockText.contains(">") -> "operator_gt"
-        blockText.contains("<") -> "operator_lt"
-        blockText.contains("随机数") -> "operator_random"
-        blockText.contains("连接") -> "operator_join"
+        blockText.contains("-") -> "operator_subtract\"></block>"
+        blockText.contains("随机数") -> "operator_random\"><value name=\"FROM\"><shadow type=\"math_number\"><field name=\"FROM\">1</field></shadow></value><value name=\"TO\"><shadow type=\"math_number\"><field name=\"TO\">10</field></shadow></value></block>"
+        blockText.contains(">") -> "operator_gt\"></block>"
+        blockText.contains("=") -> "operator_equals\"></block>"
+        blockText.contains("与") -> "operator_and\"></block>"
+        blockText.contains("或") -> "operator_or\"></block>"
+        blockText.contains("连接") -> "operator_join\"></block>"
+
+        blockText.contains("建立一个变量") -> "data_variable\"></block>"
+        blockText.contains("设为") -> "data_setvariableto\"></block>"
+        blockText.contains("增加") -> "data_changevariableby\"></block>"
+        blockText.contains("显示变量") -> "data_showvariable\"></block>"
+        blockText.contains("隐藏变量") -> "data_hidevariable\"></block>"
         
-        blockText.contains("设为0") || blockText.contains("设为") -> "data_setvariableto"
-        blockText.contains("增加") || blockText.contains("增加1") -> "data_changevariableby"
-        
-        else -> "motion_movesteps"
+        else -> "motion_movesteps\"><value name=\"STEPS\"><shadow type=\"math_number\"><field name=\"NUM\">10</field></shadow></value></block>"
     }
 
     val js = """
@@ -1284,7 +1273,6 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
     }
 }
 
-// 【终极重构：不再向 JS 拼接超长参数，改为无参数调用，让 JS 从原生接口拉取】
 fun loadProjectIntoWebView(webView: WebView?) {
     if (webView == null) return
 
@@ -1294,29 +1282,28 @@ fun loadProjectIntoWebView(webView: WebView?) {
                 window.__scratch_job_id = (window.__scratch_job_id || 0) + 1;
                 var currentJobId = window.__scratch_job_id;
 
-                // ★ 从原生接口安全拉取超长数据，避开 WebView 截断 Bug ★
                 var rawData = window.AndroidProjectLoader ? window.AndroidProjectLoader.getProjectJson() : null;
                 var base64Data = window.AndroidProjectLoader ? window.AndroidProjectLoader.getProjectBase64() : null;
                 
                 if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
                 
-                function base64ToArrayBuffer(b64) {
+                function base64ToUint8Array(b64) {
                     var binaryString = window.atob(b64);
                     var len = binaryString.length;
                     var bytes = new Uint8Array(len);
                     for (var i = 0; i < len; i++) {
                         bytes[i] = binaryString.charCodeAt(i);
                     }
-                    return bytes.buffer;
+                    return bytes;
                 }
 
-                var buffer = null;
+                var uint8Array = null;
                 if (base64Data && base64Data.length > 0) {
-                    try { buffer = base64ToArrayBuffer(base64Data); } catch(e) {}
+                    try { uint8Array = base64ToUint8Array(base64Data); } catch(e) {}
                 }
 
                 var attempts = 0;
-                var maxAttempts = 120; // 最大轮询 60 秒
+                var maxAttempts = 120; // 60秒最大轮询
                 var readyCount = 0;
 
                 function getVm() {
@@ -1328,7 +1315,6 @@ fun loadProjectIntoWebView(webView: WebView?) {
                         try { if (frames[i].contentWindow && frames[i].contentWindow.vm) return frames[i].contentWindow.vm; } catch(e) {}
                     }
                     
-                    // ★ 终极 React Fiber 深入搜索，就算被官网藏起来也能扒出来 ★
                     try {
                         var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]') || document.querySelector('[class*="gui_page-wrapper_"]');
                         if (el) {
@@ -1352,23 +1338,34 @@ fun loadProjectIntoWebView(webView: WebView?) {
                     if (window.__scratch_job_id !== currentJobId) return true; 
                     attempts++;
 
-                    // 1. 🚀 TurboWarp 专属通道
+                    // 1. 🚀 TurboWarp
                     if (window.loadProject && typeof window.loadProject === 'function') {
-                        var twData = buffer ? buffer : JSON.parse(rawData);
+                        var twData = uint8Array ? uint8Array.buffer : JSON.parse(rawData);
                         window.loadProject(twData);
                         console.log("Success: Injected via TurboWarp API.");
                         return true; 
                     }
 
-                    // 2. 🐢 标准版底层直接强插通道
+                    // 2. 🐢 标准版底层强插通道
                     var targetVm = getVm();
                     
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         readyCount = 0; return false; 
                     }
                     
-                    var loaders = document.querySelectorAll('[class*="loader_fullscreen"], [class*="loader_background"]');
+                    var bly = window.Blockly;
+                    if (!bly) {
+                        var frames = document.querySelectorAll('iframe');
+                        for(var f=0; f<frames.length; f++){
+                            if(frames[f].contentWindow && frames[f].contentWindow.Blockly) { bly = frames[f].contentWindow.Blockly; break; }
+                        }
+                    }
+                    if (!bly || !bly.getMainWorkspace || !bly.getMainWorkspace()) {
+                        readyCount = 0; return false;
+                    }
+
                     var loaderVisible = false;
+                    var loaders = document.querySelectorAll('[class*="loader_fullscreen"], [class*="loader_background"]');
                     for (var i = 0; i < loaders.length; i++) {
                         if (window.getComputedStyle(loaders[i]).display !== 'none') {
                             loaderVisible = true; break;
@@ -1378,49 +1375,73 @@ fun loadProjectIntoWebView(webView: WebView?) {
                         readyCount = 0; return false;
                     }
 
-                    // 稳定期等待，防止官方网络延迟加载导致覆盖
                     readyCount++;
-                    if (readyCount < 4) {
-                        console.log("Waiting for React UI to settle... (" + readyCount + "/4)");
-                        return false; 
-                    }
-
-                    console.log("Target VM locked. Executing safe payload.");
+                    if (readyCount < 6) return false;
 
                     try {
-                        var dataToLoad = buffer ? buffer : JSON.parse(rawData);
-                        var loadPromise = targetVm.loadProject(dataToLoad);
-                        
+                        // ★ 核心修复3：动态生成防重复的文件名！
+                        // 真实的场景中你会不断切换不同的 .sb3 项目。如果每次传给 React 的文件名都一样，
+                        // 浏览器会认为你传了同一个文件，直接屏蔽 onChange 事件！
+                        var dynamicFileName = "project_" + Date.now() + ".sb3";
+                        var fileInputs = document.querySelectorAll('input[type="file"]');
+                        var reactInjected = false;
+
+                        if (uint8Array && fileInputs.length > 0) {
+                            var file = new File([uint8Array.buffer], dynamicFileName, { type: "application/x.scratch.sb3" });
+                            var dt = new DataTransfer();
+                            dt.items.add(file);
+                            
+                            for (var i = 0; i < fileInputs.length; i++) {
+                                var input = fileInputs[i];
+                                var keys = Object.keys(input);
+                                var reactKey = keys.find(function(k) { return k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'); });
+                                
+                                if (reactKey && input[reactKey] && input[reactKey].onChange) {
+                                    input.value = ''; // 必须清空历史记录，确保触发 onChange
+                                    input.files = dt.files;
+                                    input[reactKey].onChange({
+                                        target: input,
+                                        currentTarget: input,
+                                        preventDefault: function() {},
+                                        stopPropagation: function() {}
+                                    });
+                                    reactInjected = true;
+                                }
+                            }
+                        }
+
+                        if (reactInjected) {
+                            console.log("Injected securely via React File Input bypass!");
+                            return true;
+                        }
+
+                        // 如果 React 输入框被阉割，走 VM 强刷兜底
+                        var loadPromise = uint8Array ? targetVm.loadProject(uint8Array.buffer) : targetVm.loadProject(JSON.parse(rawData));
                         loadPromise.then(function() {
                             setTimeout(function() {
                                 if (window.__scratch_job_id !== currentJobId) return;
-                                
+                                try { if (bly && bly.getMainWorkspace()) bly.getMainWorkspace().clear(); } catch(err){}
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
-                                
                                 var targets = targetVm.runtime.targets;
                                 if (targets && targets.length > 0 && targetVm.setEditingTarget) {
                                     var stage = targets.find(function(t) { return t.isStage; });
                                     var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
-                                    
                                     if (stage) targetVm.setEditingTarget(stage.id);
-                                    
                                     setTimeout(function() {
                                         if (window.__scratch_job_id !== currentJobId) return;
                                         if (sprite) targetVm.setEditingTarget(sprite.id);
                                         window.dispatchEvent(new Event('resize'));
-                                        console.log("Standard Scratch load complete!");
-                                    }, 50);
+                                    }, 80);
                                 } else {
                                     window.dispatchEvent(new Event('resize'));
                                 }
                             }, 150);
-                        }).catch(function(e) { console.error("VM load error:", e); });
+                        }).catch(function(e) {});
                         
                         return true;
                     } catch(e) {
-                        console.error("Injection error:", e);
-                        readyCount = 0;
+                        readyCount = 0; 
                         return false;
                     }
                 }
@@ -1432,87 +1453,14 @@ fun loadProjectIntoWebView(webView: WebView?) {
                         }
                     }, 500);
                 }
-                return "Started deep-search injection for Job ID: " + currentJobId;
+                return "Polling Started for Job: " + currentJobId;
             } catch(e) {
-                return "Fatal JS Error: " + e.message;
+                return "Fatal Error: " + e.message;
             }
         })();
     """.trimIndent()
-    webView.evaluateJavascript(js) { res ->
-        android.util.Log.d("ScratchLoadProject", "loadProject result: $res")
-    }
+    webView.evaluateJavascript(js, null)
 }
-
-fun getXmlForBlockText(blockText: String): String {
-    return when {
-        blockText.contains("移动") -> "<block type=\"motion_movesteps\"><value name=\"STEPS\"><shadow type=\"math_number\"><field name=\"NUM\">10</field></shadow></value></block>"
-        blockText.contains("右转") -> "<block type=\"motion_turnright\"><value name=\"DEGREES\"><shadow type=\"math_number\"><field name=\"NUM\">15</field></shadow></value></block>"
-        blockText.contains("左转") -> "<block type=\"motion_turnleft\"><value name=\"DEGREES\"><shadow type=\"math_number\"><field name=\"NUM\">15</field></shadow></value></block>"
-        blockText.contains("随机位置") && blockText.contains("移到") -> "<block type=\"motion_goto_menu\"></block>"
-        blockText.contains("x:") && blockText.contains("y:") -> "<block type=\"motion_gotoxy\"><value name=\"X\"><shadow type=\"math_number\"><field name=\"NUM\">0</field></shadow></value><value name=\"Y\"><shadow type=\"math_number\"><field name=\"NUM\">0</field></shadow></value></block>"
-        blockText.contains("滑行") -> "<block type=\"motion_glideto\"><value name=\"SECS\"><shadow type=\"math_number\"><field name=\"NUM\">1</field></shadow></value></block>"
-        blockText.contains("面向") -> "<block type=\"motion_pointindirection\"><value name=\"DIRECTION\"><shadow type=\"math_angle\"><field name=\"NUM\">90</field></shadow></value></block>"
-        blockText.contains("反弹") -> "<block type=\"motion_ifonedgebounce\"></block>"
-        
-        blockText.contains("说") -> "<block type=\"looks_sayforsecs\"><value name=\"MESSAGE\"><shadow type=\"text\"><field name=\"TEXT\">你好！</field></shadow></value><value name=\"SECS\"><shadow type=\"math_number\"><field name=\"NUM\">2</field></shadow></value></block>"
-        blockText.contains("思考") -> "<block type=\"looks_thinkforsecs\"><value name=\"MESSAGE\"><shadow type=\"text\"><field name=\"TEXT\">嗯...</field></shadow></value><value name=\"SECS\"><shadow type=\"math_number\"><field name=\"NUM\">2</field></shadow></value></block>"
-        blockText.contains("下一个造型") -> "<block type=\"looks_nextcostume\"></block>"
-        blockText.contains("造型") -> "<block type=\"looks_switchcostumeto\"></block>"
-        blockText.contains("背景") -> "<block type=\"looks_switchbackdropto\"></block>"
-        blockText.contains("增加大小") -> "<block type=\"looks_changesizeby\"><value name=\"SIZE\"><shadow type=\"math_number\"><field name=\"NUM\">10</field></shadow></value></block>"
-        blockText.contains("大小设为") -> "<block type=\"looks_setsizeto\"><value name=\"SIZE\"><shadow type=\"math_number\"><field name=\"NUM\">100</field></shadow></value></block>"
-        blockText.contains("显示") -> "<block type=\"looks_show\"></block>"
-        blockText.contains("隐藏") -> "<block type=\"looks_hide\"></block>"
-        
-        blockText.contains("等待播完") -> "<block type=\"sound_playuntildone\"><value name=\"SOUND_MENU\"><shadow type=\"sound_menu\"><field name=\"SOUND_MENU\">喵</field></shadow></value></block>"
-        blockText.contains("播放声音") -> "<block type=\"sound_play\"><value name=\"SOUND_MENU\"><shadow type=\"sound_menu\"><field name=\"SOUND_MENU\">喵</field></shadow></value></block>"
-        blockText.contains("所有声音") -> "<block type=\"sound_stopallloops\"></block>"
-        blockText.contains("音量增加") -> "<block type=\"sound_changevolumeby\"><value name=\"VOLUME\"><shadow type=\"math_number\"><field name=\"NUM\">-10</field></shadow></value></block>"
-        blockText.contains("音量设为") -> "<block type=\"sound_setvolumeto\"><value name=\"VOLUME\"><shadow type=\"math_number\"><field name=\"NUM\">100</field></shadow></value></block>"
-
-        blockText.contains("当 🟢 被点击") || blockText.contains("🟢") -> "<block type=\"event_whenflagclicked\"></block>"
-        blockText.contains("按下") -> "<block type=\"event_whenkeypressed\"><field name=\"KEY_OPTION\">space</field></block>"
-        blockText.contains("被点击") -> "<block type=\"event_whenthisspriteclicked\"></block>"
-        blockText.contains("背景换成") -> "<block type=\"event_whenbackdropswitchesto\"></block>"
-        blockText.contains("接收到广播") -> "<block type=\"event_whenbroadcastreceived\"></block>"
-        blockText.contains("广播") -> "<block type=\"event_broadcast\"></block>"
-
-        blockText.contains("等待") && blockText.contains("秒") -> "<block type=\"control_wait\"><value name=\"DURATION\"><shadow type=\"math_positive_number\"><field name=\"NUM\">1</field></shadow></value></block>"
-        blockText.contains("重复执行") && blockText.contains("次") -> "<block type=\"control_repeat\"><value name=\"TIMES\"><shadow type=\"math_whole_number\"><field name=\"NUM\">10</field></shadow></value></block>"
-        blockText.contains("重复执行") -> "<block type=\"control_forever\"></block>"
-        blockText.contains("如果") && blockText.contains("那么") && blockText.contains("否则") -> "<block type=\"control_if_else\"></block>"
-        blockText.contains("如果") && blockText.contains("那么") -> "<block type=\"control_if\"></block>"
-        blockText.contains("一直等待") -> "<block type=\"control_wait_until\"></block>"
-        blockText.contains("克隆") && blockText.contains("自己") -> "<block type=\"control_create_clone_of\"><value name=\"CLONE_OPTION\"><shadow type=\"control_create_clone_of_menu\"><field name=\"CLONE_OPTION\">_myself_</field></shadow></value></block>"
-        blockText.contains("作为克隆体") -> "<block type=\"control_start_as_clone\"></block>"
-
-        blockText.contains("碰到") && blockText.contains("?") -> "<block type=\"sensing_touchingobject\"><value name=\"TOUCHINGOBJECTMENU\"><shadow type=\"sensing_touchingobjectmenu\"><field name=\"TOUCHINGOBJECTMENU\">_mouse_</field></shadow></value></block>"
-        blockText.contains("碰到颜色") -> "<block type=\"sensing_touchingcolor\"></block>"
-        blockText.contains("询问") -> "<block type=\"sensing_askandwait\"></block>"
-        blockText.contains("键是否按下") -> "<block type=\"sensing_keypressed\"><field name=\"KEY_OPTION\">space</field></block>"
-        blockText.contains("鼠标的 x") -> "<block type=\"sensing_mousex\"></block>"
-        blockText.contains("鼠标的 y") -> "<block type=\"sensing_mousey\"></block>"
-        blockText.contains("计时器") -> "<block type=\"sensing_timer\"></block>"
-
-        blockText.contains("+") -> "<block type=\"operator_add\"></block>"
-        blockText.contains("-") -> "<block type=\"operator_subtract\"></block>"
-        blockText.contains("随机数") -> "<block type=\"operator_random\"><value name=\"FROM\"><shadow type=\"math_number\"><field name=\"FROM\">1</field></shadow></value><value name=\"TO\"><shadow type=\"math_number\"><field name=\"TO\">10</field></shadow></value></block>"
-        blockText.contains(">") -> "<block type=\"operator_gt\"></block>"
-        blockText.contains("=") -> "<block type=\"operator_equals\"></block>"
-        blockText.contains("与") -> "<block type=\"operator_and\"></block>"
-        blockText.contains("或") -> "<block type=\"operator_or\"></block>"
-        blockText.contains("连接") -> "<block type=\"operator_join\"></block>"
-
-        blockText.contains("建立一个变量") -> "<block type=\"data_variable\"></block>"
-        blockText.contains("设为") -> "<block type=\"data_setvariableto\"></block>"
-        blockText.contains("增加") -> "<block type=\"data_changevariableby\"></block>"
-        blockText.contains("显示变量") -> "<block type=\"data_showvariable\"></block>"
-        blockText.contains("隐藏变量") -> "<block type=\"data_hidevariable\"></block>"
-        
-        else -> "<block type=\"motion_movesteps\"><value name=\"STEPS\"><shadow type=\"math_number\"><field name=\"NUM\">10</field></shadow></value></block>"
-    }
-}
-
 
 class ScratchJsInterface(private val onChanged: () -> Unit) {
     @android.webkit.JavascriptInterface
@@ -1521,7 +1469,6 @@ class ScratchJsInterface(private val onChanged: () -> Unit) {
     }
 }
 
-// ★ 终极数据隔离桥梁：直接在 Android 内存里存好大文件，让 JS 来这里“进货”
 class ScratchProjectLoaderInterface(
     private var projectData: String = "", 
     private var base64Data: String = ""
