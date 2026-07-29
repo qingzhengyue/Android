@@ -1336,15 +1336,36 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
 
 fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.content.Context) {
     if (webView == null || pJson.isBlank()) return
+
+    // 1. 在 Android 侧将项目 JSON 动态生成包含 project.json 和完整矢量图素材的真实 .sb3 ZIP 压缩包 (Base64)
+    val sb3Base64 = try {
+        com.example.data.Sb3Generator.createSb3Base64(pJson)
+    } catch (e: Exception) {
+        ""
+    }
+
     val safeJsonLiteral = org.json.JSONObject.quote(pJson)
+    val safeBase64Literal = org.json.JSONObject.quote(sb3Base64)
+
     val js = """
         (function() {
             try {
                 var rawData = $safeJsonLiteral;
+                var base64Data = $safeBase64Literal;
                 if (!rawData || rawData.length === 0) return "Empty data";
                 
                 var attempts = 0;
                 var maxAttempts = 30; // 30 * 500ms = 15 秒轮询重试
+
+                function base64ToArrayBuffer(b64) {
+                    var binaryString = window.atob(b64);
+                    var len = binaryString.length;
+                    var bytes = new Uint8Array(len);
+                    for (var i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    return bytes.buffer;
+                }
 
                 function repairProjectJson(obj) {
                     if (!obj || typeof obj !== 'object') obj = {};
@@ -1461,6 +1482,27 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     var targetVm = findVm();
                     if (targetVm) {
                         try {
+                            // 优先通过阵列 Base64 (.sb3 ZIP 压缩包) 进行秒级无网络加载
+                            if (base64Data && base64Data.length > 0) {
+                                try {
+                                    var buffer = base64ToArrayBuffer(base64Data);
+                                    targetVm.loadProject(buffer).then(function() {
+                                        console.log("Project (.sb3 ZIP ArrayBuffer) loaded successfully into VM!");
+                                        if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
+                                        if (targetVm.runtime && targetVm.runtime.targets) targetVm.emit('targetsUpdate');
+                                        if (targetVm.runtime) targetVm.runtime.requestRedraw();
+                                    }).catch(function(errB64) {
+                                        console.warn("loadProject ArrayBuffer error, fallback to obj:", errB64);
+                                        var parsed = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
+                                        var obj = repairProjectJson(parsed);
+                                        targetVm.loadProject(obj);
+                                    });
+                                    return true;
+                                } catch(eBuffer) {
+                                    console.warn("Buffer creation failed, falling back to JSON:", eBuffer);
+                                }
+                            }
+
                             var parsed = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
                             var obj = repairProjectJson(parsed);
                             
@@ -1488,7 +1530,12 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     }
                     if (window.loadProject) {
                         try {
-                            window.loadProject(rawData);
+                            if (base64Data && base64Data.length > 0) {
+                                var buf = base64ToArrayBuffer(base64Data);
+                                window.loadProject(buf);
+                            } else {
+                                window.loadProject(rawData);
+                            }
                             console.log("Success via window.loadProject after " + attempts + " attempts");
                             return true;
                         } catch(e) { console.error("window.loadProject error:", e); }

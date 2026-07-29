@@ -55,14 +55,14 @@ class HomeworkStorageManager(private val context: Context) {
             return@withContext targetFile
         }
 
-        // 如果传入了文本代码/JSON内容直接写入本地文件作为离线缓存
+        // 如果传入了文本代码/JSON内容，直接通过 Sb3Generator 生成标准 .sb3 ZIP 压缩包缓存
         if (!workCodeContent.isNullOrBlank() && workCodeContent != "{}") {
             try {
-                targetFile.writeText(workCodeContent, Charsets.UTF_8)
-                Log.d("HomeworkStorage", "直接从本地JSON内容写入缓存文件: ${targetFile.absolutePath}")
+                Sb3Generator.writeSb3File(workCodeContent, targetFile)
+                Log.d("HomeworkStorage", "直接从本地JSON内容生成标准.sb3包: ${targetFile.absolutePath}")
                 return@withContext targetFile
             } catch (e: Exception) {
-                Log.e("HomeworkStorage", "写入本地文本失败: ${e.message}")
+                Log.e("HomeworkStorage", "写入本地.sb3文件失败: ${e.message}")
             }
         }
 
@@ -97,7 +97,11 @@ class HomeworkStorageManager(private val context: Context) {
 
     private fun writeFallbackProject(targetFile: File, content: String?) {
         val json = if (!content.isNullOrBlank()) content else """{"targets":[{"isStage":true,"name":"Stage","variables":{},"lists":{},"broadcasts":{},"blocks":{},"comments":{},"currentCostume":0,"costumes":[{"name":"backdrop1","bitmapResolution":1,"dataFormat":"svg","assetId":"cd21584322f79459ecb5864133b44723","md5ext":"cd21584322f79459ecb5864133b44723.svg","rotationCenterX":240,"rotationCenterY":180}],"sounds":[],"volume":100,"layerOrder":0},{"isStage":false,"name":"Sprite1","variables":{},"lists":{},"broadcasts":{},"blocks":{},"comments":{},"currentCostume":0,"costumes":[],"sounds":[],"volume":100,"visible":true,"x":0,"y":0,"size":100,"direction":90,"draggable":false,"rotationStyle":"all around","layerOrder":1}],"monitors":[],"extensions":[],"meta":{"semver":"3.0.0","vm":"0.2.0","agent":"Android"}}"""
-        targetFile.writeText(json, Charsets.UTF_8)
+        try {
+            Sb3Generator.writeSb3File(json, targetFile)
+        } catch (e: Exception) {
+            targetFile.writeText(json, Charsets.UTF_8)
+        }
     }
 
     private fun md5(str: String): String {
