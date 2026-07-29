@@ -1368,6 +1368,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 
                 var attempts = 0;
                 var maxAttempts = 60; // 30秒弹性轮询
+                var injected = false;
                 
                 function base64ToArrayBuffer(b64) {
                     var binaryString = window.atob(b64);
@@ -1378,6 +1379,12 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     }
                     return bytes.buffer;
                 }
+
+                // 一次性生成 Buffer
+                var buffer = null;
+                try {
+                    buffer = base64ToArrayBuffer(base64Data);
+                } catch(e) { return "Base64 decode failed"; }
 
                 // 嗅探底层 VM 实例
                 function getVm() {
@@ -1392,98 +1399,110 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 }
 
                 function tryInject() {
+                    if (injected) return true;
                     attempts++;
+                    
+                    // 方案 A：TurboWarp 专属极速通道 (放在最前面，只要 API 出现就立刻调用，0延迟)
+                    if (window.loadProject && typeof window.loadProject === 'function') {
+                        try {
+                            window.loadProject(buffer);
+                            injected = true;
+                            console.log("Success via TurboWarp Fast Path API");
+                            return true;
+                        } catch(e) { console.error("TurboWarp API error:", e); }
+                    }
+
                     var targetVm = getVm();
                     
-                    // 等待初始引擎加载完成
+                    // 【绝对防御：核心状态锁】必须等系统自带的“默认小猫”彻底加载完毕！
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         return false; 
                     }
 
-                    // 确保前端积木容器也已经在屏幕上渲染好了
+                    // 【绝对防御：UI状态锁】必须等积木工作区容器真正挂载到屏幕上
                     var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
                     if (!blocklyReady) {
                         return false;
                     }
 
+                    // 此时，系统自带的初始化 100% 结束，小猫已经待在屏幕上了，我们可以安全发大招了！
+                    injected = true; // 锁定，防止重复执行
+
                     try {
-                        var buffer = null;
-                        if (base64Data && base64Data.length > 0) {
-                            buffer = base64ToArrayBuffer(base64Data);
-                        }
-
-                        // 方案 A：优先走官方后门直连 (TurboWarp 专属，已验证完美)
-                        if (window.loadProject && buffer) {
-                            window.loadProject(buffer);
-                            console.log("Success via TurboWarp API");
-                            return true;
-                        }
-
-                        // 方案 B：【终极杀手锏 - React 内部 Props 劫持】 (专杀官方标准 Scratch 镜像源)
-                        // 原理：直接找到隐藏上传框绑定的 React 实例，提取它的 onChange 事件并塞入我们伪造的 File 绕过事件池
-                        if (buffer) {
-                            var fileInput = document.querySelector('input[type="file"][accept*=".sb"]') || document.querySelector('input[type="file"]');
-                            if (fileInput) {
-                                // 提取 React 的秘密属性
-                                var reactKey = Object.keys(fileInput).find(function(k) { 
-                                    return k.startsWith('__reactProps${'$'}') || k.startsWith('__reactEventHandlers${'$'}'); 
-                                });
-                                
-                                if (reactKey && fileInput[reactKey] && fileInput[reactKey].onChange) {
-                                    var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
-                                    // 伪造一个能骗过 React 合成事件系统的 Mock Event
-                                    var mockEvent = {
-                                        target: { files: [file] },
-                                        currentTarget: { files: [file] },
-                                        preventDefault: function() {},
-                                        stopPropagation: function() {}
-                                    };
-                                    // 直接触发 Redux 更新！UI 完美刷新！
-                                    fileInput[reactKey].onChange(mockEvent);
-                                    console.log("Success via React Internal Props Hijack!");
-                                    return true;
-                                }
+                        // 方案 B：尝试 React 内部 Props 劫持 (对于桌面版布局依然最稳妥)
+                        var hackSuccessful = false;
+                        var fileInput = document.querySelector('input[type="file"][accept*=".sb"]') || document.querySelector('input[type="file"]');
+                        if (fileInput) {
+                            var reactKey = Object.keys(fileInput).find(function(k) { 
+                                return k.startsWith('__reactProps${'$'}') || k.startsWith('__reactEventHandlers${'$'}'); 
+                            });
+                            
+                            if (reactKey && fileInput[reactKey] && fileInput[reactKey].onChange) {
+                                var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
+                                var mockEvent = {
+                                    target: { files: [file] },
+                                    currentTarget: { files: [file] },
+                                    preventDefault: function() {},
+                                    stopPropagation: function() {}
+                                };
+                                fileInput[reactKey].onChange(mockEvent);
+                                hackSuccessful = true;
+                                console.log("Success via React Internal Props Hijack!");
                             }
                         }
 
-                        // 方案 C：底层的 VM 加载与重绘兜底 (如果前面全部失效)
-                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
-                        loadPromise.then(function() {
-                            setTimeout(function() {
-                                if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
-                                if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
+                        // 方案 C：【终极杀器】底层 VM 加载 + “CPR心脏复苏”重绘循环 (移动平板无上传按钮时的终极防线)
+                        if (!hackSuccessful) {
+                            targetVm.loadProject(buffer).then(function() {
+                                console.log("Loaded into VM directly, starting CPR sync loop...");
                                 
-                                var targets = targetVm.runtime.targets;
-                                if (targets && targets.length > 0 && targetVm.setEditingTarget) {
-                                    var stage = targets.find(function(t) { return t.isStage; });
-                                    var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
+                                // 【强制呼吸循环】：为防止 React 忽略我们的更新，连续发送 5 次心跳重绘脉冲！
+                                var syncCount = 0;
+                                var syncTimer = setInterval(function() {
+                                    syncCount++;
+                                    if (syncCount > 5) {
+                                        clearInterval(syncTimer);
+                                        return;
+                                    }
                                     
-                                    if (stage) targetVm.setEditingTarget(stage.id);
-                                    setTimeout(function() {
-                                        targetVm.setEditingTarget(sprite.id);
-                                        window.dispatchEvent(new Event('resize'));
+                                    // 连续发送底层积木刷新信号
+                                    if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
+                                    if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
+                                    
+                                    var targets = targetVm.runtime.targets;
+                                    if (targets && targets.length > 0 && targetVm.setEditingTarget) {
+                                        var stage = targets.find(function(t) { return t.isStage; });
+                                        var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
                                         
-                                        // 强制 Blockly 重刷
-                                        if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
-                                            var ws = Blockly.getMainWorkspace();
-                                            if (ws && ws.fireChangeListener) ws.fireChangeListener(new Event('change'));
-                                        }
-                                    }, 50);
-                                } else {
-                                    window.dispatchEvent(new Event('resize'));
-                                }
-                            }, 200);
-                        }).catch(function(e) {
-                            console.error("VM load error:", e);
-                        });
-
+                                        // 闪电切换 Hack：瞬间切换 舞台 -> 角色，完美逼迫 React 重绘画布并加载新积木！
+                                        if (stage) targetVm.setEditingTarget(stage.id);
+                                        setTimeout(function() {
+                                            targetVm.setEditingTarget(sprite.id);
+                                            // 触发窗口改变大小事件，修复缩放异常
+                                            window.dispatchEvent(new Event('resize'));
+                                            // 直接触达 Blockly 强制刷新
+                                            if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
+                                                var ws = Blockly.getMainWorkspace();
+                                                if (ws && ws.fireChangeListener) ws.fireChangeListener(new Event('change'));
+                                            }
+                                        }, 40);
+                                    } else {
+                                        window.dispatchEvent(new Event('resize'));
+                                    }
+                                }, 400); // 间隔 400ms，总时长 2 秒，100% 覆盖并穿透 React 的渲染间隙
+                            }).catch(function(e) {
+                                console.error("VM load error:", e);
+                            });
+                        }
                         return true; 
                     } catch(e) {
                         console.error("Injection execution error:", e);
+                        injected = false; // 报错则释放锁，允许重试
                         return false;
                     }
                 }
 
+                // 启动 500ms 间隔的高频探针
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts) {
@@ -1491,7 +1510,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         }
                     }, 500);
                 }
-                return "Started React Props hijacking injection";
+                return "Started universal VM polling injection with CPR sync";
             } catch(e) {
                 return "Error: " + e.message;
             }
