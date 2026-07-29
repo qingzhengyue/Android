@@ -220,119 +220,38 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     }
 
     val workspaceLoadEvent by viewModel.workspaceLoadEvent.collectAsState()
-    LaunchedEffect(workspaceLoadEvent, webViewInstance) {
-        val code = workspaceLoadEvent
-        val webView = webViewInstance
-        if (code != null && webView != null) {
-            projectLoaderInterface?.setProjectData(code)
-            // 【修复】如果教师正在通过 @JavascriptInterface 接口加载学生作品，跳过不可靠的字符串拼接方式
-            if (viewModel.teacherPendingSb3Path.value != null) {
-                viewModel.workspaceLoadEvent.value = null
-            } else {
-                loadProjectIntoWebView(webView, code, context)
-                viewModel.workspaceLoadEvent.value = null
+
+    // 统一计算并实时维持当前需要加载到 Scratch 中的核心代码 JSON 字符串
+    val activeProjectCode: String = remember(pendingTeacherSb3Path, workspaceLoadEvent, draftCode) {
+        var code = ""
+        if (!pendingTeacherSb3Path.isNullOrBlank()) {
+            try {
+                val file = java.io.File(pendingTeacherSb3Path!!)
+                if (file.exists()) {
+                    code = file.readText(Charsets.UTF_8)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
-    }
-
-    LaunchedEffect(draftCode) {
-        if (draftCode.isNotBlank()) {
-            projectLoaderInterface?.setProjectData(draftCode)
+        if (code.isBlank() && !workspaceLoadEvent.isNullOrBlank()) {
+            code = workspaceLoadEvent!!
         }
+        if (code.isBlank()) {
+            code = draftCode
+        }
+        code
     }
 
-    // 手动触发 .sb3 加载（教师点击"载入作品积木"按钮时，页面已加载完毕，需延迟注入等待 VM 就绪）
-    // 【修复】通过 @JavascriptInterface 接口传递数据，而非字符串拼接注入（大 JSON 字符串拼接会导致 JS 解析失败）
-    // 【关键修复】将 webViewInstance 也作为 key，否则首次组合时 webViewInstance 为 null 直接 return，后续 WebView 创建后 effect 不会重跑
-    LaunchedEffect(pendingTeacherSb3Path, webViewInstance) {
-        val sb3Path = pendingTeacherSb3Path ?: return@LaunchedEffect
-        val webView = webViewInstance ?: return@LaunchedEffect
-        val loader = projectLoaderInterface ?: return@LaunchedEffect
-        val sb3File = java.io.File(sb3Path)
-        if (!sb3File.exists()) return@LaunchedEffect
-        // 延迟 3 秒确保 Scratch VM 完全初始化
-        kotlinx.coroutines.delay(3000)
-        if (pendingTeacherSb3Path != sb3Path) return@LaunchedEffect
-        val projectJson = sb3File.readText(Charsets.UTF_8)
-        // 【关键修复】通过 @JavascriptInterface 实例设置项目数据，JS 端调用 getProjectData() 即可获取
-        loader.setProjectData(projectJson)
-        val loadJs = """
-            (function() {
-                var attempts = 0, maxAttempts = 120;
-                function findVm() {
-                    if (window.vm && window.vm.loadProject) return window.vm;
-                    if (window.loadProject) return {
-                        loadProject: function(data) {
-                            try {
-                                var str = (typeof data === 'object') ? JSON.stringify(data) : data;
-                                window.loadProject(str);
-                                return Promise.resolve();
-                            } catch(e) {
-                                return Promise.reject(e);
-                            }
-                        }
-                    };
-                    var frames = document.querySelectorAll('iframe');
-                    for (var i = 0; i < frames.length; i++) {
-                        try {
-                            if (frames[i].contentWindow && frames[i].contentWindow.vm && frames[i].contentWindow.vm.loadProject)
-                                return frames[i].contentWindow.vm;
-                            if (frames[i].contentWindow && frames[i].contentWindow.loadProject) {
-                                var sw = frames[i].contentWindow;
-                                return {
-                                    loadProject: function(data) {
-                                        try {
-                                            var str = (typeof data === 'object') ? JSON.stringify(data) : data;
-                                            sw.loadProject(str);
-                                            return Promise.resolve();
-                                        } catch(e) {
-                                            return Promise.reject(e);
-                                        }
-                                    }
-                                };
-                            }
-                        } catch(e) {}
-                    }
-                    if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
-                    if (window.__turboWarp__ && window.__turboWarp__.vm && window.__turboWarp__.vm.loadProject) return window.__turboWarp__.vm;
-                    return null;
-                }
-                function tryLoad() {
-                    attempts++;
-                    var vm = findVm();
-                    if (!vm) return false;
-                    try {
-                        var raw = window.AndroidProjectLoader.getProjectData();
-                        console.log('ProjectLoader: raw length=' + raw.length + ', first100=' + raw.substring(0, 100));
-                        if (!raw || raw.length === 0) {
-                            console.error('ProjectLoader: getProjectData() returned empty, interface not set');
-                            return false;
-                        }
-                        var obj = JSON.parse(raw);
-                        if (!obj.meta) { obj = { meta: { semver: '3.0.0', vm: '0.2.0', agent: 'Android' }, targets: obj.targets || obj } }
-                        console.log('ProjectLoader: calling vm.loadProject, targets=' + (obj.targets ? obj.targets.length : 0));
-                        vm.loadProject(obj).then(function() {
-                            console.log('ProjectLoader: SUCCESS after ' + attempts + ' attempts');
-                            if (vm.emitWorkspaceUpdate) vm.emitWorkspaceUpdate();
-                            if (vm.runtime && vm.runtime.targets) vm.emit('targetsUpdate');
-                        }).catch(function(err) { console.error('ProjectLoader: loadProject FAILED: ' + err); });
-                    } catch(e) { console.error('ProjectLoader: parse FAILED: ' + e.message); }
-                    return true;
-                }
-                if (!tryLoad()) {
-                    var itv = setInterval(function() {
-                        if (tryLoad() || attempts >= maxAttempts) {
-                            clearInterval(itv);
-                            if (attempts >= maxAttempts) console.log('ProjectLoader: Max attempts reached');
-                        }
-                    }, 1000);
-                }
-                return 'ProjectLoader started';
-            })();
-        """.trimIndent()
-        webView.evaluateJavascript(loadJs, null)
-        sb3File.delete()
-        viewModel.teacherPendingSb3Path.value = null
+    LaunchedEffect(activeProjectCode, projectLoaderInterface, webViewInstance) {
+        if (activeProjectCode.isNotBlank()) {
+            viewModel.currentDraftCode.value = activeProjectCode
+            projectLoaderInterface?.setProjectData(activeProjectCode)
+            val webView = webViewInstance
+            if (webView != null) {
+                loadProjectIntoWebView(webView, activeProjectCode, context)
+            }
+        }
     }
 
     var showMagicBoxDrawer by remember { mutableStateOf(false) }
@@ -348,18 +267,15 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     // 首次进入编程界面缩放提示 (优化二)
     LaunchedEffect(Unit) {
         android.widget.Toast.makeText(context, "双指捏合可缩放画布 🔍", android.widget.Toast.LENGTH_LONG).show()
-        if (draftCode.isNotBlank()) {
-            viewModel.workspaceLoadEvent.value = draftCode
-        }
     }
 
-    // Scratch editor mirror URLs: 极速 Scratch 3.0 编辑器国内镜像与 TurboWarp 备用源
+    // Scratch editor mirror URLs: 直达 Scratch 3.0 编辑器页面（非主页），确保点开即是开发画布
     val mirrors = remember {
         listOf(
-            "https://editor.scratch-cn.cn/",                     // 国内极速镜像 1 (源1: 全功能 Scratch 编辑器，国内秒开)
-            "https://scratch3.fun/",                             // 国内极速镜像 2 (源2)
-            "https://turbowarp.org/editor",                      // TurboWarp 极速编辑器 (源3)
-            "https://turbowarp.org/"                             // TurboWarp 国际版 (源4)
+            "https://editor.scratch-cn.cn/editor",                // 国内极速镜像 1 (源1: 全功能 Scratch 3.0 开发画布直达)
+            "https://scratch3.fun/editor",                        // 国内极速镜像 2 (源2: 极速备用编辑器)
+            "https://turbowarp.org/editor",                       // TurboWarp 极速编辑器 (源3)
+            "file:///android_asset/scratch_blocks_viewer.html"    // 本地离线离线备用积木引擎 (源4)
         )
     }
     var currentMirrorIndex by rememberSaveable { mutableStateOf(0) }
@@ -743,9 +659,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             super.onPageFinished(view, url)
                             isPageLoading = false
                             
-                            if (draftCode.isNotBlank()) {
-                                projectLoaderInterface?.setProjectData(draftCode)
-                                loadProjectIntoWebView(view, draftCode, context)
+                            val codeToLoad = activeProjectCode
+                            if (codeToLoad.isNotBlank()) {
+                                projectLoaderInterface?.setProjectData(codeToLoad)
+                                loadProjectIntoWebView(view, codeToLoad, context)
                             }
                             
                             if (url != null && !url.startsWith("file:///")) {
@@ -1528,16 +1445,26 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     }
                     
                     var targetVm = findVm();
-                    if (targetVm && targetVm.loadProject) {
+                    if (targetVm) {
                         try {
                             var obj = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
                             if (!obj.meta) { obj = { meta: { semver: '3.0.0', vm: '0.2.0', agent: 'Android' }, targets: obj.targets || obj }; }
-                            targetVm.loadProject(obj).then(function() {
+                            
+                            var doLoad = function(data) {
+                                if (typeof targetVm.loadProject === 'function') return targetVm.loadProject(data);
+                                if (typeof targetVm.fromJSON === 'function') return targetVm.fromJSON(data);
+                                return Promise.reject("No load method");
+                            };
+
+                            doLoad(obj).then(function() {
                                 console.log("Project loaded successfully into VM after " + attempts + " attempts!");
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.runtime && targetVm.runtime.targets) targetVm.emit('targetsUpdate');
                             }).catch(function(err) {
-                                console.error("vm.loadProject Promise error:", err);
+                                console.warn("vm.loadProject Promise error with obj, retrying with string:", err);
+                                doLoad(JSON.stringify(obj)).catch(function(err2) {
+                                    console.error("vm.loadProject string error:", err2);
+                                });
                             });
                             return true;
                         } catch(e) {
