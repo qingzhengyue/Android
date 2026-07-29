@@ -1364,17 +1364,16 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
 
     val js = """
         (function() {
-            // ★ 【核心修复1】：单例锁！防止 WebView 多次触发 onPageFinished 导致多个定时器并发踩踏！
-            if (window.__scratch_inject_lock) return "Already injecting, skipped.";
-            window.__scratch_inject_lock = true;
-
             try {
+                // ★ 【终极修复1：废弃全局死锁，采用 Job ID 机制】
+                // 每次载入都生成一个全新的任务编号。旧的定时器如果发现编号变了，会自动静默自杀。
+                // 彻底解决之前因为“死锁”导致“普通源永远无法再次载入”的致命 Bug！
+                window.__scratch_job_id = (window.__scratch_job_id || 0) + 1;
+                var currentJobId = window.__scratch_job_id;
+
                 var rawData = $safeJsonLiteral;
                 var base64Data = $safeBase64Literal;
-                if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) {
-                    window.__scratch_inject_lock = false;
-                    return "Empty data";
-                }
+                if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
                 
                 // 将 Base64 解析为二进制 Buffer
                 function base64ToArrayBuffer(b64) {
@@ -1393,22 +1392,20 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 }
 
                 // ==========================================
-                // 🚀 轨道一：TurboWarp 极速专属通道
+                // 🚀 轨道一：TurboWarp 极速专属通道 (第三源完美保留)
                 // ==========================================
                 if (window.loadProject && typeof window.loadProject === 'function' && buffer) {
                     window.loadProject(buffer);
-                    window.__scratch_inject_lock = false; // 瞬间完成，释放锁
                     console.log("Success: TurboWarp Fast Path executed instantly.");
                     return "TurboWarp Path";
                 }
 
                 // ==========================================
-                // 🐢 轨道二：标准 Scratch 3.0 终极防覆盖通道
+                // 🐢 轨道二：标准 Scratch 3.0 终极 React 欺骗通道
                 // ==========================================
                 var attempts = 0;
                 var maxAttempts = 100; // 50秒弹性轮询
-                var injected = false;
-                var readyCount = 0;
+                var readyCount = 0; // 空闲稳定器
 
                 function getVm() {
                     if (window.vm) return window.vm;
@@ -1421,12 +1418,13 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 }
 
                 function tryInject() {
-                    if (injected) return true;
+                    // 如果任务编号已经更新，说明有了新的载入请求，旧探针立刻自毁
+                    if (window.__scratch_job_id !== currentJobId) return true; 
                     attempts++;
                     
                     var targetVm = getVm();
                     
-                    // 1. 基础就绪检测：自带小猫必须加载出来
+                    // 1. 基础就绪检测：必须等默认的小猫出现
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         readyCount = 0; return false; 
                     }
@@ -1435,84 +1433,98 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         readyCount = 0; return false;
                     }
 
-                    // 2. 加载遮罩检测：自带小猫的网络请求彻底完毕
+                    // 2. 加载遮罩检测：确保网络彻底空闲
                     var loaderVisible = false;
                     var loaders = document.querySelectorAll('[class*="loader_fullscreen"], [class*="loader_background"]');
                     for (var i = 0; i < loaders.length; i++) {
                         if (window.getComputedStyle(loaders[i]).display !== 'none') {
-                            loaderVisible = true;
-                            break;
+                            loaderVisible = true; break;
                         }
                     }
                     if (loaderVisible) {
-                        readyCount = 0; 
-                        return false;
+                        readyCount = 0; return false;
                     }
 
-                    // 3. 空闲稳定器倒计时：持续3个周期(约1.5秒)保证 React 状态机绝对沉寂
+                    // 3. 空闲稳定器倒计时：确保 React 彻底完成初始化
                     readyCount++;
                     if (readyCount < 3) {
-                        console.log("Waiting for React to settle... (" + readyCount + "/3)");
                         return false; 
                     }
 
-                    injected = true; 
-                    console.log("Standard Scratch Target completely IDLE. Executing VM overwrite.");
+                    console.log("Standard Scratch IDLE. Executing perfect React hack.");
 
                     try {
-                        // ★ 【核心修复2】：移除了那句自爆式的 ws.clear()，直接调取原版 VM 加载！
+                        // ★ 【终极修复2：完美触发 React 官方原生文件上传逻辑】
+                        // 我们直接找出官方隐藏的 <input type="file">，把我们的 sb3 文件强行塞给它！
+                        // 这样 React 就会乖乖走官方流程，完美加载我们的学生作品，不留任何白屏残影！
+                        var fileInputs = document.querySelectorAll('input[type="file"]');
+                        if (buffer && fileInputs.length > 0) {
+                            var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
+                            var dt = new DataTransfer();
+                            dt.items.add(file);
+                            
+                            var success = false;
+                            for (var i = 0; i < fileInputs.length; i++) {
+                                var input = fileInputs[i];
+                                // 安全绕过 React 属性只读限制的双重打法
+                                try { input.files = dt.files; } catch(e) {}
+                                try {
+                                    var nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "files").set;
+                                    if (nativeSetter) nativeSetter.call(input, dt.files);
+                                } catch(e) {}
+                                
+                                // 抛出 change 事件，呼叫 React 处理
+                                input.dispatchEvent(new Event('change', { bubbles: true }));
+                                success = true;
+                            }
+                            if (success) {
+                                console.log("Injected via Native React Input bypass.");
+                                return true; 
+                            }
+                        }
+
+                        // 兜底方案：如果真有极限精简版连 input 都删了，才回退到 VM 强插模式
                         var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
-                        
                         loadPromise.then(function() {
-                            // 延迟 100ms 触发重绘，避免 React 渲染冲突
                             setTimeout(function() {
+                                if (window.__scratch_job_id !== currentJobId) return;
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
                                 
-                                // ★ 终极 React 欺骗法：闪电切换角色，强制 React 从底层拉取刚才塞进去的新数据！
                                 var targets = targetVm.runtime.targets;
                                 if (targets && targets.length > 0 && targetVm.setEditingTarget) {
                                     var stage = targets.find(function(t) { return t.isStage; });
                                     var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
-                                    
                                     if (stage) targetVm.setEditingTarget(stage.id);
                                     setTimeout(function() {
+                                        if (window.__scratch_job_id !== currentJobId) return;
                                         targetVm.setEditingTarget(sprite.id);
                                         window.dispatchEvent(new Event('resize'));
-                                        window.__scratch_inject_lock = false; // 大功告成，解除锁定
-                                        console.log("Standard Scratch injection fully completed!");
                                     }, 50);
                                 } else {
                                     window.dispatchEvent(new Event('resize'));
-                                    window.__scratch_inject_lock = false; 
                                 }
                             }, 100);
-                        }).catch(function(e) { 
-                            console.error("VM load error:", e); 
-                            window.__scratch_inject_lock = false; 
-                        });
+                        }).catch(function(e) {});
                         
                         return true;
                     } catch(e) {
                         console.error("Injection error:", e);
-                        injected = false; 
                         readyCount = 0;
-                        window.__scratch_inject_lock = false; 
                         return false;
                     }
                 }
 
+                // 启动轮询探针
                 if (!tryInject()) {
                     var timer = setInterval(function() {
-                        if (tryInject() || attempts >= maxAttempts) {
+                        if (tryInject() || attempts >= maxAttempts || window.__scratch_job_id !== currentJobId) {
                             clearInterval(timer);
-                            if (attempts >= maxAttempts) window.__scratch_inject_lock = false; // 超时释放防卡死
                         }
                     }, 500);
                 }
-                return "Started Standard Scratch stabilized VM injection";
+                return "Started universal React-Bypass Job ID: " + currentJobId;
             } catch(e) {
-                window.__scratch_inject_lock = false; 
                 return "Error: " + e.message;
             }
         })();
