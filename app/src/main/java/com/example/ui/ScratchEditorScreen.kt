@@ -353,13 +353,13 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         }
     }
 
-    // Scratch editor mirror URLs: 优先使用本地离线引擎，国内镜像与 TurboWarp 作为备用
+    // Scratch editor mirror URLs: 极速 Scratch 3.0 编辑器国内镜像与 TurboWarp 备用源
     val mirrors = remember {
         listOf(
-            "file:///android_asset/scratch_blocks_viewer.html", // 本地离线引擎（100%秒开免联网）
-            "https://editor.scratch-cn.cn/",                     // 国内镜像 1
-            "https://scratch3.fun/",                             // 国内镜像 2
-            "https://turbowarp.org/"                             // TurboWarp 国际版
+            "https://editor.scratch-cn.cn/",                     // 国内极速镜像 1 (源1: 全功能 Scratch 编辑器，国内秒开)
+            "https://scratch3.fun/",                             // 国内极速镜像 2 (源2)
+            "https://turbowarp.org/editor",                      // TurboWarp 极速编辑器 (源3)
+            "https://turbowarp.org/"                             // TurboWarp 国际版 (源4)
         )
     }
     var currentMirrorIndex by rememberSaveable { mutableStateOf(0) }
@@ -1483,12 +1483,21 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
         (function() {
             try {
                 var rawData = $safeJsonLiteral;
-                if (window.loadProject) {
-                    window.loadProject(rawData);
-                    return "Loaded via window.loadProject";
-                }
-                var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
-                if (!targetVm) {
+                if (!rawData || rawData.length === 0) return "Empty data";
+                
+                var attempts = 0;
+                var maxAttempts = 30; // 30 * 500ms = 15 秒轮询重试
+
+                function findVm() {
+                    if (window.vm && window.vm.loadProject) return window.vm;
+                    var frames = document.querySelectorAll('iframe');
+                    for (var i = 0; i < frames.length; i++) {
+                        try {
+                            if (frames[i].contentWindow && frames[i].contentWindow.vm && frames[i].contentWindow.vm.loadProject) {
+                                return frames[i].contentWindow.vm;
+                            }
+                        } catch(e) {}
+                    }
                     var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
                     if (el) {
                         var keys = Object.keys(el);
@@ -1497,34 +1506,56 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                             var fiber = el[key];
                             while (fiber) {
                                 if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
-                                    targetVm = fiber.stateNode.props.vm;
-                                    break;
+                                    return fiber.stateNode.props.vm;
                                 }
                                 fiber = fiber.return;
                             }
                         }
                     }
+                    if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
+                    if (window.__turboWarp__ && window.__turboWarp__.vm && window.__turboWarp__.vm.loadProject) return window.__turboWarp__.vm;
+                    return null;
                 }
-                
-                if (!targetVm) {
-                    var frames = document.querySelectorAll('iframe');
-                    for (var i = 0; i < frames.length; i++) {
-                        var sw = frames[i].contentWindow;
-                        if (sw && sw.vm) {
-                            targetVm = sw.vm;
-                            break;
+
+                function tryInject() {
+                    attempts++;
+                    if (window.loadProject) {
+                        try {
+                            window.loadProject(rawData);
+                            console.log("Success via window.loadProject after " + attempts + " attempts");
+                            return true;
+                        } catch(e) { console.error("window.loadProject error:", e); }
+                    }
+                    
+                    var targetVm = findVm();
+                    if (targetVm && targetVm.loadProject) {
+                        try {
+                            var obj = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
+                            if (!obj.meta) { obj = { meta: { semver: '3.0.0', vm: '0.2.0', agent: 'Android' }, targets: obj.targets || obj }; }
+                            targetVm.loadProject(obj).then(function() {
+                                console.log("Project loaded successfully into VM after " + attempts + " attempts!");
+                                if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
+                                if (targetVm.runtime && targetVm.runtime.targets) targetVm.emit('targetsUpdate');
+                            }).catch(function(err) {
+                                console.error("vm.loadProject Promise error:", err);
+                            });
+                            return true;
+                        } catch(e) {
+                            console.error("Parse or load VM error:", e);
+                            return true;
                         }
                     }
+                    return false;
                 }
-                
-                if (targetVm) {
-                    var obj = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
-                    targetVm.loadProject(obj).then(function() {
-                        console.log("Success");
-                    });
-                    return "Injected project loading";
+
+                if (!tryInject()) {
+                    var timer = setInterval(function() {
+                        if (tryInject() || attempts >= maxAttempts) {
+                            clearInterval(timer);
+                        }
+                    }, 500);
                 }
-                return "VM not found";
+                return "Started VM polling injection";
             } catch(e) {
                 console.error("loadProject error:", e);
                 return "Error: " + e.message;
