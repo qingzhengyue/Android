@@ -86,9 +86,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var showSubmitDialog by remember { mutableStateOf(false) }
     var submitWorkName by remember { mutableStateOf("") }
     
-    // Draggable and foldable floating console state (优化一 & 优化二)
+    // Draggable and foldable floating console state
     var isExpanded by remember { mutableStateOf(false) }
-    var selectedTab by remember { mutableStateOf(0) } // 0: AI, 1: Backups, 2: Submit
+    var selectedTab by remember { mutableStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
     val animX = remember { androidx.compose.animation.core.Animatable(0f) }
     val animY = remember { androidx.compose.animation.core.Animatable(0f) }
@@ -98,9 +98,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var hasInitializedPosition by remember { mutableStateOf(false) }
 
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
-    // 保存 JavascriptInterface 实例引用，以便后续通过接口传递项目数据（避免 base64/字符串拼接注入失败）
+    // 【终极重构：增强型 Bridge 接口】
     var projectLoaderInterface by remember { mutableStateOf<ScratchProjectLoaderInterface?>(null) }
-    // 教师查看学生作品 .sb3 自动注入路径（从 ViewModel 获取，页面加载完成后自动注入积木代码）
+    
     val pendingTeacherSb3Path by viewModel.teacherPendingSb3Path.collectAsState()
     val realTimeCheckEnabled by viewModel.realTimeStateEnabled.collectAsState()
     var scratchChangeCounter by remember { mutableStateOf(0) }
@@ -115,28 +115,20 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
     fun getLiveCodeAndCall(funcType: String, param: String = "") {
         android.util.Log.d("GetLiveCode", "[START] getLiveCodeAndCall 被调用: funcType=$funcType, webViewInstance=${webViewInstance != null}")
-        // 防止重复调用: 如果AI已经在加载中, 不再发起新请求
         if (viewModel.aiLoading.value) {
-            android.util.Log.w("GetLiveCode", "[GUARD] AI调用正在进行中, 忽略重复的getLiveCodeAndCall: funcType=$funcType")
             return
         }
         val webView = webViewInstance
         if (webView != null) {
-            // 安全机制: 防止evaluateJavascript回调永不触发导致UI卡死
             val callbackFired = java.util.concurrent.atomic.AtomicBoolean(false)
             
-            // 启动超时保护协程: 5秒后如果回调还没触发，则直接调用AI(不携带代码)
             coroutineScope.launch {
                 kotlinx.coroutines.delay(5000L)
                 if (!callbackFired.getAndSet(true)) {
-                    android.util.Log.w("GetLiveCode", "[TIMEOUT] evaluateJavascript callback 超时(5s) for $funcType, 直接调用AI(不携带代码)")
                     viewModel.callAiAssistant(funcType, param = param)
-                } else {
-                    android.util.Log.d("GetLiveCode", "[TIMEOUT] 超时协程结束: callback已触发, 不再重复调用")
                 }
             }
             
-            android.util.Log.d("GetLiveCode", "[JS] 开始 evaluateJavascript...")
             webView.evaluateJavascript(
                 "(function() { " +
                 "  try { " +
@@ -180,8 +172,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 "  return ''; " +
                 "})()"
             ) { result: String? ->
-                android.util.Log.d("GetLiveCode", "[CALLBACK] evaluateJavascript 回调触发: result长度=${result?.length ?: "null"}")
-                // 如果超时保护已经触发过，则不再重复调用
                 if (!callbackFired.getAndSet(true)) {
                     val cleaned = if (result != null && result != "null" && result != "\"\"") {
                         var s = result.trim()
@@ -191,23 +181,16 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         }
                         s
                     } else ""
-                    // 安全限制: 截断过长的代码(超过8000字符则截断), 防止发送给AI的Prompt过大导致卡死
                     val maxCodeLen = 8000
                     val finalCode = if (cleaned.length > maxCodeLen) {
-                        android.util.Log.w("GetLiveCode", "[TRUNCATE] 代码过长(${cleaned.length}字符), 截断为${maxCodeLen}字符")
                         cleaned.take(maxCodeLen) + "\n...[代码已截断]"
                     } else {
                         cleaned
                     }
-                    android.util.Log.d("GetLiveCode", "[CALL] 代码清理完成: cleaned长度=${cleaned.length}, 最终长度=${finalCode.length}, 即将调用callAiAssistant($funcType)")
                     viewModel.callAiAssistant(funcType, if (finalCode.isNotBlank()) finalCode else null, param = param)
-                } else {
-                    android.util.Log.w("GetLiveCode", "[SKIP] evaluateJavascript 回调触发时超时保护已执行过, 跳过重复调用")
                 }
             }
-            android.util.Log.d("GetLiveCode", "[WAIT] evaluateJavascript 已提交, 等待回调...")
         } else {
-            android.util.Log.w("GetLiveCode", "[NULL] webViewInstance 为 null, 直接调用AI(不携带代码), funcType=$funcType")
             viewModel.callAiAssistant(funcType, param = param)
         }
     }
@@ -221,32 +204,45 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
     val workspaceLoadEvent by viewModel.workspaceLoadEvent.collectAsState()
 
-    // 1. 教师下发或特定任务载入时，单次触发 (切断与 draftCode 的绑定防死循环)
-    LaunchedEffect(pendingTeacherSb3Path) {
-        if (!pendingTeacherSb3Path.isNullOrBlank() && webViewInstance != null) {
+    // 统一计算核心代码，防止无限死循环
+    val activeProjectCode: String = remember(pendingTeacherSb3Path, workspaceLoadEvent, draftCode) {
+        var code = ""
+        if (!pendingTeacherSb3Path.isNullOrBlank()) {
             try {
                 val file = java.io.File(pendingTeacherSb3Path!!)
                 if (file.exists()) {
-                    val code = file.readText(Charsets.UTF_8)
-                    viewModel.currentDraftCode.value = code
-                    projectLoaderInterface?.setProjectData(code)
-                    loadProjectIntoWebView(webViewInstance!!, code, context)
+                    code = file.readText(Charsets.UTF_8)
                 }
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
+        if (code.isBlank() && !workspaceLoadEvent.isNullOrBlank()) {
+            code = workspaceLoadEvent!!
+        }
+        if (code.isBlank()) {
+            code = draftCode
+        }
+        code
     }
 
-    // 2. 内部事件要求载入时，单次触发
-    LaunchedEffect(workspaceLoadEvent) {
-        if (!workspaceLoadEvent.isNullOrBlank() && webViewInstance != null) {
-            viewModel.currentDraftCode.value = workspaceLoadEvent!!
-            projectLoaderInterface?.setProjectData(workspaceLoadEvent!!)
-            loadProjectIntoWebView(webViewInstance!!, workspaceLoadEvent!!, context)
+    // ★ 关键重构：将生成 Sb3 放到 Android 协程安全区，直接赋给接口内存，彻底绕开 JS 字符串拦截！
+    LaunchedEffect(activeProjectCode, projectLoaderInterface, webViewInstance) {
+        if (activeProjectCode.isNotBlank()) {
+            viewModel.currentDraftCode.value = activeProjectCode
+            val sb3Base64 = try {
+                com.example.data.Sb3Generator.createSb3Base64(activeProjectCode)
+            } catch (e: Exception) { "" }
+            
+            projectLoaderInterface?.setProjectData(activeProjectCode, sb3Base64)
+            val webView = webViewInstance
+            if (webView != null) {
+                loadProjectIntoWebView(webView)
+            }
         }
     }
 
     var showMagicBoxDrawer by remember { mutableStateOf(false) }
-
     var localInputName by remember { mutableStateOf(draftName) }
 
     val coerceInSafe = remember {
@@ -255,18 +251,16 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         }
     }
 
-    // 首次进入编程界面缩放提示 (优化二)
     LaunchedEffect(Unit) {
         android.widget.Toast.makeText(context, "双指捏合可缩放画布 🔍", android.widget.Toast.LENGTH_LONG).show()
     }
 
-    // Scratch editor mirror URLs: 直达 Scratch 3.0 编辑器页面（非主页），确保点开即是开发画布
     val mirrors = remember {
         listOf(
-            "https://editor.scratch-cn.cn/editor",                // 国内极速镜像 1 (源1: 全功能 Scratch 3.0 开发画布直达)
-            "https://scratch3.fun/editor",                        // 国内极速镜像 2 (源2: 极速备用编辑器)
-            "https://turbowarp.org/editor",                       // TurboWarp 极速编辑器 (源3)
-            "file:///android_asset/scratch_blocks_viewer.html"    // 本地离线离线备用积木引擎 (源4)
+            "https://editor.scratch-cn.cn/editor",                // 源1
+            "https://scratch3.fun/editor",                        // 源2
+            "https://turbowarp.org/editor",                       // 源3
+            "file:///android_asset/scratch_blocks_viewer.html"    // 源4
         )
     }
     var currentMirrorIndex by rememberSaveable { mutableStateOf(0) }
@@ -276,7 +270,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var isAllFailed by remember { mutableStateOf(false) }
     var loadingMessage by remember { mutableStateOf("正在加载 Scratch 编辑器 (1/${mirrors.size})...") }
 
-    // Multi-mirror auto fallback loading
     LaunchedEffect(scratchUrl, webViewInstance) {
         val webView = webViewInstance ?: return@LaunchedEffect
         isPageLoading = true
@@ -284,7 +277,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         loadingMessage = "正在加载 Scratch 编辑器 (${currentMirrorIndex + 1}/${mirrors.size})..."
         webView.loadUrl(scratchUrl)
         
-        // 6s Timeout fallthrough auto switch (Problem 2 Requirement 3)
         kotlinx.coroutines.delay(6000)
         if (isPageLoading && !isAllFailed) {
             if (currentMirrorIndex < mirrors.size - 1) {
@@ -297,7 +289,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         }
     }
 
-    // Web upload support
     var uploadMessageCallback by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
     val fileChooserLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetMultipleContents()
@@ -306,13 +297,11 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         uploadMessageCallback = null
     }
 
-    // 当载入或创建完毕，锁定此界面为横屏显示；离开时自动回退为默认竖屏，方便小学生流畅地拼搭操作
     DisposableEffect(Unit) {
         val activity = context as? Activity
         val window = activity?.window
         val originalOrientation = activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         
-        // Immersive Distraction-Free full-screen (Problem 3 point 2)
         val insetsController = window?.let { androidx.core.view.WindowCompat.getInsetsController(it, it.decorView) }
         try {
             if (activity?.requestedOrientation != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
@@ -336,7 +325,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // High 48dp Top Bar (Status Bar) - Problem 3.3
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -345,13 +333,11 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 .padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left container: Return Button + Title with limited weight to avoid taking up too much space
             Row(
                 modifier = Modifier
                     .weight(1f),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // 1. Return Button
                 Row(
                     modifier = Modifier
                         .clickable { onBackToHall() }
@@ -377,7 +363,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // 2. Draft & Task Information
                 val displayTaskInfo = if (taskName.isNullOrBlank()) "自由创作" else "学习任务: $taskName"
                 Text(
                     text = "📦 $draftName [$displayTaskInfo]",
@@ -392,12 +377,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // Right container: Buttons with explicit gap and no weight, ensuring enough space for all 3 buttons
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // 3. 编程魔法盒 Button
                 TopBarActionButton(
                     onClick = {
                         showMagicBoxDrawer = !showMagicBoxDrawer
@@ -407,10 +390,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     },
                     icon = Icons.Default.Widgets,
                     text = "编程魔法盒 🎒",
-                    containerColor = Color(0xFFF57C00) // Deep warm amber
+                    containerColor = Color(0xFFF57C00) 
                 )
 
-                // 4. 智能精灵姐姐 Button
                 TopBarActionButton(
                     onClick = {
                         showAiAssistSheet = !showAiAssistSheet
@@ -420,10 +402,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     },
                     icon = Icons.Default.AutoAwesome,
                     text = "智能精灵姐姐 👩‍💻",
-                    containerColor = Color(0xFFC2185B) // Deep rose ruby
+                    containerColor = Color(0xFFC2185B) 
                 )
 
-                // 5. 提交作品 Button (学生专属作品提交通道)
                 val userRole by viewModel.currentUserRole.collectAsState()
                 if (userRole == "student") {
                     TopBarActionButton(
@@ -433,27 +414,24 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         },
                         icon = Icons.Default.Send,
                         text = "提交作品 🚀",
-                        containerColor = Color(0xFF1E88E5) // Nice blue
+                        containerColor = Color(0xFF1E88E5) 
                     )
                 }
 
-                // 6. “更多 🛠️” 下拉二级菜单 (折叠非核心功能，提升屏占比)
                 var showMoreTopMenu by remember { mutableStateOf(false) }
-                val teacherViewingWorkspace by viewModel.teacherViewingWorkspace.collectAsState()
 
                 Box {
                     TopBarActionButton(
                         onClick = { showMoreTopMenu = true },
                         icon = Icons.Default.MoreVert,
                         text = "更多 🛠️",
-                        containerColor = Color(0xFF455A64) // Slate grey
+                        containerColor = Color(0xFF455A64) 
                     )
 
                     DropdownMenu(
                         expanded = showMoreTopMenu,
                         onDismissRequest = { showMoreTopMenu = false }
                     ) {
-                        // 手动换源
                         DropdownMenuItem(
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -474,7 +452,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             }
                         )
 
-                        // 载入作品积木 (全员可用)
                         DropdownMenuItem(
                             text = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -486,10 +463,11 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             onClick = {
                                 showMoreTopMenu = false
                                 val webView = webViewInstance
-                                val codeToLoad = draftCode // ✅ 直接使用 draftCode
+                                val codeToLoad = draftCode 
                                 if (webView != null && codeToLoad.isNotBlank()) {
-                                    projectLoaderInterface?.setProjectData(codeToLoad)
-                                    loadProjectIntoWebView(webView, codeToLoad, context)
+                                    val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(codeToLoad) } catch (e: Exception) { "" }
+                                    projectLoaderInterface?.setProjectData(codeToLoad, sb3)
+                                    loadProjectIntoWebView(webView)
                                     android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
                                 } else {
                                     android.widget.Toast.makeText(context, "当前工作区暂无可载入的代码", android.widget.Toast.LENGTH_SHORT).show()
@@ -548,14 +526,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         val screenHeightPx = with(density) { maxHeight.toPx() }
         val buttonWidthPx = with(density) { 60.dp.toPx() }
         val buttonHeightPx = with(density) { 60.dp.toPx() }
-        val topPaddingPx = with(density) { 50.dp.toPx() }
-        val bottomPaddingPx = with(density) { 50.dp.toPx() }
 
-        // Position initial state once screen thickness is measured (优化一)
         LaunchedEffect(screenWidthPx, screenHeightPx) {
             if (!hasInitializedPosition && screenWidthPx > 0) {
                 val initX = screenWidthPx - buttonWidthPx - with(density) { 20.dp.toPx() }
-                // 距离底部导航栏上方20dp (系统底栏大概56dp, 加上20dp等于76dp, 设置为80dp完美避开)
                 val initY = screenHeightPx - buttonHeightPx - with(density) { 80.dp.toPx() }
                 animX.snapTo(initX)
                 animY.snapTo(initY)
@@ -563,23 +537,20 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             }
         }
 
-        // Full Screen Scratch WebView Editor
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val url = request?.url?.toString() ?: return false
-                            // Block navigation to login/community pages on mirror sites
                             if (url.contains("login", ignoreCase = true) || 
                                 url.contains("signin", ignoreCase = true) ||
                                 url.contains("/community", ignoreCase = true) ||
                                 url.contains("/register", ignoreCase = true) ||
                                 url.contains("/signup", ignoreCase = true)) {
-                                android.util.Log.w("ScratchWebView", "Blocked redirect to: $url")
-                                return true // Prevent navigation
+                                return true 
                             }
-                            return false // Allow normal navigation
+                            return false 
                         }
 
                         override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
@@ -591,28 +562,14 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             super.onPageFinished(view, url)
                             isPageLoading = false
                             
-                            // 初始化加载：只在网页加载完毕时推一次代码
-                            var codeToLoad = ""
-                            if (!pendingTeacherSb3Path.isNullOrBlank()) {
-                                try {
-                                    val f = java.io.File(pendingTeacherSb3Path!!)
-                                    if (f.exists()) codeToLoad = f.readText(Charsets.UTF_8)
-                                } catch(e: Exception){}
-                            }
-                            if (codeToLoad.isBlank() && !workspaceLoadEvent.isNullOrBlank()) {
-                                codeToLoad = workspaceLoadEvent!!
-                            }
-                            if (codeToLoad.isBlank()) {
-                                codeToLoad = draftCode
-                            }
-                            
+                            val codeToLoad = activeProjectCode
                             if (codeToLoad.isNotBlank()) {
-                                projectLoaderInterface?.setProjectData(codeToLoad)
-                                loadProjectIntoWebView(view, codeToLoad, context)
+                                val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(codeToLoad) } catch(e:Exception){""}
+                                projectLoaderInterface?.setProjectData(codeToLoad, sb3)
+                                loadProjectIntoWebView(view)
                             }
                             
                             if (url != null && !url.startsWith("file:///")) {
-                                // 注入口：通过给HTML注入自定义Viewport限制双指缩放范围并屏蔽三方冗余登录弹窗
                                 val viewportJs = """
                                     (function() {
                                         var meta = document.createElement('meta');
@@ -624,7 +581,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                                             existingViewports.forEach(function(el) { el.remove(); });
                                             head.appendChild(meta);
                                             
-                                            // 注入自定义 CSS 屏蔽三方冗余登录对话框与顶栏多余按钮
                                             var css = '[class*="modal_modal-overlay"], [class*="login-modal"], [class*="login-dialog"], [class*="prompt_prompt-"], [class*="alert_alert"], [class*="alert_alert-container"], div[class*="modal_modal-content"], div[class*="prompt_prompt-overlay"], .react-modal-sheet-container, .login-dialog, #login-dialog, .login-modal, .alert-container, [class*="menu-bar_account-info-group"], [class*="menu-bar_login-button"], [class*="menu-bar_mystuff-button"], div[class*="menu-bar_account-info-group"], div[class*="menu-bar_mystuff-button"] { display: none !important; }';
                                             var style = document.createElement('style');
                                             style.type = 'text/css';
@@ -672,9 +628,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                                 """.trimIndent()
                                 view?.evaluateJavascript(viewportJs, null)
                             }
-
-                            // 【修复】移除 onPageFinished 中的重复 sb3 加载逻辑，统一由 LaunchedEffect(pendingTeacherSb3Path) 处理
-                            // 避免 onPageFinished 和 LaunchedEffect 竞争导致文件被提前删除
                         }
 
                         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -704,12 +657,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         }
                     }
                     webChromeClient = object : WebChromeClient() {
-                        // Support camera and microphone requests within Scratch
                         override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
                             request?.grant(request.resources)
                         }
 
-                        // Bridge WebView console.log to Android Logcat for debugging
                         override fun onConsoleMessage(message: android.webkit.ConsoleMessage?): Boolean {
                             if (message != null) {
                                 android.util.Log.d("WebViewJS", "[${'$'}{message.messageLevel()}] ${'$'}{message.message()} (line ${'$'}{message.lineNumber()})")
@@ -717,7 +668,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             return true
                         }
 
-                        // Support file uploading for custom sprites & backgrounds
                         override fun onShowFileChooser(
                             webView: WebView?,
                             filePathCallback: ValueCallback<Array<Uri>>?,
@@ -747,22 +697,16 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         useWideViewPort = true
                         loadWithOverviewMode = true
                         
-                        // 优化二：启用并且配置底层的 WebSettings 手势双指缩放支持
                         setSupportZoom(true)
                         builtInZoomControls = true
                         displayZoomControls = false
 
-                        // Desktop Chrome User-Agent to avoid mobile redirects and login walls
                         userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                         mediaPlaybackRequiresUserGesture = false
                     }
                     
-                    // Request focus immediately so that touches register without initial delays
                     requestFocus()
                     
-                    // 优化二：手势冲突彻底解决：
-                    // - 只有当多个手指（pointerCount >= 2）触屏时，才触发系统的 WebView 缩放
-                    // - 单指触屏时直接关闭 WebView 的 supportZoom 以免干扰 Scratch 积木正常拼搭
                     setOnTouchListener { v, event ->
                         v.parent?.requestDisallowInterceptTouchEvent(true)
                         if (event.action == android.view.MotionEvent.ACTION_DOWN) {
@@ -782,7 +726,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         false
                     }
                     
-                    // 【修复】保存 JavascriptInterface 实例引用，以便后续通过接口传递项目数据
+                    // 【修复】保存 JavascriptInterface 实例引用，包含强壮的 Base64 桥接功能！
                     val loaderInterface = ScratchProjectLoaderInterface(draftCode)
                     projectLoaderInterface = loaderInterface
                     addJavascriptInterface(ScratchJsInterface {
@@ -798,7 +742,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             modifier = Modifier.fillMaxSize()
         )
 
-        // Loading Overlay (Problem 2 Requirement 3)
         if (isPageLoading) {
             Box(
                 modifier = Modifier
@@ -824,7 +767,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         textAlign = TextAlign.Center
                     )
                     Spacer(modifier = Modifier.height(24.dp))
-                    // Manual Fallback Button (Problem 2 Requirement 2)
                     Button(
                         onClick = {
                             if (currentMirrorIndex < mirrors.size - 1) {
@@ -866,7 +808,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    // 诊断建议列表
                     Card(
                         colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = Color.White),
                         elevation = androidx.compose.material3.CardDefaults.cardElevation(2.dp),
@@ -902,7 +843,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         
                         Button(
                             onClick = {
-                                // 尝试使用备用国际版 TurboWarp
                                 currentMirrorIndex = mirrors.size - 1
                                 scratchUrl = mirrors[currentMirrorIndex]
                                 isAllFailed = false
@@ -935,11 +875,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                     modifier = Modifier.width(drawerWidth)
                 )
             }
-        } // Closes side-by-side Row
-    } // Closes main Column
+        } 
+    } 
 
 
-    // 重命名 Dialog
     if (saveNameDialog) {
         AlertDialog(
             onDismissRequest = { saveNameDialog = false },
@@ -973,7 +912,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
 
 
-    // 提交作品 Dialog
     if (showSubmitDialog) {
         AlertDialog(
             onDismissRequest = { showSubmitDialog = false },
@@ -1061,7 +999,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         )
     }
 
-    // 回溯本地草稿 Dialog
     if (showLoadDraftDialog) {
         AlertDialog(
             onDismissRequest = { showLoadDraftDialog = false },
@@ -1086,8 +1023,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                                     viewModel.loadDraftToWorkspace(draft)
                                     val webView = webViewInstance
                                     if (webView != null && draft.blockCode.isNotBlank()) {
-                                        projectLoaderInterface?.setProjectData(draft.blockCode)
-                                        loadProjectIntoWebView(webView, draft.blockCode, context)
+                                        val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(draft.blockCode) } catch(e:Exception){""}
+                                        projectLoaderInterface?.setProjectData(draft.blockCode, sb3)
+                                        loadProjectIntoWebView(webView)
                                     }
                                     showLoadDraftDialog = false
                                     Toast.makeText(context, "成功恢复草稿进度：${draft.draftName}", Toast.LENGTH_SHORT).show()
@@ -1120,7 +1058,6 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         )
     }
 
-    // 载入已提作品 Dialog
     if (showLoadWorkDialog) {
         AlertDialog(
             onDismissRequest = { showLoadWorkDialog = false },
@@ -1145,8 +1082,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                                     viewModel.loadWorkToWorkspace(work)
                                     val webView = webViewInstance
                                     if (webView != null && work.workCode.isNotBlank()) {
-                                        projectLoaderInterface?.setProjectData(work.workCode)
-                                        loadProjectIntoWebView(webView, work.workCode, context)
+                                        val sb3 = try { com.example.data.Sb3Generator.createSb3Base64(work.workCode) } catch(e:Exception){""}
+                                        projectLoaderInterface?.setProjectData(work.workCode, sb3)
+                                        loadProjectIntoWebView(webView)
                                     }
                                     showLoadWorkDialog = false
                                     Toast.makeText(context, "成功恢复已提交作品：${work.workName}", Toast.LENGTH_SHORT).show()
@@ -1180,14 +1118,12 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     }
 }
 
-
 fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: android.content.Context) {
     if (webView == null) {
         Toast.makeText(context, "⚠️ 编程空间未就绪，请稍后", Toast.LENGTH_SHORT).show()
         return
     }
 
-    // Determine the correct Scratch 3.0 official opcode
     val opcode = when {
         blockText.contains("移动") -> "motion_movesteps"
         blockText.contains("右转") -> "motion_turnright"
@@ -1348,32 +1284,22 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
     }
 }
 
-
-fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.content.Context) {
-    if (webView == null || pJson.isBlank()) return
-
-    // 1. 在 Android 侧将项目 JSON 动态生成包含 project.json 和完整矢量图素材的真实 .sb3 ZIP 压缩包 (Base64)
-    val sb3Base64 = try {
-        com.example.data.Sb3Generator.createSb3Base64(pJson)
-    } catch (e: Exception) {
-        ""
-    }
-
-    val safeJsonLiteral = org.json.JSONObject.quote(pJson)
-    val safeBase64Literal = org.json.JSONObject.quote(sb3Base64)
+// 【终极重构：不再向 JS 拼接超长参数，改为无参数调用，让 JS 从原生接口拉取】
+fun loadProjectIntoWebView(webView: WebView?) {
+    if (webView == null) return
 
     val js = """
         (function() {
             try {
-                // 1. 任务 ID 防治并发与重入重载
                 window.__scratch_job_id = (window.__scratch_job_id || 0) + 1;
                 var currentJobId = window.__scratch_job_id;
 
-                var rawData = $safeJsonLiteral;
-                var base64Data = $safeBase64Literal;
+                // ★ 从原生接口安全拉取超长数据，避开 WebView 截断 Bug ★
+                var rawData = window.AndroidProjectLoader ? window.AndroidProjectLoader.getProjectJson() : null;
+                var base64Data = window.AndroidProjectLoader ? window.AndroidProjectLoader.getProjectBase64() : null;
+                
                 if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
                 
-                // ★ 终极类型修复：必须返回 .buffer（ArrayBuffer类型）！标准 Scratch 的 VM 只有看到 ArrayBuffer 才肯干活！
                 function base64ToArrayBuffer(b64) {
                     var binaryString = window.atob(b64);
                     var len = binaryString.length;
@@ -1381,7 +1307,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     for (var i = 0; i < len; i++) {
                         bytes[i] = binaryString.charCodeAt(i);
                     }
-                    return bytes.buffer; // 此处少个 .buffer 就会导致官方版全军覆没！
+                    return bytes.buffer;
                 }
 
                 var buffer = null;
@@ -1390,53 +1316,59 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 }
 
                 var attempts = 0;
-                var maxAttempts = 120; // 60秒最大轮询
+                var maxAttempts = 120; // 最大轮询 60 秒
                 var readyCount = 0;
 
                 function getVm() {
                     if (window.vm) return window.vm;
                     if (window.scratch && window.scratch.vm) return window.scratch.vm;
                     if (window.__turboWarp__ && window.__turboWarp__.vm) return window.__turboWarp__.vm;
-                    // 兼容某些套壳 iframe
                     var frames = document.querySelectorAll('iframe');
                     for (var i = 0; i < frames.length; i++) {
                         try { if (frames[i].contentWindow && frames[i].contentWindow.vm) return frames[i].contentWindow.vm; } catch(e) {}
                     }
+                    
+                    // ★ 终极 React Fiber 深入搜索，就算被官网藏起来也能扒出来 ★
+                    try {
+                        var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]') || document.querySelector('[class*="gui_page-wrapper_"]');
+                        if (el) {
+                            var keys = Object.keys(el);
+                            var reactKey = keys.find(function(k) { return k.startsWith('__reactInternalInstance') || k.startsWith('__reactFiber'); });
+                            if (reactKey) {
+                                var fiber = el[reactKey];
+                                while (fiber) {
+                                    if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) return fiber.stateNode.props.vm;
+                                    if (fiber.memoizedProps && fiber.memoizedProps.vm) return fiber.memoizedProps.vm;
+                                    fiber = fiber.return;
+                                }
+                            }
+                        }
+                    } catch(e) {}
+                    
                     return null;
                 }
 
                 function tryInject() {
-                    // 如果有新的加载任务进入，立刻静默终止当前老任务
                     if (window.__scratch_job_id !== currentJobId) return true; 
                     attempts++;
 
-                    // ==========================================
-                    // 🚀 轨道一：TurboWarp 极速通道
-                    // ==========================================
+                    // 1. 🚀 TurboWarp 专属通道
                     if (window.loadProject && typeof window.loadProject === 'function') {
-                        window.loadProject(buffer ? buffer : JSON.parse(rawData));
+                        var twData = buffer ? buffer : JSON.parse(rawData);
+                        window.loadProject(twData);
                         console.log("Success: Injected via TurboWarp API.");
                         return true; 
                     }
 
-                    // ==========================================
-                    // 🐢 轨道二：标准 Scratch 底层 VM 强插通道
-                    // ==========================================
+                    // 2. 🐢 标准版底层直接强插通道
                     var targetVm = getVm();
                     
-                    // 状态检测1：VM 必须初始化完成，且自带的默认小猫必须出现
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         readyCount = 0; return false; 
                     }
                     
-                    var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
-                    if (!blocklyReady) {
-                        readyCount = 0; return false;
-                    }
-
-                    // 状态检测2：网页加载遮罩必须彻底消失
-                    var loaderVisible = false;
                     var loaders = document.querySelectorAll('[class*="loader_fullscreen"], [class*="loader_background"]');
+                    var loaderVisible = false;
                     for (var i = 0; i < loaders.length; i++) {
                         if (window.getComputedStyle(loaders[i]).display !== 'none') {
                             loaderVisible = true; break;
@@ -1446,29 +1378,26 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         readyCount = 0; return false;
                     }
 
-                    // 状态检测3：空闲稳定器。等小猫落地后，强行再等 6 个周期(约 3 秒)
-                    // 确保国内镜像站缓慢的网络请求彻底死亡，不造成反向覆盖！
+                    // 稳定期等待，防止官方网络延迟加载导致覆盖
                     readyCount++;
-                    if (readyCount < 6) {
-                        console.log("Waiting for Standard Scratch to settle... (" + readyCount + "/6)");
+                    if (readyCount < 4) {
+                        console.log("Waiting for React UI to settle... (" + readyCount + "/4)");
                         return false; 
                     }
 
-                    console.log("Standard Scratch Target IDLE. Executing perfect VM load.");
+                    console.log("Target VM locked. Executing safe payload.");
 
                     try {
-                        // 使用原汁原味的 ArrayBuffer 灌注 VM，这回它绝对不敢拒绝！
-                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
+                        var dataToLoad = buffer ? buffer : JSON.parse(rawData);
+                        var loadPromise = targetVm.loadProject(dataToLoad);
                         
                         loadPromise.then(function() {
                             setTimeout(function() {
                                 if (window.__scratch_job_id !== currentJobId) return;
                                 
-                                // 派发工作区与目标更新事件
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
                                 
-                                // 闪电切换角色：强制 React 抛弃旧状态，渲染最新注入的积木
                                 var targets = targetVm.runtime.targets;
                                 if (targets && targets.length > 0 && targetVm.setEditingTarget) {
                                     var stage = targets.find(function(t) { return t.isStage; });
@@ -1479,46 +1408,23 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                                     setTimeout(function() {
                                         if (window.__scratch_job_id !== currentJobId) return;
                                         if (sprite) targetVm.setEditingTarget(sprite.id);
-                                        
-                                        // ★ 核心终极唤醒：直捣 React 核心，让 Redux 状态机强制刷新！打破白屏装死！
-                                        try {
-                                            var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
-                                            if (el) {
-                                                var keys = Object.keys(el);
-                                                var reactKey = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
-                                                if (reactKey) {
-                                                    var fiber = el[reactKey];
-                                                    var store = null;
-                                                    while (fiber) {
-                                                        if (fiber.stateNode && fiber.stateNode.store) { store = fiber.stateNode.store; break; }
-                                                        if (fiber.memoizedProps && fiber.memoizedProps.store) { store = fiber.memoizedProps.store; break; }
-                                                        fiber = fiber.return;
-                                                    }
-                                                    if (store) store.dispatch({ type: 'scratch-gui/project-state/SET_PROJECT_ID', projectId: 'injected_' + currentJobId });
-                                                }
-                                            }
-                                        } catch(ex) {}
-
                                         window.dispatchEvent(new Event('resize'));
-                                        console.log("Standard Scratch injection fully completed!");
-                                    }, 80);
+                                        console.log("Standard Scratch load complete!");
+                                    }, 50);
                                 } else {
                                     window.dispatchEvent(new Event('resize'));
                                 }
                             }, 150);
-                        }).catch(function(e) { 
-                            console.error("VM load error:", e); 
-                        });
+                        }).catch(function(e) { console.error("VM load error:", e); });
                         
                         return true;
                     } catch(e) {
                         console.error("Injection error:", e);
-                        readyCount = 0; // 发生异常则复位稳定器重试
+                        readyCount = 0;
                         return false;
                     }
                 }
 
-                // 启动 500ms 间隔的隐形探针
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts || window.__scratch_job_id !== currentJobId) {
@@ -1526,9 +1432,9 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         }
                     }, 500);
                 }
-                return "Polling Started for Job: " + currentJobId;
+                return "Started deep-search injection for Job ID: " + currentJobId;
             } catch(e) {
-                return "Fatal Error: " + e.message;
+                return "Fatal JS Error: " + e.message;
             }
         })();
     """.trimIndent()
@@ -1536,7 +1442,6 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
         android.util.Log.d("ScratchLoadProject", "loadProject result: $res")
     }
 }
-
 
 fun getXmlForBlockText(blockText: String): String {
     return when {
@@ -1616,11 +1521,14 @@ class ScratchJsInterface(private val onChanged: () -> Unit) {
     }
 }
 
-
-
-class ScratchProjectLoaderInterface(private var projectData: String = "") {
-    fun setProjectData(data: String) {
+// ★ 终极数据隔离桥梁：直接在 Android 内存里存好大文件，让 JS 来这里“进货”
+class ScratchProjectLoaderInterface(
+    private var projectData: String = "", 
+    private var base64Data: String = ""
+) {
+    fun setProjectData(data: String, base64: String = "") {
         projectData = data
+        base64Data = base64
     }
     
     @android.webkit.JavascriptInterface
@@ -1632,5 +1540,9 @@ class ScratchProjectLoaderInterface(private var projectData: String = "") {
     fun getProjectJson(): String {
         return projectData
     }
+    
+    @android.webkit.JavascriptInterface
+    fun getProjectBase64(): String {
+        return base64Data
+    }
 }
-
