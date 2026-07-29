@@ -1272,18 +1272,54 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
 fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: String) {
     if (webView == null) return
 
-    val safeJson = projectJson.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("$", "\\$")
+    val jobId = System.currentTimeMillis()
+
+    // 1. 初始化 JS 端接收容器，并设定新任务的唯一 ID（终止一切旧的死循环）
+    webView.evaluateJavascript("""
+        window.__scratch_job_id = $jobId;
+        window.__android_b64 = '';
+        window.__android_json_b64 = '';
+    """.trimIndent(), null)
+
+    // 2. 核心黑科技：每次仅发送 150KB 切片，彻底绕开 Android WebView 的 1MB 崩溃红线
+    val chunkSize = 150 * 1024 
+
+    if (base64Data.isNotEmpty()) {
+        val b64Chunks = base64Data.chunked(chunkSize)
+        for (chunk in b64Chunks) {
+            // Base64 只包含安全字符，无需任何转义，绝对不会报 JS 语法错误
+            webView.evaluateJavascript("window.__android_b64 += \"$chunk\";", null)
+        }
+    }
+
+    if (projectJson.isNotEmpty()) {
+        // 把 JSON 也转成 Base64 再发送，彻底消灭所有 引号/换行符 引起的断链和解析异常
+        val jsonBase64 = android.util.Base64.encodeToString(projectJson.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
+        val jsonChunks = jsonBase64.chunked(chunkSize)
+        for (chunk in jsonChunks) {
+            webView.evaluateJavascript("window.__android_json_b64 += \"$chunk\";", null)
+        }
+    }
+
+    // 3. 开始执行核心注入
     val js = """
         (function() {
             try {
-                window.__scratch_job_id = (window.__scratch_job_id || 0) + 1;
                 var currentJobId = window.__scratch_job_id;
-
-                var rawData = "${safeJson}";
-                var base64Data = "${base64Data}";
+                var base64Data = window.__android_b64;
+                var jsonB64 = window.__android_json_b64;
                 
-                if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
+                if ((!base64Data || base64Data.length === 0) && (!jsonB64 || jsonB64.length === 0)) return "Empty data";
                 
+                // 将安全运达的 JSON Base64 解码回原本的字符串
+                var rawData = "";
+                if (jsonB64 && jsonB64.length > 0) {
+                    try {
+                        rawData = decodeURIComponent(escape(window.atob(jsonB64)));
+                    } catch(e) { console.error("JSON decode error", e); }
+                }
+                
+                // 标准版 VM 仅认准 Uint8Array，进行严格二进制转换
                 function base64ToUint8Array(b64) {
                     var binaryString = window.atob(b64);
                     var len = binaryString.length;
@@ -1312,6 +1348,7 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                         try { if (frames[i].contentWindow && frames[i].contentWindow.vm) return frames[i].contentWindow.vm; } catch(e) {}
                     }
                     
+                    // 极限 React Fiber DOM 强扒
                     try {
                         var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]') || document.querySelector('[class*="gui_page-wrapper_"]');
                         if (el) {
@@ -1327,18 +1364,18 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                             }
                         }
                     } catch(e) {}
-                    
                     return null;
                 }
 
                 function tryInject() {
+                    // 若检测到后续切片任务开启，旧探针立刻销毁，绝不干扰
                     if (window.__scratch_job_id !== currentJobId) return true; 
                     attempts++;
 
-                    // 1. 🚀 TurboWarp
+                    // 1. 🚀 TurboWarp 极速通道 (完美)
                     if (window.loadProject && typeof window.loadProject === 'function') {
-                        var twData = uint8Array ? uint8Array.buffer : JSON.parse(rawData);
-                        window.loadProject(twData);
+                        var twData = uint8Array ? uint8Array.buffer : (rawData ? JSON.parse(rawData) : null);
+                        if (twData) window.loadProject(twData);
                         console.log("Success: Injected via TurboWarp API.");
                         return true; 
                     }
@@ -1350,8 +1387,7 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                         readyCount = 0; return false; 
                     }
                     
-                    // ★ 终极修复：绝对不能校验 window.Blockly！官方编译版不暴露它！
-                    // 改为校验 DOM 节点是否存在，证明界面已经就绪
+                    // 利用最稳妥的 DOM 探测
                     var hasWorkspace = document.querySelector('.blocklyWorkspace') || document.querySelector('[class*="gui_blocks-wrapper"]');
                     if (!hasWorkspace) {
                         var frames = document.querySelectorAll('iframe');
@@ -1374,58 +1410,33 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                         readyCount = 0; return false;
                     }
 
+                    // 彻底稳定期：4周期 (约2秒)
                     readyCount++;
                     if (readyCount < 4) {
-                        console.log("Waiting for React UI to settle... (" + readyCount + "/4)");
                         return false; 
                     }
 
                     console.log("Target VM locked. Executing safe payload.");
 
                     try {
-                        var fileInputs = document.querySelectorAll('input[type="file"]');
-                        var reactInjected = false;
-
-                        if (uint8Array && fileInputs.length > 0) {
-                            var dynamicFileName = "project_" + Date.now() + ".sb3";
-                            var file = new File([uint8Array.buffer], dynamicFileName, { type: "application/x.scratch.sb3" });
-                            var dt = new DataTransfer();
-                            dt.items.add(file);
-                            
-                            for (var i = 0; i < fileInputs.length; i++) {
-                                var input = fileInputs[i];
-                                var keys = Object.keys(input);
-                                var reactKey = keys.find(function(k) { return k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'); });
-                                
-                                if (reactKey && input[reactKey] && input[reactKey].onChange) {
-                                    input.value = ''; // 必须清空，防同名文件拦截
-                                    try {
-                                        var nativeFileSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "files").set;
-                                        if (nativeFileSetter) nativeFileSetter.call(input, dt.files);
-                                    } catch(e) {
-                                        input.files = dt.files;
-                                    }
-                                    input[reactKey].onChange({
-                                        target: input,
-                                        currentTarget: input,
-                                        preventDefault: function() {},
-                                        stopPropagation: function() {}
-                                    });
-                                    reactInjected = true;
-                                }
-                            }
-                        }
-
-                        if (reactInjected) {
-                            console.log("Injected via React File Input bypass!");
-                            return true;
-                        }
-
-                        // VM 兜底强刷
-                        var loadPromise = uint8Array ? targetVm.loadProject(uint8Array.buffer) : targetVm.loadProject(JSON.parse(rawData));
+                        // 兜底强刷：绕开所有 UI
+                        var dataToLoad = uint8Array ? uint8Array.buffer : JSON.parse(rawData);
+                        var loadPromise = targetVm.loadProject(dataToLoad);
+                        
                         loadPromise.then(function() {
                             setTimeout(function() {
                                 if (window.__scratch_job_id !== currentJobId) return;
+                                
+                                // 销毁残余旧视图
+                                var bly = window.Blockly;
+                                if (!bly) {
+                                    var fs = document.querySelectorAll('iframe');
+                                    for(var j=0; j<fs.length; j++) {
+                                        try { if(fs[j].contentWindow && fs[j].contentWindow.Blockly) { bly = fs[j].contentWindow.Blockly; break; } }catch(e){}
+                                    }
+                                }
+                                try { if (bly && bly.getMainWorkspace()) bly.getMainWorkspace().clear(); } catch(err){}
+                                
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
                                 
@@ -1433,12 +1444,13 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                                 if (targets && targets.length > 0 && targetVm.setEditingTarget) {
                                     var stage = targets.find(function(t) { return t.isStage; });
                                     var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
+                                    
                                     if (stage) targetVm.setEditingTarget(stage.id);
                                     setTimeout(function() {
                                         if (window.__scratch_job_id !== currentJobId) return;
                                         if (sprite) targetVm.setEditingTarget(sprite.id);
                                         
-                                        // 强制唤醒 Redux 状态
+                                        // 强制唤醒 Redux 核心状态机
                                         try {
                                             var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
                                             if (el) {
@@ -1486,6 +1498,7 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
             }
         })();
     """.trimIndent()
+    
     webView.evaluateJavascript(js, null)
 }
 
