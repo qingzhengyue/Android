@@ -483,101 +483,42 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             }
                         )
 
-                        // 载入作品积木 (教师专用)
-                        if (teacherViewingWorkspace && draftCode.isNotBlank()) {
-                            DropdownMenuItem(
-                                text = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF9C27B0), modifier = Modifier.size(18.dp))
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text("载入作品积木 🧩", fontSize = 13.sp)
-                                    }
-                                },
-                                onClick = {
-                                    showMoreTopMenu = false
-                                    try {
-                                        val loader = projectLoaderInterface
-                                        if (loader != null && webViewInstance != null) {
-                                            loader.setProjectData(draftCode)
-                                            val loadJs = """
-                                                (function() {
-                                                    var attempts = 0, maxAttempts = 60;
-                                                    function findVm() {
-                                                        if (window.vm && window.vm.loadProject) return window.vm;
-                                                        if (window.loadProject) return {
-                                                            loadProject: function(data) {
-                                                                try {
-                                                                    var str = (typeof data === 'object') ? JSON.stringify(data) : data;
-                                                                    window.loadProject(str);
-                                                                    return Promise.resolve();
-                                                                } catch(e) {
-                                                                    return Promise.reject(e);
-                                                                }
-                                                            }
-                                                        };
-                                                        var frames = document.querySelectorAll('iframe');
-                                                        for (var i = 0; i < frames.length; i++) {
-                                                            try {
-                                                                if (frames[i].contentWindow && frames[i].contentWindow.vm && frames[i].contentWindow.vm.loadProject)
-                                                                    return frames[i].contentWindow.vm;
-                                                                if (frames[i].contentWindow && frames[i].contentWindow.loadProject) {
-                                                                    var sw = frames[i].contentWindow;
-                                                                    return {
-                                                                        loadProject: function(data) {
-                                                                            try {
-                                                                                var str = (typeof data === 'object') ? JSON.stringify(data) : data;
-                                                                                sw.loadProject(str);
-                                                                                return Promise.resolve();
-                                                                            } catch(e) {
-                                                                                return Promise.reject(e);
-                                                                            }
-                                                                        }
-                                                                    };
-                                                                }
-                                                            } catch(e) {}
-                                                        }
-                                                        if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
-                                                        return null;
-                                                    }
-                                                    function tryLoad() {
-                                                        attempts++;
-                                                        var vm = findVm();
-                                                        if (!vm) return false;
-                                                        try {
-                                                            var raw = window.AndroidProjectLoader.getProjectData();
-                                                            if (!raw || raw.length === 0) return false;
-                                                            var obj = JSON.parse(raw);
-                                                            if (!obj.meta) { obj = { meta: { semver: '3.0.0', vm: '0.2.0', agent: 'Android' }, targets: obj.targets || obj } }
-                                                            vm.loadProject(obj).then(function() {
-                                                                console.log('ManualLoader: SUCCESS');
-                                                                if (vm.emitWorkspaceUpdate) vm.emitWorkspaceUpdate();
-                                                                if (vm.runtime && vm.runtime.targets) vm.emit('targetsUpdate');
-                                                            }).catch(function(err) { console.error('ManualLoader: FAILED: ' + err); });
-                                                        } catch(e) { console.error('ManualLoader: parse FAILED: ' + e.message); }
-                                                        return true;
-                                                    }
-                                                    if (!tryLoad()) {
-                                                        var itv = setInterval(function() {
-                                                            if (tryLoad() || attempts >= maxAttempts) clearInterval(itv);
-                                                        }, 500);
-                                                    }
-                                                    return 'ManualLoader started';
-                                                })();
-                                            """.trimIndent()
-                                            webViewInstance?.evaluateJavascript(loadJs, null)
-                                            android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
-                                        } else {
-                                            val sb3File = java.io.File(context.cacheDir, "manual_load_${'$'}{System.currentTimeMillis()}.sb3")
-                                            sb3File.writeText(draftCode, Charsets.UTF_8)
-                                            viewModel.teacherPendingSb3Path.value = sb3File.absolutePath
-                                            android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
-                                        }
-                                    } catch (e: Exception) {
-                                        android.widget.Toast.makeText(context, "载入失败: ${'$'}{e.message}", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
+                        // 载入作品积木 (全员可用)
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Refresh, contentDescription = null, tint = Color(0xFF9C27B0), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("载入当前作品积木 🧩", fontSize = 13.sp)
                                 }
-                            )
-                        }
+                            },
+                            onClick = {
+                                showMoreTopMenu = false
+                                val webView = webViewInstance
+                                val codeToLoad = activeProjectCode
+                                if (webView != null && codeToLoad.isNotBlank()) {
+                                    projectLoaderInterface?.setProjectData(codeToLoad)
+                                    loadProjectIntoWebView(webView, codeToLoad, context)
+                                    android.widget.Toast.makeText(context, "正在载入作品积木到编辑器，请稍候... ✨", android.widget.Toast.LENGTH_SHORT).show()
+                                } else {
+                                    android.widget.Toast.makeText(context, "当前工作区暂无可载入的代码", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Default.Collections, contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("选择已提交作品导入 📁", fontSize = 13.sp)
+                                }
+                            },
+                            onClick = {
+                                showMoreTopMenu = false
+                                showLoadWorkDialog = true
+                            }
+                        )
                     }
                 }
             }
@@ -1405,6 +1346,82 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 var attempts = 0;
                 var maxAttempts = 30; // 30 * 500ms = 15 秒轮询重试
 
+                function repairProjectJson(obj) {
+                    if (!obj || typeof obj !== 'object') obj = {};
+                    if (!Array.isArray(obj.targets)) {
+                        if (obj.blocks) {
+                            obj = { targets: [ { isStage: false, name: '角色1', blocks: obj.blocks } ] };
+                        } else {
+                            obj = { targets: [] };
+                        }
+                    }
+                    var hasStage = false;
+                    for (var i = 0; i < obj.targets.length; i++) {
+                        var t = obj.targets[i];
+                        if (t.isStage) { hasStage = true; break; }
+                    }
+                    if (!hasStage) {
+                        obj.targets.unshift({
+                            isStage: true,
+                            name: "Stage",
+                            variables: {},
+                            lists: {},
+                            broadcasts: {},
+                            blocks: {},
+                            comments: {},
+                            currentCostume: 0,
+                            costumes: [{
+                                name: "背景1",
+                                bitmapResolution: 1,
+                                dataFormat: "svg",
+                                assetId: "cd21584322f79459ecb5864133b44723",
+                                md5ext: "cd21584322f79459ecb5864133b44723.svg",
+                                rotationCenterX: 240,
+                                rotationCenterY: 180
+                            }],
+                            sounds: [],
+                            volume: 100,
+                            layerOrder: 0
+                        });
+                    }
+                    for (var j = 0; j < obj.targets.length; j++) {
+                        var target = obj.targets[j];
+                        if (!target.variables) target.variables = {};
+                        if (!target.lists) target.lists = {};
+                        if (!target.broadcasts) target.broadcasts = {};
+                        if (!target.blocks) target.blocks = {};
+                        if (!target.comments) target.comments = {};
+                        if (!Array.isArray(target.costumes) || target.costumes.length === 0) {
+                            target.costumes = [{
+                                name: target.isStage ? "背景1" : "造型1",
+                                bitmapResolution: 1,
+                                dataFormat: "svg",
+                                assetId: "b7853f557e44241d288a7593e62c0d58",
+                                md5ext: "b7853f557e44241d288a7593e62c0d58.svg",
+                                rotationCenterX: 48,
+                                rotationCenterY: 50
+                            }];
+                        }
+                        if (typeof target.currentCostume !== 'number') target.currentCostume = 0;
+                        if (!Array.isArray(target.sounds)) target.sounds = [];
+                        if (typeof target.volume !== 'number') target.volume = 100;
+                        if (typeof target.layerOrder !== 'number') target.layerOrder = j;
+                        if (!target.isStage) {
+                            if (typeof target.visible !== 'boolean') target.visible = true;
+                            if (typeof target.x !== 'number') target.x = 0;
+                            if (typeof target.y !== 'number') target.y = 0;
+                            if (typeof target.size !== 'number') target.size = 100;
+                            if (typeof target.direction !== 'number') target.direction = 90;
+                            if (typeof target.draggable !== 'boolean') target.draggable = false;
+                            if (!target.rotationStyle) target.rotationStyle = "all around";
+                        }
+                    }
+                    if (!Array.isArray(obj.monitors)) obj.monitors = [];
+                    if (!Array.isArray(obj.extensions)) obj.extensions = [];
+                    if (!obj.meta) obj.meta = { semver: "3.0.0", vm: "0.2.0", agent: "Android" };
+                    return obj;
+                }
+
                 function findVm() {
                     if (window.vm && window.vm.loadProject) return window.vm;
                     var frames = document.querySelectorAll('iframe');
@@ -1415,17 +1432,22 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                             }
                         } catch(e) {}
                     }
-                    var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
-                    if (el) {
-                        var keys = Object.keys(el);
-                        var key = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
-                        if (key) {
-                            var fiber = el[key];
-                            while (fiber) {
-                                if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
-                                    return fiber.stateNode.props.vm;
+                    var selectors = ['#scratch', '[class^="gui_stage-wrapper_"]', '#app', 'body'];
+                    for (var s = 0; s < selectors.length; s++) {
+                        var el = document.querySelector(selectors[s]);
+                        if (el) {
+                            var keys = Object.keys(el);
+                            var key = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
+                            if (key) {
+                                var fiber = el[key];
+                                var depth = 0;
+                                while (fiber && depth < 30) {
+                                    if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
+                                        return fiber.stateNode.props.vm;
+                                    }
+                                    fiber = fiber.return;
+                                    depth++;
                                 }
-                                fiber = fiber.return;
                             }
                         }
                     }
@@ -1436,19 +1458,11 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
 
                 function tryInject() {
                     attempts++;
-                    if (window.loadProject) {
-                        try {
-                            window.loadProject(rawData);
-                            console.log("Success via window.loadProject after " + attempts + " attempts");
-                            return true;
-                        } catch(e) { console.error("window.loadProject error:", e); }
-                    }
-                    
                     var targetVm = findVm();
                     if (targetVm) {
                         try {
-                            var obj = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
-                            if (!obj.meta) { obj = { meta: { semver: '3.0.0', vm: '0.2.0', agent: 'Android' }, targets: obj.targets || obj }; }
+                            var parsed = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
+                            var obj = repairProjectJson(parsed);
                             
                             var doLoad = function(data) {
                                 if (typeof targetVm.loadProject === 'function') return targetVm.loadProject(data);
@@ -1471,6 +1485,13 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                             console.error("Parse or load VM error:", e);
                             return true;
                         }
+                    }
+                    if (window.loadProject) {
+                        try {
+                            window.loadProject(rawData);
+                            console.log("Success via window.loadProject after " + attempts + " attempts");
+                            return true;
+                        } catch(e) { console.error("window.loadProject error:", e); }
                     }
                     return false;
                 }
