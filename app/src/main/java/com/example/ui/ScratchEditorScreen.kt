@@ -1350,14 +1350,16 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                         readyCount = 0; return false; 
                     }
                     
-                    var bly = window.Blockly;
-                    if (!bly) {
+                    // ★ 终极修复：绝对不能校验 window.Blockly！官方编译版不暴露它！
+                    // 改为校验 DOM 节点是否存在，证明界面已经就绪
+                    var hasWorkspace = document.querySelector('.blocklyWorkspace') || document.querySelector('[class*="gui_blocks-wrapper"]');
+                    if (!hasWorkspace) {
                         var frames = document.querySelectorAll('iframe');
                         for(var f=0; f<frames.length; f++){
-                            if(frames[f].contentWindow && frames[f].contentWindow.Blockly) { bly = frames[f].contentWindow.Blockly; break; }
+                            try { if(frames[f].contentDocument.querySelector('.blocklyWorkspace')) { hasWorkspace = true; break; } }catch(e){}
                         }
                     }
-                    if (!bly || !bly.getMainWorkspace || !bly.getMainWorkspace()) {
+                    if (!hasWorkspace) {
                         readyCount = 0; return false;
                     }
 
@@ -1373,17 +1375,19 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                     }
 
                     readyCount++;
-                    if (readyCount < 6) return false;
+                    if (readyCount < 4) {
+                        console.log("Waiting for React UI to settle... (" + readyCount + "/4)");
+                        return false; 
+                    }
+
+                    console.log("Target VM locked. Executing safe payload.");
 
                     try {
-                        // ★ 核心修复3：动态生成防重复的文件名！
-                        // 真实的场景中你会不断切换不同的 .sb3 项目。如果每次传给 React 的文件名都一样，
-                        // 浏览器会认为你传了同一个文件，直接屏蔽 onChange 事件！
-                        var dynamicFileName = "project_" + Date.now() + ".sb3";
                         var fileInputs = document.querySelectorAll('input[type="file"]');
                         var reactInjected = false;
 
                         if (uint8Array && fileInputs.length > 0) {
+                            var dynamicFileName = "project_" + Date.now() + ".sb3";
                             var file = new File([uint8Array.buffer], dynamicFileName, { type: "application/x.scratch.sb3" });
                             var dt = new DataTransfer();
                             dt.items.add(file);
@@ -1394,8 +1398,13 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                                 var reactKey = keys.find(function(k) { return k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers'); });
                                 
                                 if (reactKey && input[reactKey] && input[reactKey].onChange) {
-                                    input.value = ''; // 必须清空历史记录，确保触发 onChange
-                                    input.files = dt.files;
+                                    input.value = ''; // 必须清空，防同名文件拦截
+                                    try {
+                                        var nativeFileSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "files").set;
+                                        if (nativeFileSetter) nativeFileSetter.call(input, dt.files);
+                                    } catch(e) {
+                                        input.files = dt.files;
+                                    }
                                     input[reactKey].onChange({
                                         target: input,
                                         currentTarget: input,
@@ -1408,18 +1417,18 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                         }
 
                         if (reactInjected) {
-                            console.log("Injected securely via React File Input bypass!");
+                            console.log("Injected via React File Input bypass!");
                             return true;
                         }
 
-                        // 如果 React 输入框被阉割，走 VM 强刷兜底
+                        // VM 兜底强刷
                         var loadPromise = uint8Array ? targetVm.loadProject(uint8Array.buffer) : targetVm.loadProject(JSON.parse(rawData));
                         loadPromise.then(function() {
                             setTimeout(function() {
                                 if (window.__scratch_job_id !== currentJobId) return;
-                                try { if (bly && bly.getMainWorkspace()) bly.getMainWorkspace().clear(); } catch(err){}
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
+                                
                                 var targets = targetVm.runtime.targets;
                                 if (targets && targets.length > 0 && targetVm.setEditingTarget) {
                                     var stage = targets.find(function(t) { return t.isStage; });
@@ -1428,17 +1437,38 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                                     setTimeout(function() {
                                         if (window.__scratch_job_id !== currentJobId) return;
                                         if (sprite) targetVm.setEditingTarget(sprite.id);
+                                        
+                                        // 强制唤醒 Redux 状态
+                                        try {
+                                            var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
+                                            if (el) {
+                                                var keys = Object.keys(el);
+                                                var reactKey = keys.find(function(k) { return k.startsWith('__reactInternalInstance') || k.startsWith('__reactFiber'); });
+                                                if (reactKey) {
+                                                    var fiber = el[reactKey];
+                                                    var store = null;
+                                                    while (fiber) {
+                                                        if (fiber.stateNode && fiber.stateNode.store) { store = fiber.stateNode.store; break; }
+                                                        if (fiber.memoizedProps && fiber.memoizedProps.store) { store = fiber.memoizedProps.store; break; }
+                                                        fiber = fiber.return;
+                                                    }
+                                                    if (store) store.dispatch({ type: 'scratch-gui/project-state/SET_PROJECT_ID', projectId: 'injected_' + currentJobId });
+                                                }
+                                            }
+                                        } catch(ex) {}
+                                        
                                         window.dispatchEvent(new Event('resize'));
                                     }, 80);
                                 } else {
                                     window.dispatchEvent(new Event('resize'));
                                 }
                             }, 150);
-                        }).catch(function(e) {});
+                        }).catch(function(e) { console.error("VM load error:", e); });
                         
                         return true;
                     } catch(e) {
-                        readyCount = 0; 
+                        console.error("Injection error:", e);
+                        readyCount = 0;
                         return false;
                     }
                 }
@@ -1465,4 +1495,3 @@ class ScratchJsInterface(private val onChanged: () -> Unit) {
         onChanged()
     }
 }
-
