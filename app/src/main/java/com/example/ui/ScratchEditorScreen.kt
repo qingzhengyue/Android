@@ -1355,7 +1355,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 if (!rawData || rawData.length === 0) return "Empty data";
                 
                 var attempts = 0;
-                var maxAttempts = 40; // 40 * 500ms = 20 秒轮询重试
+                var maxAttempts = 40; // 40 * 500ms = 20 秒弹性轮询
 
                 function base64ToArrayBuffer(b64) {
                     var binaryString = window.atob(b64);
@@ -1377,25 +1377,6 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                             }
                         } catch(e) {}
                     }
-                    var selectors = ['#scratch', '[class^="gui_stage-wrapper_"]', '#app', 'body'];
-                    for (var s = 0; s < selectors.length; s++) {
-                        var el = document.querySelector(selectors[s]);
-                        if (el) {
-                            var keys = Object.keys(el);
-                            var key = keys.find(function(k) { return k.startsWith('__reactInternalInstance${'$'}') || k.startsWith('__reactFiber${'$'}'); });
-                            if (key) {
-                                var fiber = el[key];
-                                var depth = 0;
-                                while (fiber && depth < 30) {
-                                    if (fiber.stateNode && fiber.stateNode.props && fiber.stateNode.props.vm) {
-                                        return fiber.stateNode.props.vm;
-                                    }
-                                    fiber = fiber.return;
-                                    depth++;
-                                }
-                            }
-                        }
-                    }
                     if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
                     if (window.__turboWarp__ && window.__turboWarp__.vm && window.__turboWarp__.vm.loadProject) return window.__turboWarp__.vm;
                     return null;
@@ -1404,59 +1385,54 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 function tryInject() {
                     attempts++;
                     
-                    // 【关键修复 1】不仅仅要等 VM，必须等 Blockly 画布 UI 真正渲染出来，防止被默认初始化覆盖！
+                    // 1. 等待 Scratch 核心的 Blockly 画布 UI 和 VM 引擎双双渲染完毕
                     var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
                     var targetVm = findVm();
                     
-                    if (!targetVm && !blocklyReady) {
-                        return false; // UI 和 VM 都没准备好，继续轮询等待
+                    // 【关键修复 1】：逻辑修正为 || (或)。只要有一个没准备好，就坚决继续等！防覆盖！
+                    if (!targetVm || !blocklyReady) {
+                        return false; 
                     }
 
                     try {
-                        // 针对支持全局注入的编辑器 (如 TurboWarp)
                         if (window.loadProject && base64Data && base64Data.length > 0) {
-                            var buf = base64ToArrayBuffer(base64Data);
-                            window.loadProject(buf);
+                            window.loadProject(base64ToArrayBuffer(base64Data));
                             console.log("Success via window.loadProject (TurboWarp mode)");
                             return true;
                         }
 
-                        // 【关键修复 2】针对标准 Scratch 镜像站，模拟原生“打开文件”操作，完美触发 Redux 状态刷新
+                        // 【关键修复 2】：原生上传组件拦截。采用 accept*=".sb3" 包含匹配官方元素
                         if (base64Data && base64Data.length > 0) {
                             var buffer = base64ToArrayBuffer(base64Data);
-                            // 将 ArrayBuffer 包装成浏览器原生的 File 对象
                             var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
                             
-                            // 寻找 Scratch 隐藏的原生上传 Input 组件
-                            var fileInput = document.querySelector('input[accept=".sb3"]');
+                            var fileInput = document.querySelector('input[type="file"][accept*=".sb3"]');
+                            
                             if (fileInput) {
-                                // 利用 DataTransfer 黑科技，将脚本生成的文件塞给原生 Input
                                 var dataTransfer = new DataTransfer();
                                 dataTransfer.items.add(file);
                                 fileInput.files = dataTransfer.files;
                                 
-                                // 派发 change 事件，Scratch 会认为这是用户手动从电脑选中的文件，完美走通所有 UI 渲染流程！
+                                // 【关键修复 3】：兼容更严苛的 React 16+ 事件池机制，连发 input 和 change 事件
+                                fileInput.dispatchEvent(new Event('input', { bubbles: true }));
                                 fileInput.dispatchEvent(new Event('change', { bubbles: true }));
                                 console.log("Success via native File Input injection!");
                                 return true;
                             }
                             
-                            // 兜底方案：如果找不到 Input，但有 VM，强行操作 VM 并手动激活目标，触发工作区刷新
-                            if (targetVm) {
-                                targetVm.loadProject(buffer).then(function() {
-                                    if (targetVm.runtime && targetVm.runtime.targets && targetVm.runtime.targets.length > 0) {
-                                        // 强制选中某个角色（舞台或角色1），这会强迫 Blockly 重新向 VM 请求积木数据
-                                        targetVm.editingTarget = targetVm.runtime.targets[1] || targetVm.runtime.targets[0];
-                                    }
-                                    if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
-                                    if (targetVm.runtime) targetVm.emit('targetsUpdate');
-                                    
-                                    // 触发 Hash Change 欺骗 React 路由进行强制更新
-                                    window.location.hash = window.location.hash === '#1' ? '#0' : '#1';
-                                    setTimeout(function() { window.dispatchEvent(new Event('hashchange')); }, 100);
-                                });
-                                return true;
-                            }
+                            // 兜底方案 (Fallback)
+                            targetVm.loadProject(buffer).then(function() {
+                                if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
+                                if (targetVm.runtime) {
+                                    targetVm.runtime.requestRedraw();
+                                    targetVm.emit('targetsUpdate');
+                                }
+                                var ws = typeof Blockly !== 'undefined' ? Blockly.getMainWorkspace() : null;
+                                if (ws && ws.fireChangeListener) {
+                                    ws.fireChangeListener(new Event('change'));
+                                }
+                            });
+                            return true;
                         }
                     } catch(e) {
                         console.error("Injection process error:", e);
@@ -1464,7 +1440,6 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     return false;
                 }
 
-                // 启动弹性轮询
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts) {
@@ -1475,7 +1450,6 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 }
                 return "Started safe VM polling injection with React sync";
             } catch(e) {
-                console.error("loadProject error:", e);
                 return "Error: " + e.message;
             }
         })();
