@@ -221,36 +221,27 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
     val workspaceLoadEvent by viewModel.workspaceLoadEvent.collectAsState()
 
-    // 统一计算并实时维持当前需要加载到 Scratch 中的核心代码 JSON 字符串
-    val activeProjectCode: String = remember(pendingTeacherSb3Path, workspaceLoadEvent, draftCode) {
-        var code = ""
-        if (!pendingTeacherSb3Path.isNullOrBlank()) {
+    // 1. 教师下发或特定任务载入时，单次触发 (切断与 draftCode 的绑定防死循环)
+    LaunchedEffect(pendingTeacherSb3Path) {
+        if (!pendingTeacherSb3Path.isNullOrBlank() && webViewInstance != null) {
             try {
                 val file = java.io.File(pendingTeacherSb3Path!!)
                 if (file.exists()) {
-                    code = file.readText(Charsets.UTF_8)
+                    val code = file.readText(Charsets.UTF_8)
+                    viewModel.currentDraftCode.value = code
+                    projectLoaderInterface?.setProjectData(code)
+                    loadProjectIntoWebView(webViewInstance!!, code, context)
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
-        if (code.isBlank() && !workspaceLoadEvent.isNullOrBlank()) {
-            code = workspaceLoadEvent!!
-        }
-        if (code.isBlank()) {
-            code = draftCode
-        }
-        code
     }
 
-    LaunchedEffect(activeProjectCode, projectLoaderInterface, webViewInstance) {
-        if (activeProjectCode.isNotBlank()) {
-            viewModel.currentDraftCode.value = activeProjectCode
-            projectLoaderInterface?.setProjectData(activeProjectCode)
-            val webView = webViewInstance
-            if (webView != null) {
-                loadProjectIntoWebView(webView, activeProjectCode, context)
-            }
+    // 2. 内部事件要求载入时，单次触发
+    LaunchedEffect(workspaceLoadEvent) {
+        if (!workspaceLoadEvent.isNullOrBlank() && webViewInstance != null) {
+            viewModel.currentDraftCode.value = workspaceLoadEvent!!
+            projectLoaderInterface?.setProjectData(workspaceLoadEvent!!)
+            loadProjectIntoWebView(webViewInstance!!, workspaceLoadEvent!!, context)
         }
     }
 
@@ -495,7 +486,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             onClick = {
                                 showMoreTopMenu = false
                                 val webView = webViewInstance
-                                val codeToLoad = activeProjectCode
+                                val codeToLoad = draftCode // ✅ 直接使用 draftCode
                                 if (webView != null && codeToLoad.isNotBlank()) {
                                     projectLoaderInterface?.setProjectData(codeToLoad)
                                     loadProjectIntoWebView(webView, codeToLoad, context)
@@ -600,7 +591,21 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             super.onPageFinished(view, url)
                             isPageLoading = false
                             
-                            val codeToLoad = activeProjectCode
+                            // 初始化加载：只在网页加载完毕时推一次代码
+                            var codeToLoad = ""
+                            if (!pendingTeacherSb3Path.isNullOrBlank()) {
+                                try {
+                                    val f = java.io.File(pendingTeacherSb3Path!!)
+                                    if (f.exists()) codeToLoad = f.readText(Charsets.UTF_8)
+                                } catch(e: Exception){}
+                            }
+                            if (codeToLoad.isBlank() && !workspaceLoadEvent.isNullOrBlank()) {
+                                codeToLoad = workspaceLoadEvent!!
+                            }
+                            if (codeToLoad.isBlank()) {
+                                codeToLoad = draftCode
+                            }
+                            
                             if (codeToLoad.isNotBlank()) {
                                 projectLoaderInterface?.setProjectData(codeToLoad)
                                 loadProjectIntoWebView(view, codeToLoad, context)
@@ -1364,7 +1369,10 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 var base64Data = $safeBase64Literal;
                 if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
                 
-                // 1. 将 Base64 解析为二进制 Buffer
+                var attempts = 0;
+                var maxAttempts = 80; 
+                var injected = false;
+                
                 function base64ToArrayBuffer(b64) {
                     var binaryString = window.atob(b64);
                     var len = binaryString.length;
@@ -1380,57 +1388,15 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     try { buffer = base64ToArrayBuffer(base64Data); } catch(e) {}
                 }
 
-                // ==========================================
-                // 🚀 轨道一：TurboWarp 极速专属通道
-                // ==========================================
-                // 没有任何等待！只要检测到专用 API，立刻注入并退出！恢复 V4 的极致速度！
-                if (window.loadProject && typeof window.loadProject === 'function' && buffer) {
-                    window.loadProject(buffer);
-                    console.log("Success: TurboWarp Fast Path executed instantly.");
-                    return "TurboWarp Path";
-                }
-
-
-                // ==========================================
-                // 🐢 轨道二：标准 Scratch 3.0 安全通道
-                // ==========================================
-                var attempts = 0;
-                var maxAttempts = 80; // 40秒弹性轮询
-                var injected = false;
-
                 function getVm() {
                     if (window.vm) return window.vm;
                     if (window.scratch && window.scratch.vm) return window.scratch.vm;
+                    if (window.__turboWarp__ && window.__turboWarp__.vm) return window.__turboWarp__.vm;
                     var frames = document.querySelectorAll('iframe');
                     for (var i = 0; i < frames.length; i++) {
                         try { if (frames[i].contentWindow && frames[i].contentWindow.vm) return frames[i].contentWindow.vm; } catch(e) {}
                     }
                     return null;
-                }
-
-                // 核心黑客手段：直接呼叫 React 内部绑定的文件上传事件
-                function triggerReactUpload() {
-                    var fileInputs = document.querySelectorAll('input[type="file"]');
-                    var success = false;
-                    if (buffer && fileInputs.length > 0) {
-                        var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
-                        for (var i = 0; i < fileInputs.length; i++) {
-                            var input = fileInputs[i];
-                            var reactKey = Object.keys(input).find(function(k) { 
-                                return k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers') || k.startsWith('__reactInternal'); 
-                            });
-                            if (reactKey && input[reactKey] && input[reactKey].onChange) {
-                                input[reactKey].onChange({
-                                    target: { files: [file] },
-                                    currentTarget: { files: [file] },
-                                    preventDefault: function() {},
-                                    stopPropagation: function() {}
-                                });
-                                success = true;
-                            }
-                        }
-                    }
-                    return success;
                 }
 
                 function tryInject() {
@@ -1439,7 +1405,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     
                     var targetVm = getVm();
                     
-                    // 【绝对防御锁】：必须等系统初始化的“默认小猫”彻底加载完！防覆盖！
+                    // 必须等待系统自带的小猫彻底加载完，防止后续被覆盖
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         return false; 
                     }
@@ -1448,48 +1414,47 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         return false;
                     }
 
-                    // 获得锁！小猫已经定型，开始真正注入
                     injected = true; 
-                    console.log("Standard Scratch Target Locked. Commencing deep injection.");
 
                     try {
-                        // 1. 先尝试最优雅的方案：劫持 React 上传事件
-                        triggerReactUpload();
+                        // 1. 专门为 TurboWarp 留的极速通道
+                        if (window.loadProject && typeof window.loadProject === 'function' && buffer) {
+                            window.loadProject(buffer);
+                            console.log("Success via TurboWarp API");
+                            return true;
+                        }
 
-                        // 2. 双重保险：强制调用底层 VM 接口，防止 React 没响应
-                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
-                        
-                        loadPromise.then(function() {
-                            // 3. 【CPR 心脏复苏脉冲】：持续 3 秒，每 500 毫秒狂刷一次视图
-                            var cprCount = 0;
-                            var cprTimer = setInterval(function() {
-                                cprCount++;
-                                if (cprCount > 6) {
-                                    clearInterval(cprTimer);
-                                    return;
+                        // 2. 终极杀手锏：全屏幕伪造拖拽事件 (通杀所有版本的官方 Scratch 源)
+                        if (buffer) {
+                            var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
+                            var dt = new DataTransfer();
+                            dt.items.add(file);
+                            
+                            // 依次向下分发拖拽事件，只要 React 侦听到任意一层，立马开始原载入
+                            var targets = [
+                                document.querySelector('[class^="gui_page-wrapper_"]'),
+                                document.getElementById('scratch'),
+                                document.body
+                            ];
+                            
+                            for (var i = 0; i < targets.length; i++) {
+                                if (targets[i]) {
+                                    targets[i].dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+                                    targets[i].dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+                                    targets[i].dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
                                 }
-                                
-                                // 强制底层发出更新信号
-                                if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
+                            }
+                            console.log("Drag & Drop Mocking execution finished.");
+                        }
+
+                        // 3. 兜底方案 (防止个别老古董内核拦截拖拽事件)
+                        targetVm.loadProject(buffer ? buffer : JSON.parse(rawData)).then(function() {
+                            setTimeout(function() {
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
-                                
-                                // 闪电切换角色 Hack：迫使 React 丢弃旧积木，渲染新积木
-                                var targets = targetVm.runtime.targets;
-                                if (targets && targets.length > 0 && targetVm.setEditingTarget) {
-                                    var stage = targets.find(function(t) { return t.isStage; });
-                                    var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
-                                    if (stage) targetVm.setEditingTarget(stage.id);
-                                    setTimeout(function() {
-                                        targetVm.setEditingTarget(sprite.id);
-                                        window.dispatchEvent(new Event('resize')); // 恢复自适应布局
-                                    }, 50);
-                                }
-                                
-                                // 再次重发 React 上传信号（针对可能由于渲染延迟错过的事件）
-                                triggerReactUpload();
-                                
-                            }, 500); 
-                        }).catch(function(e) { console.error("VM load error:", e); });
+                                if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
+                                window.dispatchEvent(new Event('resize'));
+                            }, 150);
+                        }).catch(function(e) {});
                         
                         return true;
                     } catch(e) {
@@ -1499,7 +1464,6 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     }
                 }
 
-                // 启动普通 Scratch 的轮询探针
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts) {
@@ -1507,7 +1471,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         }
                     }, 500);
                 }
-                return "Standard Scratch Polling Started";
+                return "Started universal DataTransfer Drag & Drop injection";
             } catch(e) {
                 return "Error: " + e.message;
             }
