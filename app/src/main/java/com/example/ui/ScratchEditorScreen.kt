@@ -1373,29 +1373,31 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 var base64Data = $safeBase64Literal;
                 if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
                 
-                // ★ 核心修复 1：将 Base64 解析为 Uint8Array (标准 VM 的 JSZip 只认这个，直接传 ArrayBuffer 会在部分机型上 Promise 静默崩溃！)
-                function base64ToUint8Array(b64) {
+                // ★ 终极类型修复：必须返回 .buffer（ArrayBuffer类型）！标准 Scratch 的 VM 只有看到 ArrayBuffer 才肯干活！
+                function base64ToArrayBuffer(b64) {
                     var binaryString = window.atob(b64);
                     var len = binaryString.length;
                     var bytes = new Uint8Array(len);
                     for (var i = 0; i < len; i++) {
                         bytes[i] = binaryString.charCodeAt(i);
                     }
-                    return bytes;
+                    return bytes.buffer; // 此处少个 .buffer 就会导致官方版全军覆没！
                 }
 
-                var uint8Array = null;
+                var buffer = null;
                 if (base64Data && base64Data.length > 0) {
-                    try { uint8Array = base64ToUint8Array(base64Data); } catch(e) {}
+                    try { buffer = base64ToArrayBuffer(base64Data); } catch(e) {}
                 }
 
                 var attempts = 0;
-                var maxAttempts = 120; // 最大轮询 60 秒
+                var maxAttempts = 120; // 60秒最大轮询
                 var readyCount = 0;
 
                 function getVm() {
                     if (window.vm) return window.vm;
                     if (window.scratch && window.scratch.vm) return window.scratch.vm;
+                    if (window.__turboWarp__ && window.__turboWarp__.vm) return window.__turboWarp__.vm;
+                    // 兼容某些套壳 iframe
                     var frames = document.querySelectorAll('iframe');
                     for (var i = 0; i < frames.length; i++) {
                         try { if (frames[i].contentWindow && frames[i].contentWindow.vm) return frames[i].contentWindow.vm; } catch(e) {}
@@ -1409,64 +1411,64 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     attempts++;
 
                     // ==========================================
-                    // 🚀 轨道一：TurboWarp 极速通道 (第三源已经验证完美)
+                    // 🚀 轨道一：TurboWarp 极速通道
                     // ==========================================
                     if (window.loadProject && typeof window.loadProject === 'function') {
-                        // TurboWarp 需要 ArrayBuffer
-                        var twBuffer = uint8Array ? uint8Array.buffer : JSON.parse(rawData);
-                        window.loadProject(twBuffer);
+                        window.loadProject(buffer ? buffer : JSON.parse(rawData));
                         console.log("Success: Injected via TurboWarp API.");
                         return true; 
                     }
 
                     // ==========================================
-                    // 🐢 轨道二：标准 Scratch 底层 VM 强插通道 (第一、二源)
+                    // 🐢 轨道二：标准 Scratch 底层 VM 强插通道
                     // ==========================================
                     var targetVm = getVm();
                     
-                    // 状态检测 1：VM 必须挂载，且自带的默认小猫躯干必须出现
+                    // 状态检测1：VM 必须初始化完成，且自带的默认小猫必须出现
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         readyCount = 0; return false; 
                     }
                     
-                    var bly = window.Blockly;
-                    if (!bly) {
-                        var frames = document.querySelectorAll('iframe');
-                        for(var f=0; f<frames.length; f++){
-                            if(frames[f].contentWindow && frames[f].contentWindow.Blockly) { bly = frames[f].contentWindow.Blockly; break; }
-                        }
-                    }
-                    if (!bly || !bly.getMainWorkspace || !bly.getMainWorkspace()) {
+                    var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
+                    if (!blocklyReady) {
                         readyCount = 0; return false;
                     }
 
-                    // ★ 核心修复 2：状态检测 2（空闲稳定器）
-                    // 即使小猫出来了，后台网络可能还在慢吞吞拉取官方项目数据。
-                    // 将死等周期从 4 个延长到 8 个（足足 4 秒钟！），彻底杜绝网络延迟造成的官方数据反向覆盖问题！
+                    // 状态检测2：网页加载遮罩必须彻底消失
+                    var loaderVisible = false;
+                    var loaders = document.querySelectorAll('[class*="loader_fullscreen"], [class*="loader_background"]');
+                    for (var i = 0; i < loaders.length; i++) {
+                        if (window.getComputedStyle(loaders[i]).display !== 'none') {
+                            loaderVisible = true; break;
+                        }
+                    }
+                    if (loaderVisible) {
+                        readyCount = 0; return false;
+                    }
+
+                    // 状态检测3：空闲稳定器。等小猫落地后，强行再等 6 个周期(约 3 秒)
+                    // 确保国内镜像站缓慢的网络请求彻底死亡，不造成反向覆盖！
                     readyCount++;
-                    if (readyCount < 8) {
-                        console.log("Waiting for Standard Scratch VM to settle... (" + readyCount + "/8)");
+                    if (readyCount < 6) {
+                        console.log("Waiting for Standard Scratch to settle... (" + readyCount + "/6)");
                         return false; 
                     }
 
-                    console.log("Standard Scratch Target IDLE. Executing VM load.");
+                    console.log("Standard Scratch Target IDLE. Executing perfect VM load.");
 
                     try {
-                        // 使用 Uint8Array 加载，彻底兼容老版 Android WebView
-                        var loadPromise = uint8Array ? targetVm.loadProject(uint8Array) : targetVm.loadProject(JSON.parse(rawData));
+                        // 使用原汁原味的 ArrayBuffer 灌注 VM，这回它绝对不敢拒绝！
+                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
                         
                         loadPromise.then(function() {
                             setTimeout(function() {
                                 if (window.__scratch_job_id !== currentJobId) return;
                                 
-                                // 1. 清空原积木树，防止幽灵积木或 ID 冲突报错
-                                try { if (bly && bly.getMainWorkspace()) bly.getMainWorkspace().clear(); } catch(err){}
-                                
-                                // 2. 派发工作区与目标更新事件
+                                // 派发工作区与目标更新事件
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
                                 
-                                // 3. 闪电切换角色，强制 React DOM 重绘
+                                // 闪电切换角色：强制 React 抛弃旧状态，渲染最新注入的积木
                                 var targets = targetVm.runtime.targets;
                                 if (targets && targets.length > 0 && targetVm.setEditingTarget) {
                                     var stage = targets.find(function(t) { return t.isStage; });
@@ -1478,7 +1480,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                                         if (window.__scratch_job_id !== currentJobId) return;
                                         if (sprite) targetVm.setEditingTarget(sprite.id);
                                         
-                                        // ★ 核心修复 3：深入 React 内部寻找 Redux Store 并发送强制唤醒信号，打破白屏装死！
+                                        // ★ 核心终极唤醒：直捣 React 核心，让 Redux 状态机强制刷新！打破白屏装死！
                                         try {
                                             var el = document.getElementById('scratch') || document.querySelector('[class^="gui_stage-wrapper_"]');
                                             if (el) {
@@ -1492,13 +1494,11 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                                                         if (fiber.memoizedProps && fiber.memoizedProps.store) { store = fiber.memoizedProps.store; break; }
                                                         fiber = fiber.return;
                                                     }
-                                                    if (store) store.dispatch({ type: 'scratch-gui/project-state/SET_PROJECT_ID', projectId: 'injected' });
+                                                    if (store) store.dispatch({ type: 'scratch-gui/project-state/SET_PROJECT_ID', projectId: 'injected_' + currentJobId });
                                                 }
                                             }
                                         } catch(ex) {}
 
-                                        // 刷新 SVG 画布尺寸
-                                        try { if (bly && bly.svgResize && bly.getMainWorkspace()) bly.svgResize(bly.getMainWorkspace()); } catch(ex){}
                                         window.dispatchEvent(new Event('resize'));
                                         console.log("Standard Scratch injection fully completed!");
                                     }, 80);
@@ -1513,7 +1513,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         return true;
                     } catch(e) {
                         console.error("Injection error:", e);
-                        readyCount = 0; // 发生异常则复位重来
+                        readyCount = 0; // 发生异常则复位稳定器重试
                         return false;
                     }
                 }
