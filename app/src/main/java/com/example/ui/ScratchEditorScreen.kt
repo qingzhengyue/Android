@@ -261,11 +261,36 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                 var attempts = 0, maxAttempts = 120;
                 function findVm() {
                     if (window.vm && window.vm.loadProject) return window.vm;
+                    if (window.loadProject) return {
+                        loadProject: function(data) {
+                            try {
+                                var str = (typeof data === 'object') ? JSON.stringify(data) : data;
+                                window.loadProject(str);
+                                return Promise.resolve();
+                            } catch(e) {
+                                return Promise.reject(e);
+                            }
+                        }
+                    };
                     var frames = document.querySelectorAll('iframe');
                     for (var i = 0; i < frames.length; i++) {
                         try {
                             if (frames[i].contentWindow && frames[i].contentWindow.vm && frames[i].contentWindow.vm.loadProject)
                                 return frames[i].contentWindow.vm;
+                            if (frames[i].contentWindow && frames[i].contentWindow.loadProject) {
+                                var sw = frames[i].contentWindow;
+                                return {
+                                    loadProject: function(data) {
+                                        try {
+                                            var str = (typeof data === 'object') ? JSON.stringify(data) : data;
+                                            sw.loadProject(str);
+                                            return Promise.resolve();
+                                        } catch(e) {
+                                            return Promise.reject(e);
+                                        }
+                                    }
+                                };
+                            }
                         } catch(e) {}
                     }
                     if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
@@ -345,11 +370,12 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var loadingMessage by remember { mutableStateOf("正在加载 Scratch 编辑器 (1/${mirrors.size})...") }
 
     // Multi-mirror auto fallback loading
-    LaunchedEffect(scratchUrl) {
+    LaunchedEffect(scratchUrl, webViewInstance) {
+        val webView = webViewInstance ?: return@LaunchedEffect
         isPageLoading = true
         isAllFailed = false
         loadingMessage = "正在加载 Scratch 编辑器 (${currentMirrorIndex + 1}/${mirrors.size})..."
-        webViewInstance?.loadUrl(scratchUrl)
+        webView.loadUrl(scratchUrl)
         
         // 6s Timeout fallthrough auto switch (Problem 2 Requirement 3)
         kotlinx.coroutines.delay(6000)
@@ -562,11 +588,36 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                                                     var attempts = 0, maxAttempts = 60;
                                                     function findVm() {
                                                         if (window.vm && window.vm.loadProject) return window.vm;
+                                                        if (window.loadProject) return {
+                                                            loadProject: function(data) {
+                                                                try {
+                                                                    var str = (typeof data === 'object') ? JSON.stringify(data) : data;
+                                                                    window.loadProject(str);
+                                                                    return Promise.resolve();
+                                                                } catch(e) {
+                                                                    return Promise.reject(e);
+                                                                }
+                                                            }
+                                                        };
                                                         var frames = document.querySelectorAll('iframe');
                                                         for (var i = 0; i < frames.length; i++) {
                                                             try {
                                                                 if (frames[i].contentWindow && frames[i].contentWindow.vm && frames[i].contentWindow.vm.loadProject)
                                                                     return frames[i].contentWindow.vm;
+                                                                if (frames[i].contentWindow && frames[i].contentWindow.loadProject) {
+                                                                    var sw = frames[i].contentWindow;
+                                                                    return {
+                                                                        loadProject: function(data) {
+                                                                            try {
+                                                                                var str = (typeof data === 'object') ? JSON.stringify(data) : data;
+                                                                                sw.loadProject(str);
+                                                                                return Promise.resolve();
+                                                                            } catch(e) {
+                                                                                return Promise.reject(e);
+                                                                            }
+                                                                        }
+                                                                    };
+                                                                }
                                                             } catch(e) {}
                                                         }
                                                         if (window.scratch && window.scratch.vm && window.scratch.vm.loadProject) return window.scratch.vm;
@@ -691,6 +742,11 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
                             isPageLoading = false
+                            
+                            if (draftCode.isNotBlank()) {
+                                projectLoaderInterface?.setProjectData(draftCode)
+                                loadProjectIntoWebView(view, draftCode, context)
+                            }
                             
                             if (url != null && !url.startsWith("file:///")) {
                                 // 注入口：通过给HTML注入自定义Viewport限制双指缩放范围并屏蔽三方冗余登录弹窗
@@ -1421,13 +1477,14 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
 
 
 fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.content.Context) {
-    if (webView == null) return
-    val cleanJson = pJson.replace("'", "\\'").replace("\n", " ").replace("\r", " ")
+    if (webView == null || pJson.isBlank()) return
+    val safeJsonLiteral = org.json.JSONObject.quote(pJson)
     val js = """
         (function() {
             try {
+                var rawData = $safeJsonLiteral;
                 if (window.loadProject) {
-                    window.loadProject('$cleanJson');
+                    window.loadProject(rawData);
                     return "Loaded via window.loadProject";
                 }
                 var targetVm = window.vm || (document.querySelector('iframe') && document.querySelector('iframe').contentWindow.vm);
@@ -1461,19 +1518,21 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 }
                 
                 if (targetVm) {
-                    targetVm.loadProject('$cleanJson').then(function() {
+                    var obj = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
+                    targetVm.loadProject(obj).then(function() {
                         console.log("Success");
                     });
                     return "Injected project loading";
                 }
                 return "VM not found";
             } catch(e) {
+                console.error("loadProject error:", e);
                 return "Error: " + e.message;
             }
         })();
     """.trimIndent()
     webView.evaluateJavascript(js) { res ->
-        android.util.Log.d("ScratchLoader", "Result: $res")
+        android.util.Log.d("ScratchLoadProject", "loadProject result: $res")
     }
 }
 

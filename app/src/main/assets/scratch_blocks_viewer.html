@@ -359,14 +359,14 @@ window.getProjectJson = function() {
 
 window.loadProject = function(jsonStr) {
   try {
-    const obj = JSON.parse(jsonStr);
+    const obj = (typeof jsonStr === 'object') ? jsonStr : JSON.parse(jsonStr);
     activeBlocks = [];
-    if (obj.targets) {
+    if (obj && obj.targets) {
       obj.targets.forEach(t => {
         if (!t.isStage && t.blocks) {
           for (let id in t.blocks) {
             const b = t.blocks[id];
-            if (b.opcode) {
+            if (b && typeof b === 'object' && b.opcode) {
               const cls = getCategoryClassByOpcode(b.opcode);
               activeBlocks.push({ id: id, opcode: b.opcode, label: `<span class="${cls}">${b.opcode}</span>` });
             }
@@ -384,13 +384,21 @@ window.loadProject = function(jsonStr) {
 window.onload = function() {
   renderPalette('motion');
   
-  // 检查是否在 Android 教师查看器中
-  if (window.AndroidBlockViewer && window.AndroidBlockViewer.getProjectJson) {
-    const json = window.AndroidBlockViewer.getProjectJson();
-    if (json) window.loadProject(json);
-  } else if (window.AndroidProjectLoader && window.AndroidProjectLoader.getProjectData) {
-    const json = window.AndroidProjectLoader.getProjectData();
-    if (json) window.loadProject(json);
+  function tryFetchAndLoad() {
+    if (window.AndroidBlockViewer && window.AndroidBlockViewer.getProjectJson) {
+      const json = window.AndroidBlockViewer.getProjectJson();
+      if (json) { window.loadProject(json); return true; }
+    }
+    if (window.AndroidProjectLoader && window.AndroidProjectLoader.getProjectData) {
+      const json = window.AndroidProjectLoader.getProjectData();
+      if (json) { window.loadProject(json); return true; }
+    }
+    return false;
+  }
+
+  if (!tryFetchAndLoad()) {
+    setTimeout(tryFetchAndLoad, 300);
+    setTimeout(tryFetchAndLoad, 1000);
   }
 };
 </script>

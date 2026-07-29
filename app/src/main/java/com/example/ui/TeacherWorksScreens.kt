@@ -694,8 +694,8 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                             webViewClient = object : WebViewClient() {
                                                 override fun onPageFinished(view: WebView?, url: String?) {
                                                     super.onPageFinished(view, url)
-                                                    val cleanJson = detailWork.workCode.replace("'", "\\'").replace("\n", " ").replace("\r", " ")
-                                                    view?.evaluateJavascript("if(window.loadProject){ window.loadProject('$cleanJson'); }", null)
+                                                    val safeJsonLiteral = org.json.JSONObject.quote(detailWork.workCode)
+                                                    view?.evaluateJavascript("if(window.loadProject){ window.loadProject($safeJsonLiteral); }", null)
                                                 }
                                             }
                                             val jsInterface = TeacherBlockViewerInterface(detailWork.workCode)
