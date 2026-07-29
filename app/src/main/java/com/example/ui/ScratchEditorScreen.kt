@@ -1079,6 +1079,11 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             Card(
                                 onClick = {
                                     viewModel.loadDraftToWorkspace(draft)
+                                    val webView = webViewInstance
+                                    if (webView != null && draft.blockCode.isNotBlank()) {
+                                        projectLoaderInterface?.setProjectData(draft.blockCode)
+                                        loadProjectIntoWebView(webView, draft.blockCode, context)
+                                    }
                                     showLoadDraftDialog = false
                                     Toast.makeText(context, "成功恢复草稿进度：${draft.draftName}", Toast.LENGTH_SHORT).show()
                                 },
@@ -1133,6 +1138,11 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             Card(
                                 onClick = {
                                     viewModel.loadWorkToWorkspace(work)
+                                    val webView = webViewInstance
+                                    if (webView != null && work.workCode.isNotBlank()) {
+                                        projectLoaderInterface?.setProjectData(work.workCode)
+                                        loadProjectIntoWebView(webView, work.workCode, context)
+                                    }
                                     showLoadWorkDialog = false
                                     Toast.makeText(context, "成功恢复已提交作品：${work.workName}", Toast.LENGTH_SHORT).show()
                                 },
@@ -1385,52 +1395,71 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 function tryInject() {
                     attempts++;
                     
-                    // 1. 等待 Scratch 核心的 Blockly 画布 UI 和 VM 引擎双双渲染完毕
                     var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
                     var targetVm = findVm();
                     
-                    // 【关键修复 1】：逻辑修正为 || (或)。只要有一个没准备好，就坚决继续等！防覆盖！
                     if (!targetVm || !blocklyReady) {
                         return false; 
                     }
 
                     try {
+                        // 1. 针对优化过的编辑器 (如 TurboWarp)，直接走后门 API 加载
                         if (window.loadProject && base64Data && base64Data.length > 0) {
                             window.loadProject(base64ToArrayBuffer(base64Data));
                             console.log("Success via window.loadProject (TurboWarp mode)");
                             return true;
                         }
 
-                        // 【关键修复 2】：原生上传组件拦截。采用 accept*=".sb3" 包含匹配官方元素
+                        // 2. 针对标准 Scratch 镜像站，使用 React 穿透黑科技模拟上传
                         if (base64Data && base64Data.length > 0) {
                             var buffer = base64ToArrayBuffer(base64Data);
                             var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
                             
-                            var fileInput = document.querySelector('input[type="file"][accept*=".sb3"]');
+                            // 扩大搜索范围：匹配所有 accept 包含 .sb 的输入框，或者页面上第一个 type="file" 的框
+                            var fileInput = document.querySelector('input[type="file"][accept*=".sb"]') || document.querySelector('input[type="file"]');
                             
                             if (fileInput) {
                                 var dataTransfer = new DataTransfer();
                                 dataTransfer.items.add(file);
-                                fileInput.files = dataTransfer.files;
                                 
-                                // 【关键修复 3】：兼容更严苛的 React 16+ 事件池机制，连发 input 和 change 事件
+                                // 【核心黑科技】：绕过 React 劫持，直接调用底层浏览器原生的 files Setter！
+                                var nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "files").set;
+                                if (nativeInputValueSetter) {
+                                    nativeInputValueSetter.call(fileInput, dataTransfer.files);
+                                } else {
+                                    fileInput.files = dataTransfer.files; // 兜底赋值
+                                }
+                                
+                                // 连发气泡事件，完美欺骗 React 触发 onChange
                                 fileInput.dispatchEvent(new Event('input', { bubbles: true }));
                                 fileInput.dispatchEvent(new Event('change', { bubbles: true }));
-                                console.log("Success via native File Input injection!");
+                                console.log("Success via ultimate native React File Input injection!");
                                 return true;
                             }
                             
-                            // 兜底方案 (Fallback)
+                            // 3. 终极兜底方案：如果上述两者都失败，直接从底层强塞数据并暴力唤醒 UI
                             targetVm.loadProject(buffer).then(function() {
+                                console.log("Loaded into VM directly, forcing GUI wake-up");
+                                
+                                // 强行让 VM 抛出全量更新事件
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.runtime) {
                                     targetVm.runtime.requestRedraw();
                                     targetVm.emit('targetsUpdate');
+                                    targetVm.emit('PROJECT_RUN_START');
+                                    
+                                    // 最暴力的一招：强制选中舞台或第一个角色，这会强迫 React 去 VM 库里拉取最新积木！
+                                    var targets = targetVm.runtime.targets;
+                                    if (targets && targets.length > 0) {
+                                        var targetId = (targets.find(function(t) { return !t.isStage; }) || targets[0]).id;
+                                        if (targetVm.setEditingTarget) {
+                                            targetVm.setEditingTarget(targetId);
+                                        }
+                                    }
                                 }
-                                var ws = typeof Blockly !== 'undefined' ? Blockly.getMainWorkspace() : null;
-                                if (ws && ws.fireChangeListener) {
-                                    ws.fireChangeListener(new Event('change'));
-                                }
+                                
+                                // 模拟窗口大小改变，强制积木画布重新计算布局消除白屏
+                                window.dispatchEvent(new Event('resize'));
                             });
                             return true;
                         }
