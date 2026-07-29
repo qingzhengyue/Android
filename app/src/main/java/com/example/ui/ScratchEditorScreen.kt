@@ -1362,12 +1362,10 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
             try {
                 var rawData = $safeJsonLiteral;
                 var base64Data = $safeBase64Literal;
-                if (!base64Data || base64Data.length === 0) {
-                    if (!rawData || rawData.length === 0) return "Empty data";
-                }
+                if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
                 
                 var attempts = 0;
-                var maxAttempts = 60; // 30秒弹性轮询
+                var maxAttempts = 80; // 40秒弹性轮询
                 var injected = false;
                 
                 function base64ToArrayBuffer(b64) {
@@ -1380,13 +1378,11 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     return bytes.buffer;
                 }
 
-                // 一次性生成 Buffer
                 var buffer = null;
-                try {
-                    buffer = base64ToArrayBuffer(base64Data);
-                } catch(e) { return "Base64 decode failed"; }
+                if (base64Data && base64Data.length > 0) {
+                    try { buffer = base64ToArrayBuffer(base64Data); } catch(e) {}
+                }
 
-                // 嗅探底层 VM 实例
                 function getVm() {
                     if (window.vm) return window.vm;
                     if (window.scratch && window.scratch.vm) return window.scratch.vm;
@@ -1402,102 +1398,106 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     if (injected) return true;
                     attempts++;
                     
-                    // 方案 A：TurboWarp 专属极速通道 (放在最前面，只要 API 出现就立刻调用，0延迟)
-                    if (window.loadProject && typeof window.loadProject === 'function') {
-                        try {
-                            window.loadProject(buffer);
-                            injected = true;
-                            console.log("Success via TurboWarp Fast Path API");
-                            return true;
-                        } catch(e) { console.error("TurboWarp API error:", e); }
-                    }
-
                     var targetVm = getVm();
                     
-                    // 【绝对防御：核心状态锁】必须等系统自带的“默认小猫”彻底加载完毕！
+                    // 【绝对防御锁】：修复上个版本的低级失误！
+                    // 必须、一定要等系统初始化的“默认小猫”彻底加载完，否则我们注入的作品 100% 会被它反向覆盖！
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         return false; 
                     }
 
-                    // 【绝对防御：UI状态锁】必须等积木工作区容器真正挂载到屏幕上
                     var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
                     if (!blocklyReady) {
                         return false;
                     }
 
-                    // 此时，系统自带的初始化 100% 结束，小猫已经待在屏幕上了，我们可以安全发大招了！
-                    injected = true; // 锁定，防止重复执行
+                    // 获得锁！小猫已经定型，开始真正注入
+                    injected = true; 
 
                     try {
-                        // 方案 B：尝试 React 内部 Props 劫持 (对于桌面版布局依然最稳妥)
+                        // 1. TurboWarp 专属通道 (带锁版，绝不被覆盖)
+                        if (window.loadProject && typeof window.loadProject === 'function' && buffer) {
+                            window.loadProject(buffer);
+                            console.log("Success via TurboWarp API");
+                            return true;
+                        }
+
+                        // 2. 暴力破解 React 文件上传组件 (专杀标准 Scratch 3.0)
                         var hackSuccessful = false;
-                        var fileInput = document.querySelector('input[type="file"][accept*=".sb"]') || document.querySelector('input[type="file"]');
-                        if (fileInput) {
-                            var reactKey = Object.keys(fileInput).find(function(k) { 
-                                return k.startsWith('__reactProps${'$'}') || k.startsWith('__reactEventHandlers${'$'}'); 
-                            });
-                            
-                            if (reactKey && fileInput[reactKey] && fileInput[reactKey].onChange) {
-                                var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
-                                var mockEvent = {
-                                    target: { files: [file] },
-                                    currentTarget: { files: [file] },
-                                    preventDefault: function() {},
-                                    stopPropagation: function() {}
-                                };
-                                fileInput[reactKey].onChange(mockEvent);
-                                hackSuccessful = true;
-                                console.log("Success via React Internal Props Hijack!");
+                        var fileInputs = document.querySelectorAll('input[type="file"]');
+                        if (buffer && fileInputs.length > 0) {
+                            var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
+                            var mockEvent = {
+                                target: { files: [file] },
+                                currentTarget: { files: [file] },
+                                preventDefault: function() {},
+                                stopPropagation: function() {}
+                            };
+                            // 遍历所有可能的隐藏 input，无视 React 15/16/17 的属性名差异全部强注
+                            for (var i = 0; i < fileInputs.length; i++) {
+                                var input = fileInputs[i];
+                                var reactKey = Object.keys(input).find(function(k) { 
+                                    return k.startsWith('__reactProps') || k.startsWith('__reactEventHandlers') || k.startsWith('__reactInternal'); 
+                                });
+                                if (reactKey && input[reactKey] && input[reactKey].onChange) {
+                                    input[reactKey].onChange(mockEvent);
+                                    hackSuccessful = true;
+                                    console.log("Success via React Input Hack!");
+                                }
                             }
                         }
 
-                        // 方案 C：【终极杀器】底层 VM 加载 + “CPR心脏复苏”重绘循环 (移动平板无上传按钮时的终极防线)
-                        if (!hackSuccessful) {
-                            targetVm.loadProject(buffer).then(function() {
-                                console.log("Loaded into VM directly, starting CPR sync loop...");
+                        if (hackSuccessful) return true;
+
+                        // 3. 终极底牌：VM 直连 + 物理点击 DOM 强行突破 Redux (针对移动端隐藏了菜单栏的情况)
+                        console.log("Fallback to VM direct load with Physical DOM click CPR...");
+                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
+                        
+                        loadPromise.then(function() {
+                            var clickCount = 0;
+                            var cprTimer = setInterval(function() {
+                                clickCount++;
+                                if (clickCount > 8) {
+                                    clearInterval(cprTimer);
+                                    return;
+                                }
                                 
-                                // 【强制呼吸循环】：为防止 React 忽略我们的更新，连续发送 5 次心跳重绘脉冲！
-                                var syncCount = 0;
-                                var syncTimer = setInterval(function() {
-                                    syncCount++;
-                                    if (syncCount > 5) {
-                                        clearInterval(syncTimer);
-                                        return;
+                                // 强制底层发出更新信号
+                                if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
+                                if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
+                                
+                                // 【物理外挂】：通过真实模拟完整的鼠标按压事件，强迫 React 的 Redux 状态机判定发生了用户交互，从而抛弃旧视图刷新画布！
+                                var sprites = document.querySelectorAll('[class*="sprite-selector-item_sprite-selector-item"]');
+                                if (sprites.length > 0) {
+                                    sprites[0].dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                    sprites[0].dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                    sprites[0].dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+                                } else {
+                                    var stage = document.querySelector('[class*="stage-selector_stage-selector"]');
+                                    if (stage) {
+                                        stage.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                        stage.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                        stage.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
                                     }
-                                    
-                                    // 连续发送底层积木刷新信号
-                                    if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
-                                    if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
-                                    
-                                    var targets = targetVm.runtime.targets;
-                                    if (targets && targets.length > 0 && targetVm.setEditingTarget) {
-                                        var stage = targets.find(function(t) { return t.isStage; });
-                                        var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
-                                        
-                                        // 闪电切换 Hack：瞬间切换 舞台 -> 角色，完美逼迫 React 重绘画布并加载新积木！
-                                        if (stage) targetVm.setEditingTarget(stage.id);
-                                        setTimeout(function() {
-                                            targetVm.setEditingTarget(sprite.id);
-                                            // 触发窗口改变大小事件，修复缩放异常
-                                            window.dispatchEvent(new Event('resize'));
-                                            // 直接触达 Blockly 强制刷新
-                                            if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
-                                                var ws = Blockly.getMainWorkspace();
-                                                if (ws && ws.fireChangeListener) ws.fireChangeListener(new Event('change'));
-                                            }
-                                        }, 40);
-                                    } else {
-                                        window.dispatchEvent(new Event('resize'));
-                                    }
-                                }, 400); // 间隔 400ms，总时长 2 秒，100% 覆盖并穿透 React 的渲染间隙
-                            }).catch(function(e) {
-                                console.error("VM load error:", e);
-                            });
-                        }
-                        return true; 
+                                }
+                                
+                                // 重置画布大小防白屏
+                                window.dispatchEvent(new Event('resize'));
+                                
+                                // 强刷 Blockly 的视图控制器
+                                if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
+                                    var ws = Blockly.getMainWorkspace();
+                                    if (ws && ws.fireChangeListener) ws.fireChangeListener(new Event('change'));
+                                }
+                            }, 300); // 间隔 300ms，连发 8 次脉冲，彻底击穿 React 渲染壁垒
+                        }).catch(function(e) {
+                            console.error("VM load error:", e);
+                        });
+                        
+                        return true;
                     } catch(e) {
-                        console.error("Injection execution error:", e);
-                        injected = false; // 报错则释放锁，允许重试
+                        console.error("Injection error:", e);
+                        injected = false; 
                         return false;
                     }
                 }
@@ -1510,7 +1510,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         }
                     }, 500);
                 }
-                return "Started universal VM polling injection with CPR sync";
+                return "Started universal VM polling injection with Physical CPR";
             } catch(e) {
                 return "Error: " + e.message;
             }
