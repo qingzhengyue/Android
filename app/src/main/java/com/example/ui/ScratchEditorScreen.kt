@@ -1355,7 +1355,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                 if (!rawData || rawData.length === 0) return "Empty data";
                 
                 var attempts = 0;
-                var maxAttempts = 30; // 30 * 500ms = 15 秒轮询重试
+                var maxAttempts = 40; // 40 * 500ms = 20 秒轮询重试
 
                 function base64ToArrayBuffer(b64) {
                     var binaryString = window.atob(b64);
@@ -1365,82 +1365,6 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         bytes[i] = binaryString.charCodeAt(i);
                     }
                     return bytes.buffer;
-                }
-
-                function repairProjectJson(obj) {
-                    if (!obj || typeof obj !== 'object') obj = {};
-                    if (!Array.isArray(obj.targets)) {
-                        if (obj.blocks) {
-                            obj = { targets: [ { isStage: false, name: '角色1', blocks: obj.blocks } ] };
-                        } else {
-                            obj = { targets: [] };
-                        }
-                    }
-                    var hasStage = false;
-                    for (var i = 0; i < obj.targets.length; i++) {
-                        var t = obj.targets[i];
-                        if (t.isStage) { hasStage = true; break; }
-                    }
-                    if (!hasStage) {
-                        obj.targets.unshift({
-                            isStage: true,
-                            name: "Stage",
-                            variables: {},
-                            lists: {},
-                            broadcasts: {},
-                            blocks: {},
-                            comments: {},
-                            currentCostume: 0,
-                            costumes: [{
-                                name: "背景1",
-                                bitmapResolution: 1,
-                                dataFormat: "svg",
-                                assetId: "cd21584322f79459ecb5864133b44723",
-                                md5ext: "cd21584322f79459ecb5864133b44723.svg",
-                                rotationCenterX: 240,
-                                rotationCenterY: 180
-                            }],
-                            sounds: [],
-                            volume: 100,
-                            layerOrder: 0
-                        });
-                    }
-                    for (var j = 0; j < obj.targets.length; j++) {
-                        var target = obj.targets[j];
-                        if (!target.variables) target.variables = {};
-                        if (!target.lists) target.lists = {};
-                        if (!target.broadcasts) target.broadcasts = {};
-                        if (!target.blocks) target.blocks = {};
-                        if (!target.comments) target.comments = {};
-                        if (!Array.isArray(target.costumes) || target.costumes.length === 0) {
-                            target.costumes = [{
-                                name: target.isStage ? "背景1" : "造型1",
-                                bitmapResolution: 1,
-                                dataFormat: "svg",
-                                assetId: "b7853f557e44241d288a7593e62c0d58",
-                                md5ext: "b7853f557e44241d288a7593e62c0d58.svg",
-                                rotationCenterX: 48,
-                                rotationCenterY: 50
-                            }];
-                        }
-                        if (typeof target.currentCostume !== 'number') target.currentCostume = 0;
-                        if (!Array.isArray(target.sounds)) target.sounds = [];
-                        if (typeof target.volume !== 'number') target.volume = 100;
-                        if (typeof target.layerOrder !== 'number') target.layerOrder = j;
-                        if (!target.isStage) {
-                            if (typeof target.visible !== 'boolean') target.visible = true;
-                            if (typeof target.x !== 'number') target.x = 0;
-                            if (typeof target.y !== 'number') target.y = 0;
-                            if (typeof target.size !== 'number') target.size = 100;
-                            if (typeof target.direction !== 'number') target.direction = 90;
-                            if (typeof target.draggable !== 'boolean') target.draggable = false;
-                            if (!target.rotationStyle) target.rotationStyle = "all around";
-                        }
-                    }
-                    if (!Array.isArray(obj.monitors)) obj.monitors = [];
-                    if (!Array.isArray(obj.extensions)) obj.extensions = [];
-                    if (!obj.meta) obj.meta = { semver: "3.0.0", vm: "0.2.0", agent: "Android" };
-                    return obj;
                 }
 
                 function findVm() {
@@ -1479,78 +1403,77 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
 
                 function tryInject() {
                     attempts++;
+                    
+                    // 【关键修复 1】不仅仅要等 VM，必须等 Blockly 画布 UI 真正渲染出来，防止被默认初始化覆盖！
+                    var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
                     var targetVm = findVm();
-                    if (targetVm) {
-                        try {
-                            // 优先通过阵列 Base64 (.sb3 ZIP 压缩包) 进行秒级无网络加载
-                            if (base64Data && base64Data.length > 0) {
-                                try {
-                                    var buffer = base64ToArrayBuffer(base64Data);
-                                    targetVm.loadProject(buffer).then(function() {
-                                        console.log("Project (.sb3 ZIP ArrayBuffer) loaded successfully into VM!");
-                                        if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
-                                        if (targetVm.runtime && targetVm.runtime.targets) targetVm.emit('targetsUpdate');
-                                        if (targetVm.runtime) targetVm.runtime.requestRedraw();
-                                    }).catch(function(errB64) {
-                                        console.warn("loadProject ArrayBuffer error, fallback to obj:", errB64);
-                                        var parsed = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
-                                        var obj = repairProjectJson(parsed);
-                                        targetVm.loadProject(obj);
-                                    });
-                                    return true;
-                                } catch(eBuffer) {
-                                    console.warn("Buffer creation failed, falling back to JSON:", eBuffer);
-                                }
-                            }
+                    
+                    if (!targetVm && !blocklyReady) {
+                        return false; // UI 和 VM 都没准备好，继续轮询等待
+                    }
 
-                            var parsed = (typeof rawData === 'string') ? JSON.parse(rawData) : rawData;
-                            var obj = repairProjectJson(parsed);
-                            
-                            var doLoad = function(data) {
-                                if (typeof targetVm.loadProject === 'function') return targetVm.loadProject(data);
-                                if (typeof targetVm.fromJSON === 'function') return targetVm.fromJSON(data);
-                                return Promise.reject("No load method");
-                            };
-
-                            doLoad(obj).then(function() {
-                                console.log("Project loaded successfully into VM after " + attempts + " attempts!");
-                                if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
-                                if (targetVm.runtime && targetVm.runtime.targets) targetVm.emit('targetsUpdate');
-                            }).catch(function(err) {
-                                console.warn("vm.loadProject Promise error with obj, retrying with string:", err);
-                                doLoad(JSON.stringify(obj)).catch(function(err2) {
-                                    console.error("vm.loadProject string error:", err2);
-                                });
-                            });
-                            return true;
-                        } catch(e) {
-                            console.error("Parse or load VM error:", e);
+                    try {
+                        // 针对支持全局注入的编辑器 (如 TurboWarp)
+                        if (window.loadProject && base64Data && base64Data.length > 0) {
+                            var buf = base64ToArrayBuffer(base64Data);
+                            window.loadProject(buf);
+                            console.log("Success via window.loadProject (TurboWarp mode)");
                             return true;
                         }
-                    }
-                    if (window.loadProject) {
-                        try {
-                            if (base64Data && base64Data.length > 0) {
-                                var buf = base64ToArrayBuffer(base64Data);
-                                window.loadProject(buf);
-                            } else {
-                                window.loadProject(rawData);
+
+                        // 【关键修复 2】针对标准 Scratch 镜像站，模拟原生“打开文件”操作，完美触发 Redux 状态刷新
+                        if (base64Data && base64Data.length > 0) {
+                            var buffer = base64ToArrayBuffer(base64Data);
+                            // 将 ArrayBuffer 包装成浏览器原生的 File 对象
+                            var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
+                            
+                            // 寻找 Scratch 隐藏的原生上传 Input 组件
+                            var fileInput = document.querySelector('input[accept=".sb3"]');
+                            if (fileInput) {
+                                // 利用 DataTransfer 黑科技，将脚本生成的文件塞给原生 Input
+                                var dataTransfer = new DataTransfer();
+                                dataTransfer.items.add(file);
+                                fileInput.files = dataTransfer.files;
+                                
+                                // 派发 change 事件，Scratch 会认为这是用户手动从电脑选中的文件，完美走通所有 UI 渲染流程！
+                                fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                                console.log("Success via native File Input injection!");
+                                return true;
                             }
-                            console.log("Success via window.loadProject after " + attempts + " attempts");
-                            return true;
-                        } catch(e) { console.error("window.loadProject error:", e); }
+                            
+                            // 兜底方案：如果找不到 Input，但有 VM，强行操作 VM 并手动激活目标，触发工作区刷新
+                            if (targetVm) {
+                                targetVm.loadProject(buffer).then(function() {
+                                    if (targetVm.runtime && targetVm.runtime.targets && targetVm.runtime.targets.length > 0) {
+                                        // 强制选中某个角色（舞台或角色1），这会强迫 Blockly 重新向 VM 请求积木数据
+                                        targetVm.editingTarget = targetVm.runtime.targets[1] || targetVm.runtime.targets[0];
+                                    }
+                                    if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
+                                    if (targetVm.runtime) targetVm.emit('targetsUpdate');
+                                    
+                                    // 触发 Hash Change 欺骗 React 路由进行强制更新
+                                    window.location.hash = window.location.hash === '#1' ? '#0' : '#1';
+                                    setTimeout(function() { window.dispatchEvent(new Event('hashchange')); }, 100);
+                                });
+                                return true;
+                            }
+                        }
+                    } catch(e) {
+                        console.error("Injection process error:", e);
                     }
                     return false;
                 }
 
+                // 启动弹性轮询
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts) {
                             clearInterval(timer);
+                            if (attempts >= maxAttempts) console.error("Auto load timeout after 20s");
                         }
                     }, 500);
                 }
-                return "Started VM polling injection";
+                return "Started safe VM polling injection with React sync";
             } catch(e) {
                 console.error("loadProject error:", e);
                 return "Error: " + e.message;
