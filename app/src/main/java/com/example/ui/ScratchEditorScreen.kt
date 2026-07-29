@@ -97,7 +97,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     var hasInitializedPosition by remember { mutableStateOf(false) }
 
     var webViewInstance by remember { mutableStateOf<WebView?>(null) }
-    var projectLoaderInterface by remember { mutableStateOf<ScratchProjectLoaderInterface?>(null) }
+    
     val pendingTeacherSb3Path by viewModel.teacherPendingSb3Path.collectAsState()
     val realTimeCheckEnabled by viewModel.realTimeStateEnabled.collectAsState()
     var scratchChangeCounter by remember { mutableStateOf(0) }
@@ -225,8 +225,8 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             }
 
             if (finalJson.isNotBlank() || finalBase64.isNotBlank()) {
-                projectLoaderInterface?.setProjectData(finalJson, finalBase64)
-                loadProjectIntoWebView(webView)
+                
+                loadProjectIntoWebView(webView, finalJson, finalBase64)
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -716,13 +716,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         false
                     }
                     
-                    val loaderInterface = ScratchProjectLoaderInterface()
-                    projectLoaderInterface = loaderInterface
                     addJavascriptInterface(ScratchJsInterface {
                         scratchChangeCounter++
                     }, "AndroidWorkspace")
-                    addJavascriptInterface(loaderInterface, "AndroidProjectLoader")
-                    addJavascriptInterface(loaderInterface, "AndroidBlockViewer")
                     
                     webViewInstance = this
                     loadUrl(scratchUrl)
@@ -1273,17 +1269,18 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
     }
 }
 
-fun loadProjectIntoWebView(webView: WebView?) {
+fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: String) {
     if (webView == null) return
 
+    val safeJson = projectJson.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r").replace("$", "\\$")
     val js = """
         (function() {
             try {
                 window.__scratch_job_id = (window.__scratch_job_id || 0) + 1;
                 var currentJobId = window.__scratch_job_id;
 
-                var rawData = window.AndroidProjectLoader ? window.AndroidProjectLoader.getProjectJson() : null;
-                var base64Data = window.AndroidProjectLoader ? window.AndroidProjectLoader.getProjectBase64() : null;
+                var rawData = "${safeJson}";
+                var base64Data = "${base64Data}";
                 
                 if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
                 
@@ -1469,27 +1466,3 @@ class ScratchJsInterface(private val onChanged: () -> Unit) {
     }
 }
 
-class ScratchProjectLoaderInterface(
-    private var projectData: String = "", 
-    private var base64Data: String = ""
-) {
-    fun setProjectData(data: String, base64: String = "") {
-        projectData = data
-        base64Data = base64
-    }
-    
-    @android.webkit.JavascriptInterface
-    fun getProjectData(): String {
-        return projectData
-    }
-
-    @android.webkit.JavascriptInterface
-    fun getProjectJson(): String {
-        return projectData
-    }
-    
-    @android.webkit.JavascriptInterface
-    fun getProjectBase64(): String {
-        return base64Data
-    }
-}
