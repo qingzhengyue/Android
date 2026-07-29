@@ -394,7 +394,7 @@ fun TeacherTaskListScreen(viewModel: MainViewModel) {
                 text = "📊 已下发任务列表 (${teacherTasks.size} 个):",
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1F2937),
+                color = Color.Black,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 

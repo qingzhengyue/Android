@@ -626,6 +626,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun loadWorkToWorkspace(work: ScratchWork) {
+        teacherPendingSb3Path.value = null
         currentDraftCode.value = work.workCode
         currentDraftName.value = "${work.workName} (载入版本)"
         currentTaskId.value = if (work.taskId == 0) null else work.taskId
@@ -641,9 +642,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearWorkspaceToNew() {
-        val code = "{ " +
-                "\"targets\": [{ \"isStage\": false, \"name\": \"角色1\", \"blocks\": {} }] " +
-                "}"
+        teacherPendingSb3Path.value = null
+        val code = """{"targets":[{"isStage":true,"name":"Stage","variables":{},"lists":{},"broadcasts":{},"blocks":{},"comments":{},"currentCostume":0,"costumes":[{"name":"背景1","bitmapResolution":1,"dataFormat":"svg","assetId":"cd21584322f79459ecb5864133b44723","md5ext":"cd21584322f79459ecb5864133b44723.svg","rotationCenterX":240,"rotationCenterY":180}],"sounds":[],"volume":100,"layerOrder":0},{"isStage":false,"name":"角色1","variables":{},"lists":{},"broadcasts":{},"blocks":{},"comments":{},"currentCostume":0,"costumes":[{"name":"造型1","bitmapResolution":1,"dataFormat":"svg","assetId":"b7853f557e44241d288a7593e62c0d58","md5ext":"b7853f557e44241d288a7593e62c0d58.svg","rotationCenterX":48,"rotationCenterY":50}],"sounds":[],"volume":100,"visible":true,"x":0,"y":0,"size":100,"direction":90,"draggable":false,"rotationStyle":"all around","layerOrder":1}],"monitors":[],"extensions":[],"meta":{"semver":"3.0.0","vm":"0.2.0","agent":"Android"}}"""
         currentDraftCode.value = code
         currentDraftName.value = "全新的 Scratch 创意草稿"
         currentTaskId.value = null

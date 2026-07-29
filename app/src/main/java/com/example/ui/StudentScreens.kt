@@ -371,7 +371,7 @@ fun StudentTasksScreen(viewModel: MainViewModel, onGoToCode: () -> Unit) {
 }
 
 @Composable
-fun StudentWorksScreen(viewModel: MainViewModel) {
+fun StudentWorksScreen(viewModel: MainViewModel, onGoToCode: (() -> Unit)? = null) {
     val context = LocalContext.current
     val works by viewModel.worksList.collectAsState()
     val activeReport by viewModel.activeReport.collectAsState()
@@ -529,17 +529,33 @@ fun StudentWorksScreen(viewModel: MainViewModel) {
                                     Text(text = "提交：$dateStr", fontSize = 12.sp, color = Color.Gray)
                                 }
 
-                                Button(
-                                    onClick = {
-                                        viewModel.loadReportForWork(work.workId)
-                                        showReportDialog = true
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 2.dp),
-                                    shape = RoundedCornerShape(6.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text("看 AI 评测报告 👀", fontSize = 11.sp, color = Color.White)
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Button(
+                                        onClick = {
+                                            viewModel.loadWorkToWorkspace(work)
+                                            onGoToCode?.invoke()
+                                            Toast.makeText(context, "已载入《${work.workName}》！为您切换至 Scratch 工作区 ✨", Toast.LENGTH_SHORT).show()
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text("载入作品积木 🧩", fontSize = 11.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            viewModel.loadReportForWork(work.workId)
+                                            showReportDialog = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF9800)),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        shape = RoundedCornerShape(6.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text("看 AI 评测报告 👀", fontSize = 11.sp, color = Color.White)
+                                    }
                                 }
                             }
                         }

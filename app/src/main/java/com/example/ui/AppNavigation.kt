@@ -1083,7 +1083,7 @@ fun MainPortalScreen(viewModel: MainViewModel, userRole: String) {
                         0 -> InteractiveScratchProgrammingScreen(viewModel = viewModel, onBackToHall = { selectedScreenIndex = 2 })
                         1 -> OpenHallScreen(viewModel = viewModel, onNavigateToEditor = { selectedScreenIndex = 0 })
                         2 -> StudentTasksScreen(viewModel = viewModel, onGoToCode = { selectedScreenIndex = 0 })
-                        3 -> StudentWorksScreen(viewModel = viewModel)
+                        3 -> StudentWorksScreen(viewModel = viewModel, onGoToCode = { selectedScreenIndex = 0 })
                         4 -> StudentAiAssistHistoricalHub(viewModel = viewModel)
                         5 -> StudentProfileScreen(viewModel = viewModel, onBack = { selectedScreenIndex = 0 })
                         else -> OpenHallScreen(viewModel = viewModel, onNavigateToEditor = { selectedScreenIndex = 0 })
