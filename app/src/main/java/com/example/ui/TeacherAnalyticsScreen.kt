@@ -15,9 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -186,11 +188,11 @@ fun TeacherAnalyticsScreen(
                                 HorizontalDivider(color = Color(0xFFF1F5F9))
                                 Spacer(modifier = Modifier.height(12.dp))
 
-                                // 四维量化得分对比条
-                                AnimatedQuantitativeScoreBar("语法表达", data.avgGrammar, 25f, Color(0xFF3B82F6))
-                                AnimatedQuantitativeScoreBar("逻辑结构", data.avgLogic, 30f, Color(0xFF10B981))
-                                AnimatedQuantitativeScoreBar("任务契合", data.avgTaskMatch, 25f, Color(0xFFF59E0B))
-                                AnimatedQuantitativeScoreBar("创新思维", data.avgCreative, 20f, Color(0xFF8B5CF6))
+                                // 五维得分对比条 (两层立体包裹布局：上层图标+名称与高对比得分，下层无断点渐变进度条)
+                                DimensionScoreRow("语法表达", data.avgGrammar, 25f, Color(0xFF3B82F6), icon = Icons.Default.Code)
+                                DimensionScoreRow("逻辑结构", data.avgLogic, 30f, Color(0xFF10B981), icon = Icons.Default.Psychology)
+                                DimensionScoreRow("任务契合", data.avgTaskMatch, 25f, Color(0xFFF59E0B), icon = Icons.Default.AssignmentTurnedIn)
+                                DimensionScoreRow("创新思维", data.avgCreative, 20f, Color(0xFF8B5CF6), icon = Icons.Default.AutoAwesome)
                             }
                         }
                     }
@@ -246,31 +248,88 @@ fun TeacherAnalyticsScreen(
 }
 
 @Composable
-fun DimensionScoreRow(name: String, current: Float, max: Float, color: Color) {
+fun DimensionScoreRow(
+    name: String,
+    current: Float,
+    max: Float,
+    color: Color,
+    icon: ImageVector? = null
+) {
     val percent = (current / max).coerceIn(0f, 1f)
-    Row(
+    val formattedCurrent = if (current % 1f == 0f) "${current.toInt()}" else String.format("%.1f", current)
+    val formattedMax = "${max.toInt()}"
+
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(vertical = 6.dp)
     ) {
-        Text(text = name, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.width(70.dp), color = Color(0xFF475569))
-        LinearProgressIndicator(
-            progress = { percent },
+        // 上层：左侧 [图标 + 维度名称]，右侧 [得分 / 满分] 高对比
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = color,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+                Text(
+                    text = name,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF334155)
+                )
+            }
+
+            // 右侧强化得分对比 (当前分突出放大，总分置灰缩小)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(
+                    text = formattedCurrent,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = color
+                )
+                Text(
+                    text = " / $formattedMax 分",
+                    fontSize = 11.sp,
+                    color = Color(0xFF94A3B8),
+                    modifier = Modifier.padding(bottom = 1.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        // 下层：横跨整行的修长进度条（无任何游离小圆点），同色系柔和渐变填充 + 极浅底色轨道
+        Box(
             modifier = Modifier
-                .weight(1f)
+                .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = color,
-            trackColor = Color(0xFFF1F5F9)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = "${String.format("%.1f", current)} / ${max.toInt()}分",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
-            color = Color(0xFF1E293B)
-        )
+                .clip(RoundedCornerShape(4.dp))
+                .background(color.copy(alpha = 0.12f))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction = percent)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(
+                        brush = Brush.horizontalGradient(
+                            colors = listOf(
+                                color.copy(alpha = 0.65f),
+                                color
+                            )
+                        )
+                    )
+            )
+        }
     }
 }
 

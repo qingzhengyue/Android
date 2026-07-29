@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -239,28 +240,57 @@ fun OpenWorkCard(
             Spacer(modifier = Modifier.height(12.dp))
 
             // 占位预览画廊
+            val coverConfig = remember(work.workId, work.workName) {
+                val name = work.workName.lowercase()
+                when {
+                    name.contains("猫") || name.contains("宠") || name.contains("cat") -> 
+                        Triple(Icons.Default.Pets, "Scratch 角色动画舞台", listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5)))
+                    name.contains("太空") || name.contains("火箭") || name.contains("星") || name.contains("space") -> 
+                        Triple(Icons.Default.RocketLaunch, "太空探索与物理逻辑", listOf(Color(0xFFEFF6FF), Color(0xFFDBEAFE)))
+                    name.contains("游戏") || name.contains("迷宫") || name.contains("捕获") || name.contains("game") -> 
+                        Triple(Icons.Default.SportsEsports, "交互游戏与按键控制", listOf(Color(0xFFF0FDF4), Color(0xFFDCFCE7)))
+                    name.contains("音") || name.contains("琴") || name.contains("歌") || name.contains("music") -> 
+                        Triple(Icons.Default.MusicNote, "声音与音乐积木应用", listOf(Color(0xFFFAF5FF), Color(0xFFF3E8FF)))
+                    else -> {
+                        val bgList = when (kotlin.math.abs(work.workId.hashCode()) % 4) {
+                            0 -> listOf(Color(0xFFEFF6FF), Color(0xFFE0F2FE))
+                            1 -> listOf(Color(0xFFF0FDF4), Color(0xFFE0E7FF))
+                            2 -> listOf(Color(0xFFFFF7ED), Color(0xFFFFEDD5))
+                            else -> listOf(Color(0xFFFDF2F8), Color(0xFFFCE7F3))
+                        }
+                        Triple(Icons.Default.Code, "Scratch 3.0 逻辑积木作品", bgList)
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(110.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFFF1F5F9)),
+                    .background(Brush.linearGradient(coverConfig.third)),
                 contentAlignment = Alignment.Center
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        imageVector = Icons.Default.Code,
+                        imageVector = coverConfig.first,
                         contentDescription = null,
-                        tint = Color(0xFF0EA5E9),
+                        tint = Color(0xFF2563EB),
                         modifier = Modifier.size(32.dp)
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Scratch 3.0 逻辑舞台预览中",
-                        color = Color(0xFF64748B),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Text(
+                            text = coverConfig.second,
+                            color = Color(0xFF1E293B),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "点击 Fork 可在编辑器中一键克隆此作品",
+                            color = Color(0xFF64748B),
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
 
