@@ -1395,9 +1395,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     attempts++;
                     var targetVm = getVm();
                     
-                    // 【绝对防御：核心状态锁】
-                    // 绝不使用定时器瞎等！必须等 VM 内部的 editingTarget 被赋上值。
-                    // 只要它没值，就说明系统还在后台苦苦加载那只“默认小猫”，此时注入必被覆盖，我们继续等！
+                    // 等待初始引擎加载完成
                     if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
                         return false; 
                     }
@@ -1408,27 +1406,49 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         return false;
                     }
 
-                    // 此时，系统自带的初始化 100% 结束，小猫已经待在屏幕上了，我们可以安全发大招了！
                     try {
                         var buffer = null;
                         if (base64Data && base64Data.length > 0) {
                             buffer = base64ToArrayBuffer(base64Data);
                         }
 
-                        // 方案 A：优先走官方后门直连 (TurboWarp 专属)
+                        // 方案 A：优先走官方后门直连 (TurboWarp 专属，已验证完美)
                         if (window.loadProject && buffer) {
                             window.loadProject(buffer);
                             console.log("Success via TurboWarp API");
                             return true;
                         }
 
-                        // 方案 B：标准 Scratch VM 底层核心加载
-                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
+                        // 方案 B：【终极杀手锏 - React 内部 Props 劫持】 (专杀官方标准 Scratch 镜像源)
+                        // 原理：直接找到隐藏上传框绑定的 React 实例，提取它的 onChange 事件并塞入我们伪造的 File 绕过事件池
+                        if (buffer) {
+                            var fileInput = document.querySelector('input[type="file"][accept*=".sb"]') || document.querySelector('input[type="file"]');
+                            if (fileInput) {
+                                // 提取 React 的秘密属性
+                                var reactKey = Object.keys(fileInput).find(function(k) { 
+                                    return k.startsWith('__reactProps${'$'}') || k.startsWith('__reactEventHandlers${'$'}'); 
+                                });
+                                
+                                if (reactKey && fileInput[reactKey] && fileInput[reactKey].onChange) {
+                                    var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
+                                    // 伪造一个能骗过 React 合成事件系统的 Mock Event
+                                    var mockEvent = {
+                                        target: { files: [file] },
+                                        currentTarget: { files: [file] },
+                                        preventDefault: function() {},
+                                        stopPropagation: function() {}
+                                    };
+                                    // 直接触发 Redux 更新！UI 完美刷新！
+                                    fileInput[reactKey].onChange(mockEvent);
+                                    console.log("Success via React Internal Props Hijack!");
+                                    return true;
+                                }
+                            }
+                        }
 
+                        // 方案 C：底层的 VM 加载与重绘兜底 (如果前面全部失效)
+                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
                         loadPromise.then(function() {
-                            // 【白屏克星：角色闪电切换黑科技】
-                            // VM 加载了代码后 React UI 可能装死不画积木。
-                            // 我们通过连续切换焦点角色，强迫 React 丢弃旧视图，重新拉取我们的积木数据！
                             setTimeout(function() {
                                 if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
                                 if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
@@ -1438,12 +1458,16 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                                     var stage = targets.find(function(t) { return t.isStage; });
                                     var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
                                     
-                                    // 闪电切换：先切到舞台，50毫秒后瞬间切回角色
                                     if (stage) targetVm.setEditingTarget(stage.id);
                                     setTimeout(function() {
                                         targetVm.setEditingTarget(sprite.id);
-                                        // 触发窗口改变大小事件，确保积木大小自适应画布
                                         window.dispatchEvent(new Event('resize'));
+                                        
+                                        // 强制 Blockly 重刷
+                                        if (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace) {
+                                            var ws = Blockly.getMainWorkspace();
+                                            if (ws && ws.fireChangeListener) ws.fireChangeListener(new Event('change'));
+                                        }
                                     }, 50);
                                 } else {
                                     window.dispatchEvent(new Event('resize'));
@@ -1453,14 +1477,13 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                             console.error("VM load error:", e);
                         });
 
-                        return true; // 只要发起了成功注入，就终止轮询
+                        return true; 
                     } catch(e) {
                         console.error("Injection execution error:", e);
                         return false;
                     }
                 }
 
-                // 启动 500ms 间隔的高频探针
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts) {
@@ -1468,7 +1491,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         }
                     }, 500);
                 }
-                return "Started state-locked VM polling injection";
+                return "Started React Props hijacking injection";
             } catch(e) {
                 return "Error: " + e.message;
             }
