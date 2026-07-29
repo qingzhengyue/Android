@@ -1362,13 +1362,13 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
             try {
                 var rawData = $safeJsonLiteral;
                 var base64Data = $safeBase64Literal;
-                if (!base64Data || base64Data.length === 0) return "Empty data";
+                if (!base64Data || base64Data.length === 0) {
+                    if (!rawData || rawData.length === 0) return "Empty data";
+                }
                 
                 var attempts = 0;
-                var maxAttempts = 40; // 20秒弹性轮询
-                var initialWaitDone = false; // 防覆盖竞争锁
-
-                // Base64 转 ArrayBuffer
+                var maxAttempts = 60; // 30秒弹性轮询
+                
                 function base64ToArrayBuffer(b64) {
                     var binaryString = window.atob(b64);
                     var len = binaryString.length;
@@ -1379,7 +1379,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     return bytes.buffer;
                 }
 
-                // 获取底层 VM 实例
+                // 嗅探底层 VM 实例
                 function getVm() {
                     if (window.vm) return window.vm;
                     if (window.scratch && window.scratch.vm) return window.scratch.vm;
@@ -1391,84 +1391,76 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                     return null;
                 }
 
-                // 核心注入执行器
-                function executeInjection() {
-                    var buffer = base64ToArrayBuffer(base64Data);
-                    var targetVm = getVm();
-                    
-                    // 方案 A：针对 TurboWarp 专属的高级后门直连 API
-                    if (window.loadProject) {
-                        try {
-                            window.loadProject(buffer);
-                            console.log("Success: Injected via TurboWarp API");
-                            return true;
-                        } catch(e) { console.warn(e); }
-                    }
-
-                    // 方案 B：【终极大杀器】全局虚拟拖拽注入（完美适配标准 Scratch 3.0）
-                    // 无论界面怎么改，Scratch 永远在 body 挂载了 react-dropzone
-                    try {
-                        var file = new File([buffer], "project.sb3", { type: "application/x.scratch.sb3" });
-                        var dataTransfer = new DataTransfer();
-                        dataTransfer.items.add(file);
-                        
-                        var dropTarget = document.getElementById('app') || document.body;
-                        
-                        ['dragenter', 'dragover', 'drop'].forEach(function(evtName) {
-                            var event = new DragEvent(evtName, {
-                                bubbles: true,
-                                cancelable: true,
-                                dataTransfer: dataTransfer
-                            });
-                            dropTarget.dispatchEvent(event);
-                        });
-                        console.log("Success: Injected via Synthetic Drag & Drop");
-                        return true;
-                    } catch (e) { 
-                        console.warn("Drag/Drop failed", e); 
-                    }
-
-                    // 方案 C：底层强穿透（最后兜底）
-                    if (targetVm) {
-                        targetVm.loadProject(buffer).then(function() {
-                            if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
-                            if (targetVm.runtime) {
-                                targetVm.emit('targetsUpdate');
-                                targetVm.emit('PROJECT_RUN_START');
-                            }
-                            window.location.hash = window.location.hash === '#1' ? '#0' : '#1';
-                        });
-                        console.log("Success: Injected via direct VM load");
-                        return true;
-                    }
-                    return false;
-                }
-
-                // 轮询探针
                 function tryInject() {
                     attempts++;
                     var targetVm = getVm();
-                    // 只要网页的大框架出来了，就说明 React 挂载完毕了
-                    var guiReady = document.querySelector('[class^="gui_page-wrapper_"]') !== null || document.getElementById('app') !== null;
                     
-                    if (!targetVm || !guiReady) return false;
-
-                    // 【最关键一步：解决默认小猫覆盖的 Race Condition】
-                    // 探针发现 UI 准备好了，但我们绝对不能马上注入！
-                    // 我们必须强行等待 1.5 秒，让系统默认的小猫走完异步加载流程，然后我们再一波带走它！
-                    if (!initialWaitDone) {
-                        initialWaitDone = true;
-                        console.log("Target locked. Waiting 1.5s to bypass default cat overwrite...");
-                        setTimeout(function() {
-                            executeInjection();
-                        }, 1500); 
-                        return true; // 成功进入延时调度，结束轮询
+                    // 【绝对防御：核心状态锁】
+                    // 绝不使用定时器瞎等！必须等 VM 内部的 editingTarget 被赋上值。
+                    // 只要它没值，就说明系统还在后台苦苦加载那只“默认小猫”，此时注入必被覆盖，我们继续等！
+                    if (!targetVm || !targetVm.editingTarget || !targetVm.runtime || targetVm.runtime.targets.length === 0) {
+                        return false; 
                     }
-                    
-                    return false;
+
+                    // 确保前端积木容器也已经在屏幕上渲染好了
+                    var blocklyReady = document.querySelector('.blocklyWorkspace') !== null || (typeof Blockly !== 'undefined' && Blockly.getMainWorkspace() !== null);
+                    if (!blocklyReady) {
+                        return false;
+                    }
+
+                    // 此时，系统自带的初始化 100% 结束，小猫已经待在屏幕上了，我们可以安全发大招了！
+                    try {
+                        var buffer = null;
+                        if (base64Data && base64Data.length > 0) {
+                            buffer = base64ToArrayBuffer(base64Data);
+                        }
+
+                        // 方案 A：优先走官方后门直连 (TurboWarp 专属)
+                        if (window.loadProject && buffer) {
+                            window.loadProject(buffer);
+                            console.log("Success via TurboWarp API");
+                            return true;
+                        }
+
+                        // 方案 B：标准 Scratch VM 底层核心加载
+                        var loadPromise = buffer ? targetVm.loadProject(buffer) : targetVm.loadProject(JSON.parse(rawData));
+
+                        loadPromise.then(function() {
+                            // 【白屏克星：角色闪电切换黑科技】
+                            // VM 加载了代码后 React UI 可能装死不画积木。
+                            // 我们通过连续切换焦点角色，强迫 React 丢弃旧视图，重新拉取我们的积木数据！
+                            setTimeout(function() {
+                                if (targetVm.emitWorkspaceUpdate) targetVm.emitWorkspaceUpdate();
+                                if (targetVm.emitTargetsUpdate) targetVm.emitTargetsUpdate();
+                                
+                                var targets = targetVm.runtime.targets;
+                                if (targets && targets.length > 0 && targetVm.setEditingTarget) {
+                                    var stage = targets.find(function(t) { return t.isStage; });
+                                    var sprite = targets.find(function(t) { return !t.isStage; }) || targets[0];
+                                    
+                                    // 闪电切换：先切到舞台，50毫秒后瞬间切回角色
+                                    if (stage) targetVm.setEditingTarget(stage.id);
+                                    setTimeout(function() {
+                                        targetVm.setEditingTarget(sprite.id);
+                                        // 触发窗口改变大小事件，确保积木大小自适应画布
+                                        window.dispatchEvent(new Event('resize'));
+                                    }, 50);
+                                } else {
+                                    window.dispatchEvent(new Event('resize'));
+                                }
+                            }, 200);
+                        }).catch(function(e) {
+                            console.error("VM load error:", e);
+                        });
+
+                        return true; // 只要发起了成功注入，就终止轮询
+                    } catch(e) {
+                        console.error("Injection execution error:", e);
+                        return false;
+                    }
                 }
 
-                // 启动 500ms 间隔的弹性轮询寻找目标
+                // 启动 500ms 间隔的高频探针
                 if (!tryInject()) {
                     var timer = setInterval(function() {
                         if (tryInject() || attempts >= maxAttempts) {
@@ -1476,7 +1468,7 @@ fun loadProjectIntoWebView(webView: WebView?, pJson: String, context: android.co
                         }
                     }, 500);
                 }
-                return "Injection initiated with Drag&Drop strategy and 1.5s Anti-Overwrite delay";
+                return "Started state-locked VM polling injection";
             } catch(e) {
                 return "Error: " + e.message;
             }
