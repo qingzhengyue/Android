@@ -20,6 +20,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Analytics
+import androidx.compose.material.icons.rounded.Extension
+
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -537,23 +540,32 @@ fun StudentWorksScreen(viewModel: MainViewModel, onGoToCode: (() -> Unit)? = nul
                                     Text(text = "提交：$dateStr", fontSize = 11.sp, color = Color.Gray)
                                 }
 
-                                // 操作按钮在右侧
+                                // 操作按钮在右侧，使用 MD3 现代设计语言
                                 Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.End,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    OutlinedButton(
+                                    FilledTonalButton(
                                         onClick = {
                                             viewModel.loadReportForWork(work.workId)
                                             showReportDialog = true
                                         },
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                        border = BorderStroke(1.dp, Color(0xFFE0E0E0))
+                                        modifier = Modifier.height(40.dp).padding(end = 12.dp),
+                                        shape = androidx.compose.foundation.shape.CircleShape,
+                                        contentPadding = PaddingValues(horizontal = 16.dp)
                                     ) {
-                                        Icon(Icons.Default.Analytics, contentDescription = null, modifier = Modifier.size(14.dp), tint = Color(0xFF1E88E5))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text("看评价", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = Color(0xFF333333))
+                                        Icon(
+                                            imageVector = androidx.compose.material.icons.Icons.Rounded.Analytics,
+                                            contentDescription = "看评价",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "看评价",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
 
                                     Button(
@@ -562,11 +574,22 @@ fun StudentWorksScreen(viewModel: MainViewModel, onGoToCode: (() -> Unit)? = nul
                                             onGoToCode?.invoke()
                                             Toast.makeText(context, "已载入《${work.workName}》！为您切换至 Scratch 工作区 ✨", Toast.LENGTH_SHORT).show()
                                         },
-                                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E88E5)),
-                                        shape = RoundedCornerShape(8.dp),
-                                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                        modifier = Modifier.height(40.dp),
+                                        shape = androidx.compose.foundation.shape.CircleShape,
+                                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp),
+                                        contentPadding = PaddingValues(horizontal = 16.dp)
                                     ) {
-                                        Text("载入作品 🧩", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                                        Icon(
+                                            imageVector = androidx.compose.material.icons.Icons.Rounded.Extension,
+                                            contentDescription = "载入作品",
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "载入作品",
+                                            fontSize = 14.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
                                     }
                                 }
                             }
