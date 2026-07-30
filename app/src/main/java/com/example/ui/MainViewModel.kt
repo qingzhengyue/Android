@@ -673,10 +673,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun submitWorkAndAiReport(onResult: (String) -> Unit) {
+        android.util.Log.d("SupabaseDebug", "====== 🎯 提交作品按钮被成功触发了！======")
         viewModelScope.launch {
             val studentId = _currentUserId.value
             val classId = _currentClassId.value
             if (studentId == -1) {
+                android.util.Log.e("SupabaseDebug", "错误：当前 studentId = -1，用户未登录！")
                 onResult("错误：请先登录")
                 return@launch
             }
