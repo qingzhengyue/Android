@@ -395,6 +395,7 @@ class AppRepository(private val context: Context) {
             supabase?.from("scratch_work")?.upsert(finalWorkWithId)
         } catch (e: Exception) {
             Log.e("Supabase", "Work sync failed: ${e.message}")
+            throw e
         }
 
         val task = dao.getTaskById(work.taskId)
