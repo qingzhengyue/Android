@@ -53,7 +53,7 @@ object GeminiClient {
                     val requestBodyJson = JSONObject()
                     val modelName = when {
                         isSparkMaaS -> "xopqwen36v35b"
-                        isCSK -> "gpt-3.5-turbo" // 默认使用通用模型名，如果您有特定模型请在此修改
+                        isCSK -> "llama3.1-8b" // 替换为 Cerebras Cloud 支持的模型
                         else -> "qwen-plus"
                     }
                     requestBodyJson.put("model", modelName)
@@ -66,7 +66,7 @@ object GeminiClient {
 
                     val targetUrl = when {
                         isSparkMaaS -> "https://maas-api.cn-huabei-1.xf-yun.com/v2/chat/completions"
-                        isCSK -> "https://api.openai.com/v1/chat/completions" // 若使用的是中转 API，请将此处改为中转地址
+                        isCSK -> "https://api.cerebras.ai/v1/chat/completions" // 替换为真实的 Cerebras 请求地址
                         else -> "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
                     }
 
