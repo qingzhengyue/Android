@@ -39,7 +39,9 @@ object GeminiClient {
         }
 
         val isSparkMaaS = apiKey.startsWith("dae06") || apiKey.contains(":")
-        val isQwen = true // 强制统一使用通义千问 API
+        val isCSK = apiKey.startsWith("csk-")
+        val isQwen = apiKey.startsWith("sk-") && !isCSK // 默认通义千问
+        val isOpenAICompatible = isQwen || isSparkMaaS || isCSK
         var attempts = 0
         val maxAttempts = 3
         var lastErrCode = 0
@@ -47,9 +49,13 @@ object GeminiClient {
 
         while (attempts <= maxAttempts) {
             try {
-                val request = if (isQwen || isSparkMaaS) {
+                val request = if (isOpenAICompatible) {
                     val requestBodyJson = JSONObject()
-                    val modelName = if (isSparkMaaS) "xopqwen36v35b" else "qwen-plus"
+                    val modelName = when {
+                        isSparkMaaS -> "xopqwen36v35b"
+                        isCSK -> "gpt-3.5-turbo" // 默认使用通用模型名，如果您有特定模型请在此修改
+                        else -> "qwen-plus"
+                    }
                     requestBodyJson.put("model", modelName)
                     val messagesArray = JSONArray()
                     val messageObj = JSONObject()
@@ -58,10 +64,10 @@ object GeminiClient {
                     messagesArray.put(messageObj)
                     requestBodyJson.put("messages", messagesArray)
 
-                    val targetUrl = if (isSparkMaaS) {
-                        "https://maas-api.cn-huabei-1.xf-yun.com/v2/chat/completions"
-                    } else {
-                        "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+                    val targetUrl = when {
+                        isSparkMaaS -> "https://maas-api.cn-huabei-1.xf-yun.com/v2/chat/completions"
+                        isCSK -> "https://api.openai.com/v1/chat/completions" // 若使用的是中转 API，请将此处改为中转地址
+                        else -> "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
                     }
 
                     Request.Builder()
@@ -99,7 +105,7 @@ object GeminiClient {
                         val responseBody = response.body?.string() ?: return@withContext "无返回结果"
                         val responseJson = JSONObject(responseBody)
                         
-                        if (isQwen || isSparkMaaS) {
+                        if (isOpenAICompatible) {
                             val choices = responseJson.optJSONArray("choices")
                             if (choices != null && choices.length() > 0) {
                                 val firstChoice = choices.getJSONObject(0)
