@@ -611,7 +611,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
         val detailStudentName = detailStudent?.let { "${it.name} (学号: ${it.studentNumber})" } ?: "学生ID: ${detailWork.studentId}"
 
         val formattedJson = remember(detailWork.workCode) {
-            try { org.json.JSONObject(detailWork.workCode).toString(2) } catch (e: Exception) { detailWork.workCode }
+            com.example.data.ScratchToPythonConverter.convertJsonToPython(detailWork.workCode)
         }
 
         // JavascriptInterface 传递项目数据给 WebView
