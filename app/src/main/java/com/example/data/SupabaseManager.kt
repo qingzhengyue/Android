@@ -18,21 +18,15 @@ object SupabaseManager {
 
     suspend fun uploadScratchProject(localFile: File, remoteFileName: String): Boolean {
         return withContext(Dispatchers.IO) {
-            try {
-                val bucket = client.storage.from("student-works")
-                val fileBytes = localFile.readBytes()
-                
-                bucket.upload(remoteFileName, fileBytes) {
-                    upsert = true
-                }
-                
-                println("上传成功：$remoteFileName")
-                true
-            } catch (e: Exception) {
-                println("上传失败：${e.message}")
-                e.printStackTrace()
-                false
+            val bucket = client.storage.from("student-works")
+            val fileBytes = localFile.readBytes()
+            
+            bucket.upload(remoteFileName, fileBytes) {
+                upsert = true
             }
+            
+            println("上传成功：$remoteFileName")
+            true
         }
     }
 }
