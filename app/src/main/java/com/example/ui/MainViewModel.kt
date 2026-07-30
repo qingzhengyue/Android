@@ -701,6 +701,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     reviewStatus = "已评测"
                 )
                 val report = repository.submitWorkAndEvaluate(work)
+                
+                // ----- Supabase 上传逻辑 -----
+                try {
+                    val localFile = java.io.File(context.filesDir, "student_${studentId}_project_${report.workId}.sb3")
+                    com.example.data.Sb3Generator.writeSb3File(currentDraftCode.value, localFile)
+                    com.example.data.SupabaseManager.uploadScratchProject(localFile, localFile.name)
+                } catch (e: Exception) {
+                    android.util.Log.e("SupabaseUpload", "Upload to Supabase failed", e)
+                }
+                // ---------------------------
+
                 onResult("作品提报并评测成功！综合评分：${report.averageScore} 分，精细诊断细节已产生 ~")
                 onUserLoggedIn() // refresh lists
             } catch (e: Exception) {
