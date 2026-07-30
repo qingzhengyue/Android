@@ -834,8 +834,13 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (viewingDetailTab == "代码视图") {
-                            // 1. 复制代码按钮（主操作，均分宽度）
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = viewingDetailTab == "代码视图",
+                            modifier = if (viewingDetailTab == "代码视图") Modifier.weight(1f) else Modifier,
+                            enter = androidx.compose.animation.expandHorizontally() + androidx.compose.animation.fadeIn(),
+                            exit = androidx.compose.animation.shrinkHorizontally() + androidx.compose.animation.fadeOut()
+                        ) {
+                            // 1. 复制代码按钮（主操作）
                             Button(
                                 onClick = {
                                     try {
@@ -848,7 +853,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                     }
                                 },
                                 modifier = Modifier
-                                    .weight(1f)
+                                    .fillMaxWidth()
                                     .height(48.dp),
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
@@ -859,7 +864,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                             }
                         }
 
-                        // 2. 关闭按钮（次操作，均分宽度）
+                        // 2. 关闭按钮（次操作）
                         OutlinedButton(
                             onClick = { viewingWorkDetail = null },
                             modifier = Modifier
