@@ -394,8 +394,8 @@ class AppRepository(private val context: Context) {
         try {
             supabase?.from("scratch_work")?.upsert(finalWorkWithId)
         } catch (e: Exception) {
-            Log.e("Supabase", "Work sync failed: ${e.message}")
-            throw e
+            Log.e("SupabaseSync", "同步上传失败，拦截到的底层错误是: ${e.message}", e)
+            throw Exception("作品云端同步失败: ${e.message}", e)
         }
 
         val task = dao.getTaskById(work.taskId)
@@ -422,7 +422,8 @@ class AppRepository(private val context: Context) {
         try {
             supabase?.from("work_ai_report")?.upsert(reportWithId)
         } catch (e: Exception) {
-            Log.e("Supabase", "Report sync failed: ${e.message}")
+            Log.e("SupabaseSync", "评测报告同步失败，拦截到的底层错误是: ${e.message}", e)
+            throw Exception("评测报告云端同步失败: ${e.message}", e)
         }
 
         reportWithId

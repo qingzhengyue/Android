@@ -737,7 +737,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onUserLoggedIn() // refresh lists
             } catch (e: Exception) {
                 e.printStackTrace()
-                onResult("作答提交异常或网络超时，请重载或向老师反馈")
+                onResult("作答提交异常: ${e.message}")
             } finally {
                 _currentBtnLoading.value = false
             }
