@@ -112,7 +112,12 @@ object ScratchToPythonConverter {
                 sb.append(indent).append("while True:\n")
                 val substack = getSubstackId(inputs)
                 if (substack != null) {
-                    sb.append(parseBlock(substack, blocks, indentLevel + 1))
+                    val parsed = parseBlock(substack, blocks, indentLevel + 1)
+                    if (parsed.isBlank()) {
+                        sb.append(indent).append("    pass\n")
+                    } else {
+                        sb.append(parsed)
+                    }
                 } else {
                     sb.append(indent).append("    pass\n")
                 }
