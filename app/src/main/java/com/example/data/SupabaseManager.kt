@@ -3,6 +3,7 @@ package com.example.data
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.storage.Storage
 import io.github.jan.supabase.storage.storage
+import io.github.jan.supabase.postgrest.postgrest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -13,6 +14,7 @@ object SupabaseManager {
         supabaseUrl = BuildConfig.SUPABASE_URL,
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
+        install(io.github.jan.supabase.postgrest.Postgrest)
         install(Storage)
     }
 
@@ -28,6 +30,19 @@ object SupabaseManager {
             
             println("上传成功：$remoteFileName")
             true
+        }
+    }
+    
+    suspend fun insertScratchWorkRecord(work: ScratchWork): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                // Ensure Postgrest is imported and used to insert data
+                client.postgrest["scratch_work"].insert(work)
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
         }
     }
 }

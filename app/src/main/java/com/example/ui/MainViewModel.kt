@@ -741,7 +741,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     
                     com.example.data.SupabaseManager.uploadScratchProject(localFile, localFile.name)
                     
-                    android.util.Log.d("SupabaseDebug", "SupabaseManager.uploadScratchProject 调用完成")
+                    val workToInsert = work.copy(workId = report.workId)
+                    com.example.data.SupabaseManager.insertScratchWorkRecord(workToInsert)
+                    
+                    android.util.Log.d("SupabaseDebug", "SupabaseManager.uploadScratchProject and insertScratchWorkRecord 调用完成")
                     uploadStatusTip = "\n☁️ 云端同步成功！"
                 } catch (e: Exception) {
                     val errorMsg = e.message ?: e.toString()
