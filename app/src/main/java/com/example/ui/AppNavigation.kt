@@ -558,7 +558,7 @@ fun LoginScreen(viewModel: MainViewModel) {
 
                                 Button(
                                     onClick = {
-                                        viewModel.studentLogin("S2001", "123456") {
+                                        viewModel.studentLogin("3101", "123456") {
                                             Toast.makeText(context, "已一键快捷登录为学生：张小帅！", Toast.LENGTH_SHORT).show()
                                         }
                                     },
