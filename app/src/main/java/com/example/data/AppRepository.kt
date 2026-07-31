@@ -391,8 +391,11 @@ class AppRepository(private val context: Context) {
         val finalWorkWithId = finalWork.copy(workId = workId)
 
         // 同步作品到云端
-        try {
-            supabase?.from("scratch_work")?.upsert(finalWorkWithId)
+        val realWorkId = try {
+            val remoteWork = supabase?.from("scratch_work")?.upsert(finalWorkWithId) {
+                select()
+            }?.decodeSingle<ScratchWork>()
+            remoteWork?.workId ?: workId
         } catch (e: Exception) {
             Log.e("SupabaseSync", "同步上传失败，拦截到的底层错误是: ${e.message}", e)
             throw Exception("作品云端同步失败: ${e.message}", e)
@@ -407,7 +410,7 @@ class AppRepository(private val context: Context) {
         )
 
         val report = WorkAiReport(
-            workId = workId,
+            workId = realWorkId, // 使用云端返回的真实 ID
             studentId = work.studentId,
             grammarScore = eval.grammarScore,
             logicScore = eval.logicScore,
