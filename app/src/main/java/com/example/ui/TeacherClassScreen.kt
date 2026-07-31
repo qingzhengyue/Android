@@ -1062,7 +1062,7 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                         }
                         viewModel.batchImportStudentsByTeacher(
                             namesStr = batchNamesInput,
-                            classId = selClass.classId
+                            classEntity = selClass
                         ) { msg ->
                             Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                             showBatchImportDialog = false

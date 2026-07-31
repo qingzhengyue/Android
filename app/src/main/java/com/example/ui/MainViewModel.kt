@@ -501,11 +501,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun studentRegister(studentNum: String, name: String, pass: String, classId: Int, onSuccess: () -> Unit) {
-        val cleanNum = studentNum.trim().uppercase()
+        val cleanNum = studentNum.replace(Regex("[^0-9]"), "")
         val cleanName = name.trim()
         val cleanPass = pass.trim()
         viewModelScope.launch {
             _currentBtnLoading.value = true
+            if (cleanNum.isEmpty()) {
+                _authError.value = "学号必须包含数字！"
+                _currentBtnLoading.value = false
+                return@launch
+            }
             _authError.value = null
             val existing = repository.getStudentByNumber(cleanNum)
             if (existing != null) {
@@ -1680,13 +1685,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onResult("各项输入不能为空！")
                 return@launch
             }
-            val existing = repository.getStudentByNumber(studentNumber)
+            val cleanNum = studentNumber.replace(Regex("[^0-9]"), "")
+            if (cleanNum.isEmpty()) {
+                onResult("学号必须包含数字！")
+                return@launch
+            }
+            val existing = repository.getStudentByNumber(cleanNum)
             if (existing != null) {
                 onResult("该学号已被占用！")
                 return@launch
             }
             val student = Student(
-                studentNumber = studentNumber,
+                studentNumber = cleanNum,
                 name = name,
                 password = pass,
                 classId = classId
@@ -1701,7 +1711,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun batchImportStudentsByTeacher(namesStr: String, classId: Int, onResult: (String) -> Unit) {
+    fun batchImportStudentsByTeacher(namesStr: String, classEntity: com.example.data.ClassEntity, onResult: (String) -> Unit) {
+        val classId = classEntity.classId
         viewModelScope.launch {
             if (namesStr.isBlank()) {
                 onResult("请输入学生明细名单")
@@ -1713,10 +1724,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 return@launch
             }
             var count = 0
-            val prefix = "S${classId}"
-            val randSuffix = (1000..9999).random()
+            val gradeMatch = Regex("([一二三四五六七八九十0-9]+)年级").find(classEntity.grade) ?: Regex("([高初][一二三])").find(classEntity.grade)
+            val classMatch = Regex("([一二三四五六七八九十0-9]+)[班(]").find(classEntity.className)
+            val numMap = mapOf("一" to "1", "二" to "2", "三" to "3", "四" to "4", "五" to "5", "六" to "6", "七" to "7", "八" to "8", "九" to "9", "十" to "10", "初一" to "7", "初二" to "8", "初三" to "9", "高一" to "10", "高二" to "11", "高三" to "12")
+            var gStr = classId.toString()
+            if (gradeMatch != null) {
+                val g = gradeMatch.groupValues[1]
+                gStr = numMap[g] ?: g
+            }
+            var cStr = ""
+            if (classMatch != null) {
+                val c = classMatch.groupValues[1]
+                cStr = numMap[c] ?: c
+            } else {
+                cStr = "1"
+            }
+            val prefix = "${gStr}${cStr}"
+            val existingStudents = repository.getStudentsByClass(classId)
+            val randSuffix = existingStudents.size + 1
             names.forEachIndexed { index, name ->
-                val num = "$prefix${randSuffix + index}"
+                val currentSuffix = (randSuffix + index).toString().padStart(2, '0')
+                val num = "$prefix${currentSuffix}"
                 val student = Student(
                     studentNumber = num,
                     name = name,
@@ -1726,7 +1754,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val id = repository.registerStudent(student)
                 if (id > 0) count++
             }
-            onResult("成功批量导入 $count 名学生！学号前缀为 $prefix，默认密码 123456")
+            onResult("成功批量导入 $count 名学生！学号前缀为 S$prefix，默认密码 123456")
             onUserLoggedIn()
         }
     }

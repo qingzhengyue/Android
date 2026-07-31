@@ -11,6 +11,7 @@ object BlockTranslator {
         "motion_movesteps" to "移动 步",
         "motion_changexby" to "将 x 坐标增加",
         "motion_ifonedgebounce" to "碰到边缘就反弹",
+        "motion_setrotationstyle" to "将旋转方式设为",
         "sensing_keypressed" to "按下 <按键> 键?",
         "looks_say" to "说"
     )

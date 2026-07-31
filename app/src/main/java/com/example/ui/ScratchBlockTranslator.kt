@@ -32,6 +32,7 @@ object ScratchBlockTranslator {
         "motion_turnleft" to "左转 15 度",
         "motion_changexby" to "将 x 坐标增加 10",
         "motion_ifonedgebounce" to "碰到边缘就反弹",
+        "motion_setrotationstyle" to "将旋转方式设为",
         "sensing_touchingobject" to "碰到鼠标指针?",
         "sensing_askandwait" to "询问 你叫什么名字? 并等待",
         "sensing_keypressed" to "按下 <空格> 键?",

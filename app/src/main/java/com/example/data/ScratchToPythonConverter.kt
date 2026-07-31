@@ -143,6 +143,15 @@ object ScratchToPythonConverter {
                 val message = getInputValue(inputs, "MESSAGE", "Hello!")
                 sb.append(indent).append("print(\"$message\")\n")
             }
+            "motion_setrotationstyle" -> {
+                var style = "left-right"
+                val fields = block.optJSONObject("fields")
+                if (fields != null && fields.has("STYLE")) {
+                    val f = fields.optJSONArray("STYLE")
+                    if (f != null && f.length() > 0) style = f.optString(0)
+                }
+                sb.append(indent).append("sprite.set_rotation_style('$style')\n")
+            }
             "motion_ifonedgebounce" -> {
                 sb.append(indent).append("sprite.bounce_off_edge()\n")
             }
