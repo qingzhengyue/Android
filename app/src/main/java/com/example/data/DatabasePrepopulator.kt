@@ -7,6 +7,13 @@ object DatabasePrepopulator {
 
     suspend fun populateIfEmpty(db: AppDatabase) = withContext(Dispatchers.IO) {
         val dao = db.appDao
+        
+        // --- 数据清理：修复早期测试数据导致学号带有 S 的问题 ---
+        try {
+            db.openHelper.writableDatabase.execSQL("UPDATE student SET studentNumber = REPLACE(studentNumber, 'S', '') WHERE studentNumber LIKE '%S%'")
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
 
         // 1. 确保教师王老师存在并获取其 teacherId
         var existingTeacher = dao.getTeacherByWorkId("T1001")
