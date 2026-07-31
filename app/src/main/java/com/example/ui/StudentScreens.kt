@@ -1,67 +1,133 @@
 package com.example.ui
+import androidx.compose.ui.text.withStyle
+
 
 import android.app.Activity
+
 import android.content.pm.ActivityInfo
+
 import android.webkit.WebChromeClient
+
 import android.webkit.WebSettings
+
 import android.webkit.WebView
+
 import android.webkit.WebViewClient
+
 import android.webkit.WebResourceRequest
+
 import android.webkit.WebResourceError
+
 import android.widget.Toast
+
 import androidx.compose.animation.*
+
+import androidx.compose.animation.core.*
+
 import androidx.compose.foundation.*
+
 import androidx.compose.foundation.layout.*
+
 import androidx.compose.foundation.layout.FlowRow
+
 import androidx.compose.ui.text.input.TextFieldValue
+
 import androidx.compose.ui.text.input.VisualTransformation
+
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+
 import androidx.compose.foundation.lazy.LazyColumn
+
 import androidx.compose.foundation.lazy.items
+
 import androidx.compose.foundation.shape.RoundedCornerShape
+
 import androidx.compose.material.icons.Icons
+
 import androidx.compose.material.icons.rounded.Analytics
+
 import androidx.compose.material.icons.rounded.Extension
 
 import androidx.compose.material.icons.filled.*
+
 import androidx.compose.material3.*
+
 import androidx.compose.runtime.*
+
+import androidx.compose.runtime.getValue
+
 import androidx.compose.ui.Alignment
+
 import androidx.compose.ui.Modifier
+
 import androidx.compose.ui.draw.clip
+
 import androidx.compose.ui.graphics.Brush
+
 import androidx.compose.ui.graphics.Color
+
 import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.ui.text.font.FontFamily
+
 import androidx.compose.ui.text.font.FontWeight
+
 import androidx.compose.ui.text.style.TextAlign
+
 import androidx.compose.ui.text.style.TextOverflow
+
 import androidx.compose.ui.unit.dp
+
 import androidx.compose.ui.unit.sp
+
 import androidx.compose.ui.viewinterop.AndroidView
+
 import androidx.compose.ui.window.DialogProperties
+
 import android.net.Uri
+
 import android.webkit.ValueCallback
+
 import androidx.activity.compose.rememberLauncherForActivityResult
+
 import androidx.activity.result.contract.ActivityResultContracts
+
 import androidx.compose.foundation.gestures.detectDragGestures
+
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+
 import androidx.compose.ui.input.pointer.pointerInput
+
 import androidx.compose.ui.unit.IntOffset
+
 import androidx.compose.ui.geometry.Offset
+
 import kotlin.math.roundToInt
+
 import androidx.compose.foundation.shape.CircleShape
+
 import androidx.compose.ui.draw.alpha
+
 import androidx.compose.ui.draw.scale
+
 import androidx.compose.ui.focus.onFocusChanged
+
 import androidx.compose.foundation.text.KeyboardOptions
+
 import androidx.compose.ui.text.input.ImeAction
+
 import androidx.compose.ui.text.input.KeyboardType
+
 import com.example.data.*
+
 import java.text.SimpleDateFormat
+
 import java.util.Date
+
 import java.util.Locale
+
 import kotlinx.coroutines.launch
+
 import kotlinx.coroutines.delay
 
 @Composable
@@ -652,10 +718,10 @@ fun StudentWorksScreen(viewModel: MainViewModel, onGoToCode: (() -> Unit)? = nul
                         // 细分子项目雷达直条图
                         Text("多维度教学要素测算：", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Color.DarkGray)
 
-                        EvaluationProgressRow(label = "1. 语法合规性 (检测积木完整拼接)", score = rep.grammarScore, maxScore = 25, color = Color(0xFF4CAF50))
-                        EvaluationProgressRow(label = "2. 逻辑完整性 (检测逻辑环嵌套等)", score = rep.logicScore, maxScore = 30, color = Color(0xFF2196F3))
-                        EvaluationProgressRow(label = "3. 任务匹配度 (检测任务目标要素)", score = rep.taskMatchScore, maxScore = 25, color = Color(0xFFFF9800))
-                        EvaluationProgressRow(label = "4. 创意实现度 (分析交互及原创想法)", score = rep.creativeScore, maxScore = 20, color = Color(0xFF9C27B0))
+                        StatProgressBar(label = "1. 语法合规性 (检测积木完整拼接)", score = rep.grammarScore, maxScore = 25, gradientColors = listOf(Color(0xFF84DFB4), Color(0xFF28B48F)))
+                        StatProgressBar(label = "2. 逻辑完整性 (检测逻辑环嵌套等)", score = rep.logicScore, maxScore = 30, gradientColors = listOf(Color(0xFF8AB4F8), Color(0xFF4285F4)))
+                        StatProgressBar(label = "3. 任务匹配度 (检测任务目标要素)", score = rep.taskMatchScore, maxScore = 25, gradientColors = listOf(Color(0xFFFFD180), Color(0xFFFF8F00)))
+                        StatProgressBar(label = "4. 创意实现度 (分析交互及原创想法)", score = rep.creativeScore, maxScore = 20, gradientColors = listOf(Color(0xFFD7A1F9), Color(0xFF9333EA)))
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -689,25 +755,94 @@ fun StudentWorksScreen(viewModel: MainViewModel, onGoToCode: (() -> Unit)? = nul
 }
 
 @Composable
-fun EvaluationProgressRow(label: String, score: Int, maxScore: Int, color: Color) {
-    val progressRatio = score.toFloat() / maxScore.toFloat()
-    Column(modifier = Modifier.padding(vertical = 6.dp)) {
+fun StatProgressBar(
+    label: String,
+    score: Int,
+    maxScore: Int,
+    gradientColors: List<Color>
+) {
+    val progressRatio = (score.toFloat() / maxScore.toFloat()).coerceIn(0f, 1f)
+    
+    // 使用 Spring 动画实现丝滑填充效果
+    val animatedProgress by animateFloatAsState(
+        targetValue = progressRatio,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "progress_animation"
+    )
+
+    // 解析主标题和副标题，增加排版层次感
+    val titleMatch = Regex("(.*?)\\s*\\((.*?)\\)").find(label)
+    val mainTitle = titleMatch?.groupValues?.get(1) ?: label
+    val subTitle = titleMatch?.groupValues?.get(2)
+
+    Column(modifier = Modifier.padding(vertical = 10.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom
         ) {
-            Text(label, fontSize = 11.sp, color = Color.Gray)
-            Text("$score / $maxScore 分", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = color)
+            Text(
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    withStyle(style = androidx.compose.ui.text.SpanStyle(
+                        color = Color(0xFF2C3E50),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )) {
+                        append(mainTitle)
+                    }
+                    if (subTitle != null) {
+                        append(" ")
+                        withStyle(style = androidx.compose.ui.text.SpanStyle(
+                            color = Color(0xFF95A5A6),
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 11.sp
+                        )) {
+                            append("($subTitle)")
+                        }
+                    }
+                }
+            )
+            
+            Text(
+                text = androidx.compose.ui.text.buildAnnotatedString {
+                    withStyle(style = androidx.compose.ui.text.SpanStyle(
+                        color = gradientColors.last(),
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp
+                    )) {
+                        append(score.toString())
+                    }
+                    withStyle(style = androidx.compose.ui.text.SpanStyle(
+                        color = Color(0xFFBDC3C7),
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 12.sp
+                    )) {
+                        append(" / $maxScore 分")
+                    }
+                }
+            )
         }
-        LinearProgressIndicator(
-            progress = { progressRatio },
+
+        // 现代感进度条轨道
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(8.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = color,
-            trackColor = Color(0xFFEEEEEE)
-        )
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(Color(0xFFF0F3F4)) // 极浅的高级灰作为底色
+        ) {
+            // 渐变填充层
+            Box(
+                modifier = Modifier
+                    .width(maxWidth * animatedProgress)
+                    .fillMaxHeight()
+                    .clip(androidx.compose.foundation.shape.CircleShape)
+                    .background(androidx.compose.ui.graphics.Brush.horizontalGradient(gradientColors))
+            )
+        }
     }
 }
 
