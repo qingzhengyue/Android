@@ -703,6 +703,7 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                             webViewClient = object : WebViewClient() {
                                                 override fun onPageFinished(view: WebView?, url: String?) {
                                                     super.onPageFinished(view, url)
+                                                    view?.evaluateJavascript("if(window.setViewOnly){ window.setViewOnly(true); }", null)
                                                     val safeJsonLiteral = org.json.JSONObject.quote(detailWork.workCode)
                                                     view?.evaluateJavascript("if(window.loadProject){ window.loadProject($safeJsonLiteral); }", null)
                                                 }

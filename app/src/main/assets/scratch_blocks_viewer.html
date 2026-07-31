@@ -273,10 +273,16 @@ function updateWorkspaceUI() {
   let html = '';
   activeBlocks.forEach((b, idx) => {
     const cls = getCategoryClassByOpcode(b.opcode);
-    html += `<div class="block ${cls}" style="justify-content:space-between;width:100%;">
-      <span>${b.label}</span>
-      <span style="font-size:12px;opacity:0.8;margin-left:8px;" onclick="event.stopPropagation();removeBlock(${idx})">✕</span>
-    </div>`;
+    if (window.isViewOnly) {
+      html += `<div class="block ${cls}" style="justify-content:space-between;width:100%;">
+        <span>${b.label}</span>
+      </div>`;
+    } else {
+      html += `<div class="block ${cls}" style="justify-content:space-between;width:100%;">
+        <span>${b.label}</span>
+        <span class="remove-btn" style="font-size:12px;opacity:0.8;margin-left:8px;cursor:pointer;" onclick="event.stopPropagation();removeBlock(${idx})">✕</span>
+      </div>`;
+    }
   });
   stackEl.innerHTML = html;
 }
@@ -378,6 +384,17 @@ window.loadProject = function(jsonStr) {
     logMessage('✅ 导入学生作品代码成功，包含 ' + activeBlocks.length + ' 个积木');
   } catch(e) {
     logMessage('❌ 解析作业 JSON 异常: ' + e.message);
+  }
+};
+
+window.setViewOnly = function(isViewOnly) {
+  window.isViewOnly = isViewOnly;
+  if(isViewOnly) {
+    var sidebar = document.querySelector('.category-sidebar');
+    if(sidebar) sidebar.style.display = 'none';
+    var palette = document.querySelector('.palette-panel');
+    if(palette) palette.style.display = 'none';
+    updateWorkspaceUI();
   }
 };
 
