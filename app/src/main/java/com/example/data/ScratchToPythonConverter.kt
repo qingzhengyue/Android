@@ -210,7 +210,8 @@ object ScratchToPythonConverter {
     private fun getSubstackId(inputs: JSONObject?): String? {
         if (inputs == null) return null
         val substackArray = inputs.optJSONArray("SUBSTACK") ?: return null
-        val valObj = substackArray.opt(1)
+        // Support both ["b3"] (from draft) and [2, "c"] (from valid JSON)
+        val valObj = if (substackArray.length() == 1) substackArray.opt(0) else substackArray.opt(1)
         return if (valObj is String) valObj else null
     }
 
@@ -221,9 +222,9 @@ object ScratchToPythonConverter {
         return if (valObj is org.json.JSONArray) {
             valObj.optString(1, defaultValue)
         } else if (valObj is String) {
-            "'$valObj'"
+            valObj
         } else {
-            defaultValue
+            valObj?.toString() ?: defaultValue
         }
     }
 }

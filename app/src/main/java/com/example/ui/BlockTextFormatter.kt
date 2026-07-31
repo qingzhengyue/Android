@@ -82,6 +82,22 @@ object BlockTextFormatter {
                     BlockSegment.Text(" 度")
                 )
             }
+            "motion_setrotationstyle" -> {
+                val style = getFieldValue(fields, "STYLE", "left-right")
+                val displayStyle = when(style) {
+                    "left-right" -> "左右翻转"
+                    "don't rotate" -> "不可旋转"
+                    "all around" -> "任意旋转"
+                    "左右翻转" -> "左右翻转"
+                    "不可旋转" -> "不可旋转"
+                    "任意旋转" -> "任意旋转"
+                    else -> style
+                }
+                listOf(
+                    BlockSegment.Text("将旋转方式设为 "),
+                    BlockSegment.Parameter(displayStyle)
+                )
+            }
             else -> listOf(BlockSegment.Text(BlockTranslator.getChineseName(opcode)))
         }
     }
