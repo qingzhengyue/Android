@@ -463,12 +463,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- 用户登录/注册逻辑 ---
     fun studentLogin(studentNum: String, pass: String, onSuccess: () -> Unit) {
-        val cleanNum = studentNum.trim().uppercase()
+        // 健壮性处理：剔除输入中的所有字母和特殊字符，只保留纯数字
+        // 这样无论学生输入 "S3101" 还是 "3101"，都能提取出 3101
+        val rawNum = studentNum.trim()
+        val cleanNumStr = rawNum.replace(Regex("[^0-9]"), "")
+        // 转为 Long 类型，确保 4 位数字编码规则（防溢出/类型对齐）
+        val cleanNumLong = cleanNumStr.toLongOrNull() ?: 0L
+        
         val cleanPass = pass.trim()
         viewModelScope.launch {
             _currentBtnLoading.value = true
             _authError.value = null
-            val student = repository.getStudentByNumber(cleanNum)
+            // 匹配数据库中存储的纯数字学号字符串
+            val student = repository.getStudentByNumber(cleanNumLong.toString())
             if (student == null) {
                 _authError.value = "没有找到该学号的学生，请确认或先注册！"
             } else if (student.password != cleanPass) {

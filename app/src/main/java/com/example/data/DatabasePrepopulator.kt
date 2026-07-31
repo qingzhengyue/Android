@@ -47,9 +47,9 @@ object DatabasePrepopulator {
 
         // 3. 检查并补全学生数据
         val existingStudents = dao.getAllStudents()
-        var studentId1 = existingStudents.firstOrNull { it.studentNumber == "S2001" }?.studentId ?: 0
-        var studentId2 = existingStudents.firstOrNull { it.studentNumber == "S2002" }?.studentId ?: 0
-        var studentId3 = existingStudents.firstOrNull { it.studentNumber == "S2003" }?.studentId ?: 0
+        var studentId1 = existingStudents.firstOrNull { it.studentNumber == "3101" }?.studentId ?: 0
+        var studentId2 = existingStudents.firstOrNull { it.studentNumber == "3102" }?.studentId ?: 0
+        var studentId3 = existingStudents.firstOrNull { it.studentNumber == "3103" }?.studentId ?: 0
 
         if (existingStudents.isEmpty() && classId1 != 0 && classId2 != 0) {
             val class1Names = listOf(
@@ -61,7 +61,7 @@ object DatabasePrepopulator {
             )
 
             for (i in 0 until 25) {
-                val sNum = "S" + (2001 + i)
+                val sNum = (3101 + i).toString()
                 val sName = class1Names.getOrElse(i) { "学生$sNum" }
                 val sId = dao.insertStudent(
                     Student(
@@ -85,7 +85,7 @@ object DatabasePrepopulator {
             )
 
             for (i in 0 until 25) {
-                val sNum = "S" + (3001 + i)
+                val sNum = (4201 + i).toString()
                 val sName = class2Names.getOrElse(i) { "学生$sNum" }
                 dao.insertStudent(
                     Student(
