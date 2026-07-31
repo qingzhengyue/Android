@@ -726,7 +726,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val taskNameForMock = matchedTaskForMock?.taskName ?: ""
                     
                     val mockFile = com.example.data.MockWorkRepository.getMockSb3FileForTask(context, taskIdForMock.toLong(), taskNameForMock)
-                    val localFile = java.io.File(context.filesDir, "student_${studentId}_project_${report.workId}.sb3")
+                    val timestamp = System.currentTimeMillis()
+                    val localFile = java.io.File(context.filesDir, "student_${studentId}_project_${report.workId}_${timestamp}.sb3")
                     
                     // Copy mock file to localFile for upload
                     mockFile.copyTo(localFile, overwrite = true)

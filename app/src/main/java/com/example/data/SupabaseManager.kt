@@ -21,8 +21,9 @@ object SupabaseManager {
             val bucket = client.storage.from("student-works")
             val fileBytes = localFile.readBytes()
             
+            // Avoid upsert which requires UPDATE permissions
             bucket.upload(remoteFileName, fileBytes) {
-                upsert = true
+                upsert = false
             }
             
             println("上传成功：$remoteFileName")
