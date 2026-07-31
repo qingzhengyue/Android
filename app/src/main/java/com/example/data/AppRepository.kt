@@ -34,8 +34,8 @@ class AppRepository(private val context: Context) {
     private val supabase: io.github.jan.supabase.SupabaseClient? by lazy {
         try {
             createSupabaseClient(
-                supabaseUrl = "https://mzpchmcodrtmpspfnssk.supabase.co",
-                supabaseKey = "sb_secret_oHif5SwNmpUJcmudVS5G0Q_l3kzW1VK"
+                supabaseUrl = com.example.BuildConfig.SUPABASE_URL,
+                supabaseKey = com.example.BuildConfig.SUPABASE_ANON_KEY
             ) {
                 install(Postgrest)
             }
