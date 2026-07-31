@@ -449,7 +449,7 @@ class AppRepository(private val context: Context) {
         )
 
         val report = WorkAiReport(
-            workId = realWorkId, // 使用云端返回的真实 ID
+            workId = workId, // 使用本地的 workId 保持本地数据库一致性
             studentId = work.studentId,
             grammarScore = eval.grammarScore,
             logicScore = eval.logicScore,

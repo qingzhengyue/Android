@@ -444,6 +444,7 @@ fun StudentWorksScreen(viewModel: MainViewModel, onGoToCode: (() -> Unit)? = nul
     val context = LocalContext.current
     val works by viewModel.worksList.collectAsState()
     val activeReport by viewModel.activeReport.collectAsState()
+    val isReportLoading by viewModel.isReportLoading.collectAsState()
 
     var showReportDialog by remember { mutableStateOf(false) }
 
@@ -677,9 +678,13 @@ fun StudentWorksScreen(viewModel: MainViewModel, onGoToCode: (() -> Unit)? = nul
                 }
             },
             text = {
-                if (activeReport == null) {
+                if (isReportLoading) {
                     Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = Color(0xFF3F51B5))
+                    }
+                } else if (activeReport == null) {
+                    Box(modifier = Modifier.fillMaxWidth().height(150.dp), contentAlignment = Alignment.Center) {
+                        Text("抱歉，未找到该作品的评测报告数据（可能因网络问题同步失败或为旧数据）。请尝试重新提交作品。", color = Color.Gray, textAlign = TextAlign.Center)
                     }
                 } else {
                     val rep = activeReport!!

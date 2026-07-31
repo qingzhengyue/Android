@@ -78,7 +78,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // --- 选中的作品详情评测数据 ---
     private val _activeReport = MutableStateFlow<WorkAiReport?>(null)
-    val activeReport: StateFlow<WorkAiReport?> = _activeReport.asStateFlow()
+    val activeReport: StateFlow<WorkAiReport?> = _activeReport
+    
+    private val _isReportLoading = MutableStateFlow(false)
+    val isReportLoading: StateFlow<Boolean> = _isReportLoading.asStateFlow()
 
     // --- AI 助手与限制管理 ---
     private val _aiResult = MutableStateFlow<String?>(null)
@@ -1742,7 +1745,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadReportForWork(workId: Int) {
         viewModelScope.launch {
+            _isReportLoading.value = true
             _activeReport.value = repository.getReportForWork(workId)
+            _isReportLoading.value = false
         }
     }
 
