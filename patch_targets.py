@@ -3,11 +3,17 @@ with open("app/src/main/java/com/example/ui/TeacherWorksScreens.kt", "r") as f:
 
 import re
 
-# find targetBlocksList declaration until the end of LazyColumn
-pattern = re.compile(r'val targetBlocksList = remember\(detailWork.workCode\) \{.*?\}\s*\}', re.DOTALL)
+pattern = re.compile(r'Column\(\s*modifier = Modifier\s*\.fillMaxWidth\(\)\s*\.weight\(1f\)\s*\.clip\(RoundedCornerShape\(8\.dp\)\)\s*\.background\(Color\.White\)\s*\)\s*\{.*?\}\s*\}\s*"代码视图"', re.DOTALL)
 
-replacement = """val targetBlocksList = remember(detailWork.workCode) {
-                                    val list = mutableListOf<Pair<String, Pair<List<Pair<String, org.json.JSONObject>>, org.json.JSONObject>>>()
+replacement = """Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White)
+                            ) {
+                                val targetBlocksList = remember(detailWork.workCode) {
+                                    val list = mutableListOf<Pair<String, List<String>>>()
                                     try {
                                         val json = org.json.JSONObject(detailWork.workCode)
                                         if (json.has("targets")) {
@@ -17,31 +23,32 @@ replacement = """val targetBlocksList = remember(detailWork.workCode) {
                                                 val name = target.optString("name", "角色 ${i+1}")
                                                 val isStage = target.optBoolean("isStage", false)
                                                 val displayName = if (isStage) "🖼️ 舞台 ($name)" else "🐱 角色 ($name)"
-                                                val blockItems = mutableListOf<Pair<String, org.json.JSONObject>>()
-                                                val blocksObj = target.optJSONObject("blocks") ?: org.json.JSONObject()
-                                                
-                                                blocksObj.keys().forEach { key ->
-                                                    val block = blocksObj.optJSONObject(key)
-                                                    val opcode = block?.optString("opcode")
-                                                    if (!opcode.isNullOrEmpty()) {
-                                                        blockItems.add(Pair(opcode, block))
+                                                val opcodes = mutableListOf<String>()
+                                                if (target.has("blocks")) {
+                                                    val blocksObj = target.getJSONObject("blocks")
+                                                    blocksObj.keys().forEach { key ->
+                                                        val block = blocksObj.optJSONObject(key)
+                                                        val opcode = block?.optString("opcode")
+                                                        if (!opcode.isNullOrEmpty()) {
+                                                            opcodes.add(opcode)
+                                                        }
                                                     }
                                                 }
-                                                if (blockItems.isNotEmpty() || i == 0) {
-                                                    list.add(Pair(displayName, Pair(blockItems, blocksObj)))
+                                                if (opcodes.isNotEmpty() || i == 0) {
+                                                    list.add(Pair(displayName, opcodes))
                                                 }
                                             }
                                         } else if (json.has("blocks")) {
-                                            val blockItems = mutableListOf<Pair<String, org.json.JSONObject>>()
-                                            val blocksObj = json.optJSONObject("blocks") ?: org.json.JSONObject()
+                                            val opcodes = mutableListOf<String>()
+                                            val blocksObj = json.getJSONObject("blocks")
                                             blocksObj.keys().forEach { key ->
                                                 val block = blocksObj.optJSONObject(key)
                                                 val opcode = block?.optString("opcode")
                                                 if (!opcode.isNullOrEmpty()) {
-                                                    blockItems.add(Pair(opcode, block))
+                                                    opcodes.add(opcode)
                                                 }
                                             }
-                                            list.add(Pair("🐱 角色 1", Pair(blockItems, blocksObj)))
+                                            list.add(Pair("🐱 角色 1", opcodes))
                                         }
                                     } catch (e: Exception) {
                                         e.printStackTrace()
@@ -54,10 +61,7 @@ replacement = """val targetBlocksList = remember(detailWork.workCode) {
                                     contentPadding = PaddingValues(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    targetBlocksList.forEach { (targetName, blocksData) ->
-                                        val blockItems = blocksData.first
-                                        val blocksMap = blocksData.second
-                                        
+                                    targetBlocksList.forEach { (targetName, opcodes) ->
                                         item {
                                             Row(
                                                 modifier = Modifier
@@ -84,7 +88,7 @@ replacement = """val targetBlocksList = remember(detailWork.workCode) {
                                                     contentAlignment = Alignment.Center
                                                 ) {
                                                     Text(
-                                                        text = "${blockItems.size} 个积木",
+                                                        text = "${opcodes.size} 个积木",
                                                         fontSize = 11.sp,
                                                         fontWeight = FontWeight.SemiBold,
                                                         color = Color(0xFF1976D2),
@@ -95,31 +99,37 @@ replacement = """val targetBlocksList = remember(detailWork.workCode) {
                                             HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
                                         }
                                         
-                                        if (blockItems.isEmpty()) {
+                                        if (opcodes.isEmpty()) {
                                             item {
                                                 Text("无积木程序", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(vertical = 8.dp))
                                             }
                                         } else {
-                                            items(blockItems) { blockItem ->
-                                                val opcode = blockItem.first
-                                                val blockJson = blockItem.second
+                                            items(opcodes) { opcode ->
+                                                val zhName = BlockTranslator.getChineseName(opcode)
+                                                val color = BlockTranslator.getBlockColor(opcode)
                                                 
-                                                BlockItemView(
-                                                    opcode = opcode,
-                                                    blockJson = blockJson,
-                                                    blocksMap = blocksMap
-                                                )
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(color = color, shape = RoundedCornerShape(8.dp))
+                                                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                                                ) {
+                                                    Text(
+                                                        text = zhName,
+                                                        color = Color.White,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 14.sp
+                                                    )
+                                                }
                                             }
                                         }
                                     }
-                                }"""
+                                }
+                            }
+                        }
+                        "代码视图" """
 
-# We need to correctly target the existing `val targetBlocksList = ...` block up to `} else { items(opcodes) { ... } } } }`
-import re
-target_pattern = re.compile(r'val targetBlocksList = remember\(detailWork\.workCode\) \{.*?items\(opcodes\) \{ opcode ->.*?\}\s*\}\s*\}\s*\}\s*\}', re.DOTALL)
-
-if target_pattern.search(content):
-    content = target_pattern.sub(replacement, content)
+if pattern.search(content):
+    content = pattern.sub(replacement, content)
     with open("app/src/main/java/com/example/ui/TeacherWorksScreens.kt", "w") as f:
         f.write(content)
     print("Patched successfully")

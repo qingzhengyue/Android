@@ -685,97 +685,47 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(Color.White)
                             ) {
-                                // 优雅的标题头部
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "🐱 角色 1 (Sprite1) 积木程序",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = Color(0xFF333333),
-                                        maxLines = 1,
-                                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    
-                                    val blockCount = remember(detailWork.workCode) {
-                                        try {
-                                            val json = org.json.JSONObject(detailWork.workCode)
-                                            var count = 0
-                                            if (json.has("targets")) {
-                                                val targets = json.getJSONArray("targets")
-                                                for (i in 0 until targets.length()) {
-                                                    val target = targets.getJSONObject(i)
-                                                    if (target.has("blocks")) {
-                                                        count += target.getJSONObject("blocks").length()
-                                                    }
-                                                }
-                                            } else if (json.has("blocks")) {
-                                                count = json.getJSONObject("blocks").length()
-                                            }
-                                            count
-                                        } catch (e: Exception) {
-                                            0
-                                        }
-                                    }
-                                    
-                                    Box(
-                                        modifier = Modifier
-                                            .background(Color(0xFFE3F2FD), RoundedCornerShape(12.dp))
-                                            .padding(horizontal = 10.dp, vertical = 4.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text(
-                                            text = "$blockCount 个积木",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = Color(0xFF1976D2),
-                                            maxLines = 1
-                                        )
-                                    }
-                                }
-                                
-                                HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
-
-                                val blockOpcodes = remember(detailWork.workCode) {
-                                    val opcodes = mutableListOf<String>()
+                                val targetBlocksList = remember(detailWork.workCode) {
+                                    val list = mutableListOf<Pair<String, Pair<List<Pair<String, org.json.JSONObject>>, org.json.JSONObject>>>()
                                     try {
                                         val json = org.json.JSONObject(detailWork.workCode)
                                         if (json.has("targets")) {
                                             val targets = json.getJSONArray("targets")
                                             for (i in 0 until targets.length()) {
                                                 val target = targets.getJSONObject(i)
-                                                if (target.has("blocks")) {
-                                                    val blocksObj = target.getJSONObject("blocks")
-                                                    blocksObj.keys().forEach { key ->
-                                                        val block = blocksObj.optJSONObject(key)
-                                                        val opcode = block?.optString("opcode")
-                                                        if (!opcode.isNullOrEmpty()) {
-                                                            opcodes.add(opcode)
-                                                        }
+                                                val name = target.optString("name", "角色 ${i+1}")
+                                                val isStage = target.optBoolean("isStage", false)
+                                                val displayName = if (isStage) "🖼️ 舞台 ($name)" else "🐱 角色 ($name)"
+                                                val blockItems = mutableListOf<Pair<String, org.json.JSONObject>>()
+                                                val blocksObj = target.optJSONObject("blocks") ?: org.json.JSONObject()
+                                                
+                                                blocksObj.keys().forEach { key ->
+                                                    val block = blocksObj.optJSONObject(key)
+                                                    val opcode = block?.optString("opcode")
+                                                    if (!opcode.isNullOrEmpty()) {
+                                                        blockItems.add(Pair(opcode, block))
                                                     }
+                                                }
+                                                if (blockItems.isNotEmpty() || i == 0) {
+                                                    list.add(Pair(displayName, Pair(blockItems, blocksObj)))
                                                 }
                                             }
                                         } else if (json.has("blocks")) {
-                                            val blocksObj = json.getJSONObject("blocks")
+                                            val blockItems = mutableListOf<Pair<String, org.json.JSONObject>>()
+                                            val blocksObj = json.optJSONObject("blocks") ?: org.json.JSONObject()
                                             blocksObj.keys().forEach { key ->
                                                 val block = blocksObj.optJSONObject(key)
                                                 val opcode = block?.optString("opcode")
                                                 if (!opcode.isNullOrEmpty()) {
-                                                    opcodes.add(opcode)
+                                                    blockItems.add(Pair(opcode, block))
                                                 }
                                             }
+                                            list.add(Pair("🐱 角色 1", Pair(blockItems, blocksObj)))
                                         }
                                     } catch (e: Exception) {
                                         e.printStackTrace()
                                     }
-                                    opcodes
+                                    list
                                 }
 
                                 androidx.compose.foundation.lazy.LazyColumn(
@@ -783,27 +733,68 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                     contentPadding = PaddingValues(12.dp),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    items(blockOpcodes) { opcode ->
-                                        val zhName = BlockTranslator.getChineseName(opcode)
-                                        val color = BlockTranslator.getBlockColor(opcode)
+                                    targetBlocksList.forEach { (targetName, blocksData) ->
+                                        val blockItems = blocksData.first
+                                        val blocksMap = blocksData.second
                                         
-                                        Box(
-                                            modifier = Modifier
-                                                .background(color = color, shape = RoundedCornerShape(8.dp))
-                                                .padding(horizontal = 16.dp, vertical = 10.dp)
-                                        ) {
-                                            Text(
-                                                text = zhName,
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 14.sp
-                                            )
+                                        item {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(top = 16.dp, bottom = 8.dp),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    text = targetName,
+                                                    fontSize = 13.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color(0xFF333333),
+                                                    maxLines = 1,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(Color(0xFFE3F2FD), RoundedCornerShape(12.dp))
+                                                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(
+                                                        text = "${blockItems.size} 个积木",
+                                                        fontSize = 11.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = Color(0xFF1976D2),
+                                                        maxLines = 1
+                                                    )
+                                                }
+                                            }
+                                            HorizontalDivider(color = Color(0xFFEEEEEE), thickness = 1.dp)
+                                        }
+                                        
+                                        if (blockItems.isEmpty()) {
+                                            item {
+                                                Text("无积木程序", fontSize = 12.sp, color = Color.Gray, modifier = Modifier.padding(vertical = 8.dp))
+                                            }
+                                        } else {
+                                            items(blockItems) { blockItem ->
+                                                val opcode = blockItem.first
+                                                val blockJson = blockItem.second
+                                                
+                                                BlockItemView(
+                                                    opcode = opcode,
+                                                    blockJson = blockJson,
+                                                    blocksMap = blocksMap
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                        "代码视图"  -> {
+                        "代码视图"   -> {
                             // JSON 代码视图
                             Box(
                                 modifier = Modifier

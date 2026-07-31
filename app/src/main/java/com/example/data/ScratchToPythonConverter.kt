@@ -7,58 +7,87 @@ object ScratchToPythonConverter {
     fun convertJsonToPython(scratchJson: String): String {
         return try {
             val jsonObject = JSONObject(scratchJson)
-            val blocks = org.json.JSONObject()
+            val pythonCode = StringBuilder()
+            
             if (jsonObject.has("targets")) {
                 val targetsArray = jsonObject.getJSONArray("targets")
                 for (i in 0 until targetsArray.length()) {
                     val targetObj = targetsArray.getJSONObject(i)
+                    val targetName = targetObj.optString("name", "角色 ${i+1}")
+                    val isStage = targetObj.optBoolean("isStage", false)
+                    val displayName = if (isStage) "舞台 ($targetName)" else "角色 ($targetName)"
+                    
                     if (targetObj.has("blocks")) {
                         val targetBlocks = targetObj.getJSONObject("blocks")
+                        val topLevelBlocks = mutableListOf<String>()
+                        
                         targetBlocks.keys().forEach { key ->
-                            blocks.put(key, targetBlocks.get(key))
+                            val block = targetBlocks.optJSONObject(key)
+                            if (block != null && block.optBoolean("topLevel", false)) {
+                                topLevelBlocks.add(key)
+                            }
+                        }
+                        
+                        if (topLevelBlocks.isEmpty()) {
+                            var flagClickedBlockId: String? = null
+                            targetBlocks.keys().forEach { key ->
+                                val block = targetBlocks.optJSONObject(key)
+                                if (block != null && block.optString("opcode") == "event_whenflagclicked") {
+                                    flagClickedBlockId = key
+                                }
+                            }
+                            if (flagClickedBlockId != null) {
+                                topLevelBlocks.add(flagClickedBlockId!!)
+                            } else if (targetBlocks.keys().hasNext()) {
+                                topLevelBlocks.add(targetBlocks.keys().next())
+                            }
+                        }
+                        
+                        if (topLevelBlocks.isNotEmpty()) {
+                            if (pythonCode.isNotEmpty()) pythonCode.append("\n")
+                            pythonCode.append("# --- $displayName ---\n")
+                            topLevelBlocks.forEach { blockId ->
+                                pythonCode.append(parseBlock(blockId, targetBlocks, 0))
+                                pythonCode.append("\n")
+                            }
                         }
                     }
                 }
             } else if (jsonObject.has("blocks")) {
-                jsonObject.getJSONObject("blocks")
-            } else {
-                jsonObject
-            }
-
-            // 查找所有顶层积木 (topLevel: true)
-            val topLevelBlocks = mutableListOf<String>()
-            blocks.keys().forEach { key ->
-                val block = blocks.optJSONObject(key)
-                if (block != null && block.optBoolean("topLevel", false)) {
-                    topLevelBlocks.add(key)
-                }
-            }
-
-            // 如果没有明确标明 topLevel，我们尝试找 event_whenflagclicked
-            if (topLevelBlocks.isEmpty()) {
-                var flagClickedBlockId: String? = null
+                val blocks = jsonObject.getJSONObject("blocks")
+                val topLevelBlocks = mutableListOf<String>()
                 blocks.keys().forEach { key ->
                     val block = blocks.optJSONObject(key)
-                    if (block != null && block.optString("opcode") == "event_whenflagclicked") {
-                        flagClickedBlockId = key
+                    if (block != null && block.optBoolean("topLevel", false)) {
+                        topLevelBlocks.add(key)
                     }
                 }
-                if (flagClickedBlockId != null) {
-                    topLevelBlocks.add(flagClickedBlockId!!)
-                } else if (blocks.keys().hasNext()) {
-                    topLevelBlocks.add(blocks.keys().next())
-                } else {
-                    return "# [空代码或未能识别出积木块]"
+                if (topLevelBlocks.isEmpty()) {
+                    var flagClickedBlockId: String? = null
+                    blocks.keys().forEach { key ->
+                        val block = blocks.optJSONObject(key)
+                        if (block != null && block.optString("opcode") == "event_whenflagclicked") {
+                            flagClickedBlockId = key
+                        }
+                    }
+                    if (flagClickedBlockId != null) {
+                        topLevelBlocks.add(flagClickedBlockId!!)
+                    } else if (blocks.keys().hasNext()) {
+                        topLevelBlocks.add(blocks.keys().next())
+                    }
+                }
+                topLevelBlocks.forEach { blockId ->
+                    pythonCode.append(parseBlock(blockId, blocks, 0))
+                    pythonCode.append("\n")
                 }
             }
-
-            val pythonCode = StringBuilder()
-            topLevelBlocks.forEach { blockId ->
-                pythonCode.append(parseBlock(blockId, blocks, 0))
-                pythonCode.append("\n")
-            }
             
-            pythonCode.toString().trim()
+            val result = pythonCode.toString().trim()
+            if (result.isEmpty()) {
+                "# [空代码或未能识别出积木块]"
+            } else {
+                result
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             "# [解析代码失败]: ${e.message}\n$scratchJson"
