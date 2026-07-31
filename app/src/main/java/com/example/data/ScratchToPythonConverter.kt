@@ -7,8 +7,18 @@ object ScratchToPythonConverter {
     fun convertJsonToPython(scratchJson: String): String {
         return try {
             val jsonObject = JSONObject(scratchJson)
-            val blocks = if (jsonObject.has("targets")) {
-                jsonObject.getJSONArray("targets").getJSONObject(0).getJSONObject("blocks")
+            val blocks = org.json.JSONObject()
+            if (jsonObject.has("targets")) {
+                val targetsArray = jsonObject.getJSONArray("targets")
+                for (i in 0 until targetsArray.length()) {
+                    val targetObj = targetsArray.getJSONObject(i)
+                    if (targetObj.has("blocks")) {
+                        val targetBlocks = targetObj.getJSONObject("blocks")
+                        targetBlocks.keys().forEach { key ->
+                            blocks.put(key, targetBlocks.get(key))
+                        }
+                    }
+                }
             } else if (jsonObject.has("blocks")) {
                 jsonObject.getJSONObject("blocks")
             } else {

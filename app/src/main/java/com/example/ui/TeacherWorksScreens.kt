@@ -611,7 +611,11 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
         val detailStudentName = detailStudent?.let { "${it.name} (学号: ${it.studentNumber})" } ?: "学生ID: ${detailWork.studentId}"
 
         val formattedJson = remember(detailWork.workCode) {
-            com.example.data.ScratchToPythonConverter.convertJsonToPython(detailWork.workCode)
+            if (detailWork.workCode.isBlank() || detailWork.workCode == "{}" || detailWork.workCode == "\"\"") {
+                "# [此作品未包含任何积木代码，可能学生提交了空草稿]"
+            } else {
+                com.example.data.ScratchToPythonConverter.convertJsonToPython(detailWork.workCode)
+            }
         }
 
         // JavascriptInterface 传递项目数据给 WebView
@@ -684,6 +688,11 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                 AndroidView(
                                     factory = { ctx ->
                                         WebView(ctx).apply {
+                                            layoutParams = android.view.ViewGroup.LayoutParams(
+                                                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                                                android.view.ViewGroup.LayoutParams.MATCH_PARENT
+                                            )
+                                            webChromeClient = android.webkit.WebChromeClient()
                                             settings.javaScriptEnabled = true
                                             settings.domStorageEnabled = true
                                             settings.allowFileAccess = true

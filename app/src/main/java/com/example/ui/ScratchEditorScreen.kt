@@ -126,8 +126,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
             webView.evaluateJavascript(
                 "(function() { " +
                 "  try { " +
+                "    if (typeof window.getProjectJson === 'function') { return window.getProjectJson(); } " +
                 "    var vm = window.vm || (window.scratch && window.scratch.vm); " +
                 "    if (vm) { " +
+                "      if (typeof vm.toJSON === 'function') { var res = vm.toJSON(); if (typeof res === 'string') return res; return JSON.stringify(res); } " +
                 "      var result = {targets: []}; " +
                 "      var targets = vm.runtime.targets; " +
                 "      for (var i = 0; i < targets.length; i++) { " +
@@ -936,8 +938,9 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                             webView.evaluateJavascript(
                                 "(function() { " +
                                 "  try { " +
-                                "    if (window.vm) { return JSON.stringify(window.vm.toJSON()); } " +
-                                "    else if (window.scratch && window.scratch.vm) { return JSON.stringify(window.scratch.vm.toJSON()); } " +
+                                "    if (typeof window.getProjectJson === 'function') { return window.getProjectJson(); } " +
+                                "    var vm = window.vm || (window.scratch && window.scratch.vm); " +
+                                "    if (vm && typeof vm.toJSON === 'function') { var res = vm.toJSON(); return (typeof res === 'string') ? res : JSON.stringify(res); } " +
                                 "    else if (typeof Blockly !== 'undefined') { " +
                                 "         var xml = Blockly.Xml.workspaceToDom(Blockly.mainWorkspace); " +
                                 "         return Blockly.Xml.domToText(xml); " +
