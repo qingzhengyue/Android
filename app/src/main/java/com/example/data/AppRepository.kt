@@ -398,7 +398,14 @@ class AppRepository(private val context: Context) {
             remoteWork?.workId ?: workId
         } catch (e: Exception) {
             Log.e("SupabaseSync", "同步上传失败，拦截到的底层错误是: ${e.message}", e)
-            throw Exception("作品云端同步失败: ${e.message}", e)
+            val errorMsg = e.message ?: ""
+            if (errorMsg.contains("violates foreign key constraint")) {
+                throw Exception("当前学生账号或作业任务在系统中不存在，请联系老师核对")
+            } else if (errorMsg.contains("Timeout") || errorMsg.contains("UnknownHostException")) {
+                throw Exception("网络连接超时，请检查网络设置")
+            } else {
+                throw Exception("作品云端同步失败: ${e.message}", e)
+            }
         }
 
         val task = dao.getTaskById(work.taskId)
@@ -426,7 +433,14 @@ class AppRepository(private val context: Context) {
             supabase?.from("work_ai_report")?.upsert(reportWithId)
         } catch (e: Exception) {
             Log.e("SupabaseSync", "评测报告同步失败，拦截到的底层错误是: ${e.message}", e)
-            throw Exception("评测报告云端同步失败: ${e.message}", e)
+            val errorMsg = e.message ?: ""
+            if (errorMsg.contains("violates foreign key constraint")) {
+                throw Exception("当前学生账号或作业任务在系统中不存在，请联系老师核对")
+            } else if (errorMsg.contains("Timeout") || errorMsg.contains("UnknownHostException")) {
+                throw Exception("网络连接超时，请检查网络设置")
+            } else {
+                throw Exception("评测报告云端同步失败: ${e.message}", e)
+            }
         }
 
         reportWithId
