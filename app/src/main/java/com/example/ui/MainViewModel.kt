@@ -1746,8 +1746,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadReportForWork(workId: Int) {
         viewModelScope.launch {
             _isReportLoading.value = true
-            _activeReport.value = repository.getReportForWork(workId)
-            _isReportLoading.value = false
+            try {
+                _activeReport.value = repository.getReportForWork(workId)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _activeReport.value = null
+            } finally {
+                _isReportLoading.value = false
+            }
         }
     }
 

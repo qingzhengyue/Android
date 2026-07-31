@@ -901,10 +901,11 @@ fun TeacherWorksClassViewScreen(viewModel: MainViewModel) {
                                         )
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
-                                            text = "🤖 正在检索该作品的 AI 评测报告...",
+                                            text = "🤖 正在生成 AI 评测报告中...\n(通常需要 10-15 秒)",
                                             fontSize = 13.sp,
                                             color = Color.Gray,
-                                            fontWeight = FontWeight.Medium
+                                            fontWeight = FontWeight.Medium,
+                                            textAlign = TextAlign.Center
                                         )
                                     }
                                 }
