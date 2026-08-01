@@ -540,7 +540,7 @@ fun TeacherClassManagementUnifiedScreen(viewModel: MainViewModel) {
                                                 textAlign = TextAlign.Center
                                             )
                                             Text(
-                                                text = "S${student.studentNumber}",
+                                                text = student.studentNumber,
                                                 fontSize = 9.sp,
                                                 color = Color.LightGray,
                                                 textAlign = TextAlign.Center
