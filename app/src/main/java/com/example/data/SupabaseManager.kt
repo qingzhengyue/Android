@@ -15,7 +15,11 @@ object SupabaseManager {
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
         install(io.github.jan.supabase.postgrest.Postgrest)
-        install(Storage)
+        install(Storage) {
+            resumable {
+                cache = io.github.jan.supabase.storage.resumable.MemoryResumableCache()
+            }
+        }
     }
 
     suspend fun uploadScratchProject(localFile: File, remoteFileName: String): Boolean {
