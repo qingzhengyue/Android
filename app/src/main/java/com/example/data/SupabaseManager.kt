@@ -11,7 +11,7 @@ import com.example.BuildConfig
 
 object SupabaseManager {
     val client = createSupabaseClient(
-        supabaseUrl = if (BuildConfig.SUPABASE_URL.startsWith("http")) BuildConfig.SUPABASE_URL else "http://${BuildConfig.SUPABASE_URL}",
+        supabaseUrl = BuildConfig.SUPABASE_URL.trim(),
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
         install(io.github.jan.supabase.postgrest.Postgrest)

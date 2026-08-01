@@ -766,7 +766,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     android.util.Log.d("SupabaseDebug", "SupabaseManager.uploadScratchProject and insertScratchWorkRecord 调用完成")
                     uploadStatusTip = "\n☁️ 云端同步成功！"
                 } catch (e: Exception) {
-                    val errorMsg = e.message ?: e.toString()
+                    val errorMsg = "${e.javaClass.name}: ${e.message}"
                     uploadStatusTip = "\n⚠️ 云端上传失败，原因：$errorMsg"
                     android.util.Log.e("SupabaseDebug", "Upload to Supabase failed with exception", e)
                 }
