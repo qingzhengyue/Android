@@ -1,11 +1,9 @@
-import json
-import subprocess
+package com.example
 
-kotlin_code = """
 import com.example.data.ScratchToPythonConverter
 
 fun main() {
-    val json = \"\"\"{
+    val json = """{
         "targets": [
             {
                 "name": "Sprite1",
@@ -27,11 +25,6 @@ fun main() {
                 }
             }
         ]
-    }\"\"\"
+    }"""
     println(ScratchToPythonConverter.convertJsonToPython(json))
 }
-"""
-
-with open("app/src/test/java/com/example/TestMain.kt", "w") as f:
-    f.write("package com.example\n" + kotlin_code)
-

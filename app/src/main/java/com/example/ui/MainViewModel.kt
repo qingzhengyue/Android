@@ -15,6 +15,27 @@ import java.util.Date
 import java.util.Locale
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    private fun generateStudentPrefix(grade: String, className: String, fallbackId: Int): String {
+        val gradeMatch = Regex("([一二三四五六七八九十0-9]+)年级").find(grade) ?: Regex("([高初][一二三])").find(grade)
+        val classMatch = Regex("([一二三四五六七八九十0-9]+)\\s*班").find(className) ?: Regex("(?<=[(（])[一二三四五六七八九十0-9]+(?=[)）])").find(className) ?: Regex("([一二三四五六七八九十0-9]+)").findAll(className).lastOrNull()
+        val numMap = mapOf("一" to "1", "二" to "2", "三" to "3", "四" to "4", "五" to "5", "六" to "6", "七" to "7", "八" to "8", "九" to "9", "十" to "10", "初一" to "7", "初二" to "8", "初三" to "9", "高一" to "10", "高二" to "11", "高三" to "12")
+        var gStr = fallbackId.toString()
+        if (gradeMatch != null) {
+            val g = gradeMatch.groupValues[1]
+            gStr = numMap[g] ?: g
+        }
+        var cStr = ""
+        if (classMatch != null) {
+            val c = classMatch.groupValues.getOrElse(1) { classMatch.value }
+            cStr = numMap[c] ?: c
+        } else {
+            cStr = "1"
+        }
+        return "${gStr}${cStr}"
+    }
+
+
     private val repository = AppRepository(application)
     private val context = application.applicationContext
 
@@ -1452,7 +1473,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         // 为该班级添加默认学生（基于模板班级的学生数量）
                         for ((index, templateStudent) in templateStudents.withIndex()) {
                             // 生成新的学号：S + 班级ID + 序号
-                            val newStudentNum = "S${disabledClass.classId}${(index + 1).toString().padStart(3, '0')}"
+                            val prefix = generateStudentPrefix(disabledClass.grade, disabledClass.className, disabledClass.classId)
+                            val newStudentNum = "${prefix}${(index + 1).toString().padStart(2, '0')}"
                             // 去除模板学生名称中的括号内容，只保留姓名
                             val baseName = templateStudent.name.substringBefore('(')
                             val newStudentName = baseName
@@ -1537,7 +1559,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     // 为该新班级添加默认学生（基于模板班级的学生数量）
                     for ((index, templateStudent) in templateStudents.withIndex()) {
                         // 生成新的学号：S + 新班级ID + 序号
-                        val newStudentNum = "S${newClassId}${(index + 1).toString().padStart(3, '0')}"
+                        val prefix = generateStudentPrefix(grade, className, newClassId)
+                        val newStudentNum = "${prefix}${(index + 1).toString().padStart(2, '0')}"
                         // 去除模板学生名称中的括号内容，只保留姓名
                         val baseName = templateStudent.name.substringBefore('(')
                         val newStudentName = baseName
