@@ -159,10 +159,36 @@ object ScratchToPythonConverter {
             }
             "motion_ifonedgebounce" -> {
                 sb.append(indent).append("sprite.bounce_off_edge()\n")
-            }
-            "motion_changexby" -> {
+            }            "motion_changexby" -> {
                 val dx = getInputValue(inputs, "DX", "10")
                 sb.append(indent).append("sprite.change_x($dx)\n")
+            }            "motion_goto" -> {
+                val toInput = inputs?.optJSONArray("TO")
+                var toValue = "_random_"
+                if (toInput != null) {
+                    var toBlockId: String? = null
+                    for (i in 1 until toInput.length()) {
+                        val v = toInput.optString(i)
+                        if (v.isNotEmpty() && blocks.has(v)) {
+                            toBlockId = v
+                            break
+                        }
+                    }
+                    if (toBlockId != null) {
+                        val toBlock = blocks.optJSONObject(toBlockId)
+                        if (toBlock != null && toBlock.optString("opcode") == "motion_goto_menu") {
+                            val fields = toBlock.optJSONObject("fields")
+                            if (fields != null && fields.has("TO")) {
+                                val f = fields.optJSONArray("TO")
+                                if (f != null && f.length() > 0) toValue = f.optString(0)
+                            }
+                        }
+                    }
+                }
+                sb.append(indent).append("sprite.go_to('$toValue')\n")
+            }
+            "motion_goto_menu" -> {
+                // Ignore standalone menu blocks
             }
             "control_if" -> {
                 var conditionStr = "True"
