@@ -751,6 +751,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         reviewStatus = work.reviewStatus
                     )
                     com.example.data.SupabaseManager.insertScratchWorkRecord(workToInsert)
+                    val reportToInsert = com.example.data.WorkAiReportInsertDto(
+                        workId = report.workId,
+                        studentId = report.studentId,
+                        grammarScore = report.grammarScore,
+                        logicScore = report.logicScore,
+                        taskMatchScore = report.taskMatchScore,
+                        creativeScore = report.creativeScore,
+                        averageScore = report.averageScore,
+                        optimizationSuggestions = report.optimizationSuggestions
+                    )
+                    com.example.data.SupabaseManager.insertWorkAiReportRecord(reportToInsert)
                     
                     android.util.Log.d("SupabaseDebug", "SupabaseManager.uploadScratchProject and insertScratchWorkRecord 调用完成")
                     uploadStatusTip = "\n☁️ 云端同步成功！"

@@ -33,6 +33,18 @@ object SupabaseManager {
         }
     }
     
+    suspend fun insertWorkAiReportRecord(report: WorkAiReportInsertDto): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                client.postgrest["work_ai_report"].insert(report)
+                true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                false
+            }
+        }
+    }
+
     suspend fun insertScratchWorkRecord(work: ScratchWorkInsertDto): Boolean {
         return withContext(Dispatchers.IO) {
             try {
