@@ -34,7 +34,7 @@ android {
     buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
 
     val supabaseUrl = localProperties.getProperty("SUPABASE_URL") ?: System.getenv("SUPABASE_URL") ?: ""
-    val supabaseKey = localProperties.getProperty("SUPABASE_ANON_KEY") ?: System.getenv("SUPABASE_ANON_KEY") ?: ""
+    val supabaseKey = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"
     buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
     buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseKey\"")
   }
@@ -75,6 +75,7 @@ android {
 secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
+  ignoreList.add("SUPABASE_ANON_KEY")
 }
 
 dependencies {

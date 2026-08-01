@@ -12,7 +12,7 @@ import com.example.BuildConfig
 object SupabaseManager {
     val client = createSupabaseClient(
         supabaseUrl = BuildConfig.SUPABASE_URL.trim(),
-        supabaseKey = BuildConfig.SUPABASE_ANON_KEY
+        supabaseKey = BuildConfig.SUPABASE_ANON_KEY.trim()
     ) {
         install(io.github.jan.supabase.postgrest.Postgrest)
         install(Storage) {
