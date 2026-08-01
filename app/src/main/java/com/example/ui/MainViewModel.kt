@@ -741,7 +741,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     
                     com.example.data.SupabaseManager.uploadScratchProject(localFile, localFile.name)
                     
-                    val workToInsert = work.copy(workId = report.workId)
+                    val workToInsert = com.example.data.ScratchWorkInsertDto(
+                        workName = work.workName,
+                        workCode = work.workCode,
+                        studentId = work.studentId,
+                        classId = work.classId,
+                        taskId = work.taskId,
+                        submitCount = work.submitCount,
+                        reviewStatus = work.reviewStatus
+                    )
                     com.example.data.SupabaseManager.insertScratchWorkRecord(workToInsert)
                     
                     android.util.Log.d("SupabaseDebug", "SupabaseManager.uploadScratchProject and insertScratchWorkRecord 调用完成")

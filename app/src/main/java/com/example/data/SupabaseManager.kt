@@ -11,7 +11,7 @@ import com.example.BuildConfig
 
 object SupabaseManager {
     val client = createSupabaseClient(
-        supabaseUrl = BuildConfig.SUPABASE_URL,
+        supabaseUrl = if (BuildConfig.SUPABASE_URL.startsWith("http")) BuildConfig.SUPABASE_URL else "http://${BuildConfig.SUPABASE_URL}",
         supabaseKey = BuildConfig.SUPABASE_ANON_KEY
     ) {
         install(io.github.jan.supabase.postgrest.Postgrest)
@@ -33,7 +33,7 @@ object SupabaseManager {
         }
     }
     
-    suspend fun insertScratchWorkRecord(work: ScratchWork): Boolean {
+    suspend fun insertScratchWorkRecord(work: ScratchWorkInsertDto): Boolean {
         return withContext(Dispatchers.IO) {
             try {
                 // Ensure Postgrest is imported and used to insert data

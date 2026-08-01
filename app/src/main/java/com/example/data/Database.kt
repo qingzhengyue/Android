@@ -665,3 +665,33 @@ abstract class AppDatabase : RoomDatabase() {
         }
     }
 }
+
+@Serializable
+data class ScratchWorkInsertDto(
+    @SerialName("work_name")
+    val workName: String,
+    @SerialName("work_code")
+    val workCode: String,
+    @SerialName("student_id")
+    val studentId: Int,
+    @SerialName("class_id")
+    val classId: Int,
+    @SerialName("task_id")
+    val taskId: Int,
+    @SerialName("submit_count")
+    val submitCount: Int,
+    @SerialName("review_status")
+    val reviewStatus: String
+)
+
+@Serializable
+data class WorkAiReportInsertDto(
+    @SerialName("work_id") val workId: Int,
+    @SerialName("student_id") val studentId: Int,
+    @SerialName("grammar_score") val grammarScore: Int,
+    @SerialName("logic_score") val logicScore: Int,
+    @SerialName("task_match_score") val taskMatchScore: Int,
+    @SerialName("creative_score") val creativeScore: Int,
+    @SerialName("average_score") val averageScore: Int,
+    @SerialName("optimization_suggestions") val optimizationSuggestions: String
+)
