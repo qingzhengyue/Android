@@ -341,7 +341,7 @@ data class WorkAiReport(
 // 10. 作品与评测报告联合查询结果
 data class WorkWithReport(
     @Embedded val work: ScratchWork,
-    @Embedded(prefix = "report") val report: WorkAiReport?
+    @Relation(parentColumn = "workId", entityColumn = "workId") val report: WorkAiReport?
 )
 
 // 11. 作品点赞记录 (WorkLikeEntity)
@@ -622,7 +622,8 @@ interface AppDao {
     suspend fun getReportByWorkId(workId: Int): WorkAiReport?
 
     // --- 作品与报告联合查询 ---
-    @Query("SELECT scratch_work.*, work_ai_report.grammarScore AS reportGrammarScore, work_ai_report.logicScore AS reportLogicScore, work_ai_report.taskMatchScore AS reportTaskMatchScore, work_ai_report.creativeScore AS reportCreativeScore, work_ai_report.averageScore AS reportAverageScore, work_ai_report.optimizationSuggestions AS reportOptimizationSuggestions, work_ai_report.reportTime AS reportReportTime FROM scratch_work LEFT JOIN work_ai_report ON scratch_work.workId = work_ai_report.workId WHERE scratch_work.studentId = :studentId AND scratch_work.taskId = :taskId LIMIT 1")
+    @Transaction
+    @Query("SELECT * FROM scratch_work WHERE studentId = :studentId AND taskId = :taskId LIMIT 1")
     fun getWorkWithReportFlow(studentId: Int, taskId: Int): Flow<WorkWithReport?>
 }
 
