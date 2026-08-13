@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
@@ -8,6 +9,7 @@ import android.provider.MediaStore
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
@@ -130,6 +132,24 @@ fun AITutoringScreen(viewModel: MainViewModel) {
             attachedImageBitmap = bitmap
         } else {
             Toast.makeText(context, "未拍摄照片", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 相机权限申请 launcher
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            try {
+                cameraLauncher.launch(null)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "启动硬件相机失败，已为你切换至相册选图", Toast.LENGTH_SHORT).show()
+                galleryLauncher.launch("image/*")
+            }
+        } else {
+            Toast.makeText(context, "未获得相机权限，已为你引导至相册选图", Toast.LENGTH_SHORT).show()
+            galleryLauncher.launch("image/*")
         }
     }
 
@@ -329,7 +349,22 @@ fun AITutoringScreen(viewModel: MainViewModel) {
                         }
                     },
                     onCameraClick = {
-                        cameraLauncher.launch(null)
+                        val hasCameraPerm = ContextCompat.checkSelfPermission(
+                            context,
+                            android.Manifest.permission.CAMERA
+                        ) == PackageManager.PERMISSION_GRANTED
+
+                        if (hasCameraPerm) {
+                            try {
+                                cameraLauncher.launch(null)
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                                Toast.makeText(context, "未启动硬件相机，已为你切至相册导入", Toast.LENGTH_SHORT).show()
+                                galleryLauncher.launch("image/*")
+                            }
+                        } else {
+                            cameraPermissionLauncher.launch(android.Manifest.permission.CAMERA)
+                        }
                     },
                     onGalleryClick = {
                         galleryLauncher.launch("image/*")
