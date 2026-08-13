@@ -192,6 +192,93 @@ object GeminiClient {
                 "3. 🚀 **动手尝试**：把图中积木按顺序拼好，点击右上角绿旗亲自看看运行效果吧！"
             }
 
+            // 0.2 Python 与代码范例（高优先级：响应学生关于 Python、代码例子、具体编程语言实现的需求）
+            q.contains("python") || q.contains("代码") || q.contains("范例") || q.contains("例程") || q.contains("代码示例") -> {
+                when {
+                    (q.contains("顺序") || q.contains("选择")) && (q.contains("区别") || q.contains("对比") || q.contains("范例") || q.contains("例子") || q.contains("与") || q.contains("和")) -> {
+                        "🐍【 Python 编程：顺序结构 vs 选择结构 代码范例 】✨\n\n" +
+                        "宝贝你想看 Python 代码范例太有远见啦！下面为你对比演示【顺序结构】与【选择结构】在 Python 中的具体编写方式：\n\n" +
+                        "📌 **1. 顺序结构 (Sequential Structure)**\n" +
+                        "• **特点**：代码从上到下按顺序依次执行，每一行都会运行，没有分支跳转。\n" +
+                        "• **Python 代码范例**：\n" +
+                        "```python\n" +
+                        "# 顺序结构：按照步骤从第一行运行到最后一行\n" +
+                        "print(\"第一步：准备 Python 魔法画笔 🎨\")\n" +
+                        "print(\"第二步：在画板上画一个小圆圈 🟢\")\n" +
+                        "print(\"第三步：涂上漂亮的蓝色 🎨\")\n" +
+                        "print(\"顺序结构执行完毕！✨\")\n" +
+                        "```\n\n" +
+                        "📌 **2. 选择结构 (Selection / Conditional Structure)**\n" +
+                        "• **特点**：使用 if 和 else 关键字进行条件判断，根据判断结果选择执行哪一条分支代码。\n" +
+                        "• **Python 代码范例**：\n" +
+                        "```python\n" +
+                        "# 选择结构：根据分数判断是否通关\n" +
+                        "score = 85\n\n" +
+                        "if score >= 60:\n" +
+                        "    # 当 score >= 60 条件成立时执行\n" +
+                        "    print(\"🎉 恭喜你！成功通关少儿编程第一关！\")\n" +
+                        "else:\n" +
+                        "    # 当条件不成立时执行\n" +
+                        "    print(\"💪 差一点点就通关啦，再接再厉哦！\")\n" +
+                        "```\n\n" +
+                        "💡 **核心区别小结**：\n" +
+                        "• **顺序结构**：无条件分支，代码行行必过。\n" +
+                        "• **选择结构**：用 if ... else ... 问句做选择，满不满足条件走不同路线！"
+                    }
+                    q.contains("选择") || q.contains("条件") || q.contains("分支") -> {
+                        "🐍【 Python 选择结构 代码范例 】✨\n\n" +
+                        "选择结构在 Python 中依靠 `if`、`elif` 和 `else` 来实现：\n\n" +
+                        "```python\n" +
+                        "# 示例：根据气温选择穿衣提醒\n" +
+                        "temperature = 28\n\n" +
+                        "if temperature > 25:\n" +
+                        "    print(\"☀️ 今天天气很热，建议穿短袖！\")\n" +
+                        "elif temperature >= 15:\n" +
+                        "    print(\"🌤️ 天气很舒适，穿长袖外套吧！\")\n" +
+                        "else:\n" +
+                        "    print(\"❄️ 天气太冷啦，记得穿厚羽绒服！\")\n" +
+                        "```"
+                    }
+                    q.contains("顺序") -> {
+                        "🐍【 Python 顺序结构 代码范例 】✨\n\n" +
+                        "顺序结构是 Python 最基本的执行方式：\n\n" +
+                        "```python\n" +
+                        "# 示例：计算两数之和\n" +
+                        "print(\"--- 开始计算 ---\")\n" +
+                        "a = 10\n" +
+                        "b = 20\n" +
+                        "result = a + b\n" +
+                        "print(\"计算结果是:\", result)\n" +
+                        "print(\"--- 计算结束 ---\")\n" +
+                        "```"
+                    }
+                    q.contains("循环") -> {
+                        "🐍【 Python 循环结构 代码范例 】✨\n\n" +
+                        "Python 中包含 `for` 循环与 `while` 循环：\n\n" +
+                        "```python\n" +
+                        "# 1. for 循环：重复 5 次\n" +
+                        "for i in range(1, 6):\n" +
+                        "    print(f\"这是第 {i} 次报数 📢\")\n\n" +
+                        "# 2. while 循环：条件成立就重复\n" +
+                        "count = 0\n" +
+                        "while count < 3:\n" +
+                        "    print(\"小猫向前跑 🐾\")\n" +
+                        "    count += 1\n" +
+                        "```"
+                    }
+                    else -> {
+                        "🐍【 Python 少儿编程代码范例 】✨\n\n" +
+                        "```python\n" +
+                        "# 欢迎来到 Python 少儿编程世界！\n" +
+                        "name = \"小明\"\n" +
+                        "age = 9\n\n" +
+                        "print(f\"你好，{name}！欢迎你来到少儿编程乐园！\")\n" +
+                        "print(\"这里可以用代码命令电脑画图、做数学游戏和控制角色哦！\")\n" +
+                        "```"
+                    }
+                }
+            }
+
             // 0.5 多结构对比 / 区别（例如：选择结构和顺序结构的区别、三大结构的区别）
             (q.contains("区别") || q.contains("不同") || q.contains("对比") || q.contains("比较") || q.contains("还是")) &&
             (q.contains("结构") || q.contains("顺序") || q.contains("选择") || q.contains("循环") || q.contains("分支")) -> {
