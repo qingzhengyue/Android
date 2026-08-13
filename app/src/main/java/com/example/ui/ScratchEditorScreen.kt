@@ -7,6 +7,7 @@ import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebResourceError
 import android.widget.Toast
 import androidx.compose.animation.*
@@ -534,7 +535,21 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
+                    // setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
                     webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
+                            val url = request?.url?.toString() ?: return null
+                            if (url.endsWith("/___android_injected_project.sb3")) {
+                                val bytes = ProjectDataProvider.projectBytes
+                                if (bytes != null) {
+                                    val stream = java.io.ByteArrayInputStream(bytes)
+                                    val response = WebResourceResponse("application/octet-stream", "UTF-8", stream)
+                                    response.responseHeaders = mapOf("Access-Control-Allow-Origin" to "*")
+                                    return response
+                                }
+                            }
+                            return super.shouldInterceptRequest(view, request)
+                        }
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                             val url = request?.url?.toString() ?: return false
                             if (url.contains("login", ignoreCase = true) || 
@@ -718,6 +733,7 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
                         false
                     }
                     
+                    addJavascriptInterface(ProjectDataProvider, "AndroidProjectProvider")
                     addJavascriptInterface(ScratchJsInterface {
                         scratchChangeCounter++
                     }, "AndroidWorkspace")
@@ -1274,74 +1290,36 @@ fun injectBlockIntoWebView(webView: WebView?, blockText: String, context: androi
 
 fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: String) {
     if (webView == null) return
-
     val jobId = System.currentTimeMillis()
-
-    // 1. 初始化 JS 端接收容器，并设定新任务的唯一 ID（终止一切旧的死循环）
-    webView.evaluateJavascript("""
-        window.__scratch_job_id = $jobId;
-        window.__android_b64 = '';
-        window.__android_json_b64 = '';
-    """.trimIndent(), null)
-
-    // 2. 核心黑科技：每次仅发送 150KB 切片，彻底绕开 Android WebView 的 1MB 崩溃红线
-    val chunkSize = 150 * 1024 
-
-    if (base64Data.isNotEmpty()) {
-        val b64Chunks = base64Data.chunked(chunkSize)
-        for (chunk in b64Chunks) {
-            // Base64 只包含安全字符，无需任何转义，绝对不会报 JS 语法错误
-            webView.evaluateJavascript("window.__android_b64 += \"$chunk\";", null)
-        }
-    }
-
-    if (projectJson.isNotEmpty()) {
-        // 把 JSON 也转成 Base64 再发送，彻底消灭所有 引号/换行符 引起的断链和解析异常
-        val jsonBase64 = android.util.Base64.encodeToString(projectJson.toByteArray(Charsets.UTF_8), android.util.Base64.NO_WRAP)
-        val jsonChunks = jsonBase64.chunked(chunkSize)
-        for (chunk in jsonChunks) {
-            webView.evaluateJavascript("window.__android_json_b64 += \"$chunk\";", null)
-        }
-    }
+    
+    // Store data in the interface object
+    ProjectDataProvider.projectJson = projectJson
+    ProjectDataProvider.base64Data = base64Data
+    ProjectDataProvider.projectBytes = try {
+        if (base64Data.isNotEmpty()) android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT) else null
+    } catch(e: Exception) { null }
 
     // 3. 开始执行核心注入
     val js = """
         (function() {
             try {
-                var currentJobId = window.__scratch_job_id;
-                var base64Data = window.__android_b64;
-                var jsonB64 = window.__android_json_b64;
+                var currentJobId = $jobId;
                 
-                if ((!base64Data || base64Data.length === 0) && (!jsonB64 || jsonB64.length === 0)) return "Empty data";
                 
-                // 将安全运达的 JSON Base64 解码回原本的字符串
-                var rawData = "";
-                if (jsonB64 && jsonB64.length > 0) {
-                    try {
-                        rawData = decodeURIComponent(escape(window.atob(jsonB64)));
-                    } catch(e) { console.error("JSON decode error", e); }
-                }
+                window.__scratch_job_id = currentJobId;
                 
-                // 标准版 VM 仅认准 Uint8Array，进行严格二进制转换
-                function base64ToUint8Array(b64) {
-                    var binaryString = window.atob(b64);
-                    var len = binaryString.length;
-                    var bytes = new Uint8Array(len);
-                    for (var i = 0; i < len; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                    }
-                    return bytes;
-                }
-
+                // Natively fetch data from JavascriptInterface, bypassing all IPC limits
+                var rawData = window.AndroidProjectProvider.fetchProjectJson() || "";
+                var base64Data = window.AndroidProjectProvider.fetchBase64Data() || "";
+                window.AndroidProjectProvider.clearData(); // Clean up immediately
+                
+                if ((!base64Data || base64Data.length === 0) && (!rawData || rawData.length === 0)) return "Empty data";
+                
                 var uint8Array = null;
-                if (base64Data && base64Data.length > 0) {
-                    try { uint8Array = base64ToUint8Array(base64Data); } catch(e) {}
-                }
-
                 var attempts = 0;
                 var maxAttempts = 120; // 60秒最大轮询
                 var readyCount = 0;
-
+                
                 function getVm() {
                     if (window.vm) return window.vm;
                     if (window.scratch && window.scratch.vm) return window.scratch.vm;
@@ -1369,7 +1347,7 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                     } catch(e) {}
                     return null;
                 }
-
+                
                 function tryInject() {
                     // 若检测到后续切片任务开启，旧探针立刻销毁，绝不干扰
                     if (window.__scratch_job_id !== currentJobId) return true; 
@@ -1488,13 +1466,30 @@ fun loadProjectIntoWebView(webView: WebView?, projectJson: String, base64Data: S
                     }
                 }
 
-                if (!tryInject()) {
-                    var timer = setInterval(function() {
-                        if (tryInject() || attempts >= maxAttempts || window.__scratch_job_id !== currentJobId) {
-                            clearInterval(timer);
-                        }
-                    }, 500);
+                function startInjecting() {
+                    if (!tryInject()) {
+                        var timer = setInterval(function() {
+                            if (tryInject() || attempts >= maxAttempts || window.__scratch_job_id !== currentJobId) {
+                                clearInterval(timer);
+                            }
+                        }, 500);
+                    }
                 }
+                
+                if (base64Data && base64Data.length > 0) {
+                    fetch("/___android_injected_project.sb3")
+                        .then(res => res.arrayBuffer())
+                        .then(buffer => {
+                            uint8Array = new Uint8Array(buffer);
+                            startInjecting();
+                        })
+                        .catch(e => {
+                            console.error("Base64 decode failed", e);
+                        });
+                } else {
+                    startInjecting();
+                }
+                
                 return "Polling Started for Job: " + currentJobId;
             } catch(e) {
                 return "Fatal Error: " + e.message;
@@ -1509,5 +1504,24 @@ class ScratchJsInterface(private val onChanged: () -> Unit) {
     @android.webkit.JavascriptInterface
     fun onCodeChanged() {
         onChanged()
+    }
+}
+
+object ProjectDataProvider {
+    var projectJson: String = ""
+    var base64Data: String = ""
+    var projectBytes: ByteArray? = null
+    
+    @android.webkit.JavascriptInterface
+    fun fetchProjectJson(): String = projectJson
+
+    @android.webkit.JavascriptInterface
+    fun fetchBase64Data(): String = base64Data
+    
+    @android.webkit.JavascriptInterface
+    fun clearData() {
+        projectJson = ""
+        base64Data = ""
+        projectBytes = null
     }
 }

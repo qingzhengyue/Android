@@ -9,7 +9,7 @@ class TestKtor {
     @Test
     fun testUrl() {
         try {
-            createSupabaseClient("10.42.101.36:8000", "some_key") {
+            createSupabaseClient("169.254.8.1:8000", "some_key") {
                 install(Postgrest)
             }
         } catch(e: Exception) {

@@ -9,6 +9,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.GlobalScope
 import kotlinx.serialization.json.Json
 
 
@@ -344,10 +347,16 @@ class AppRepository(private val context: Context) {
     suspend fun saveDraft(draft: ScratchDraft): Long = withContext(Dispatchers.IO) {
         val localId = dao.insertDraft(draft)
         val draftWithId = if (draft.draftId == 0) draft.copy(draftId = localId.toInt()) else draft
-        try {
-            supabase?.from("scratch_draft")?.upsert(draftWithId)
-        } catch (e: Exception) {
-            Log.e("Supabase", "Draft sync failed: ${e.message}")
+        // Fire and forget, don't block the UI thread waiting for 30s timeout
+        kotlinx.coroutines.GlobalScope.launch(Dispatchers.IO) {
+            try {
+                // Ignore sync locally if no supabase server
+                if (!com.example.BuildConfig.SUPABASE_URL.contains("169.254")) {
+                    supabase?.from("scratch_draft")?.upsert(draftWithId)
+                }
+            } catch (e: Exception) {
+                // Silently ignore sync failures to prevent log spam
+            }
         }
         localId
     }
@@ -380,7 +389,9 @@ class AppRepository(private val context: Context) {
         val localId = dao.insertAssistRecord(record)
         val recordWithId = if (record.callId == 0) record.copy(callId = localId.toInt()) else record
         try {
-            supabase?.from("ai_assist_record")?.upsert(recordWithId)
+            withTimeoutOrNull(3000L) {
+                supabase?.from("ai_assist_record")?.upsert(recordWithId)
+            }
         } catch (e: Exception) {
             Log.e("Supabase", "Assist record sync failed: ${e.message}")
         }

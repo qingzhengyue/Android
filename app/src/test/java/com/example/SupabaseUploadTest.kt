@@ -14,7 +14,7 @@ class SupabaseUploadTest {
     fun testUpload() = runBlocking {
         try {
             val client = createSupabaseClient(
-                supabaseUrl = "http://10.42.101.36:8000",
+                supabaseUrl = "http://169.254.8.1:8000",
                 supabaseKey = com.example.BuildConfig.SUPABASE_ANON_KEY
             ) {
                 install(Postgrest)

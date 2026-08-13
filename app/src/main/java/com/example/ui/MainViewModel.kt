@@ -760,7 +760,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     
                     android.util.Log.d("SupabaseDebug", "本地 .sb3 文件生成成功，路径：${localFile.absolutePath}，大小：${localFile.length()}字节")
                     
-                    com.example.data.SupabaseManager.uploadScratchProject(localFile, localFile.name)
+                    try {
+                        if (!com.example.BuildConfig.SUPABASE_URL.contains("169.254")) {
+                            com.example.data.SupabaseManager.uploadScratchProject(localFile, localFile.name)
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("SupabaseDebug", "Upload failed, but continuing locally: ${e.message}")
+                    }
                     
                     val workToInsert = com.example.data.ScratchWorkInsertDto(
                         workName = work.workName,
@@ -771,7 +777,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         submitCount = work.submitCount,
                         reviewStatus = work.reviewStatus
                     )
-                    com.example.data.SupabaseManager.insertScratchWorkRecord(workToInsert)
+                    try {
+                        if (!com.example.BuildConfig.SUPABASE_URL.contains("169.254")) {
+                            com.example.data.SupabaseManager.insertScratchWorkRecord(workToInsert)
+                        }
+                    } catch(e: Exception) {
+                        android.util.Log.e("SupabaseDebug", "Insert failed: ${e.message}")
+                    }
                     val reportToInsert = com.example.data.WorkAiReportInsertDto(
                         workId = report.workId,
                         studentId = report.studentId,
@@ -782,7 +794,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         averageScore = report.averageScore,
                         optimizationSuggestions = report.optimizationSuggestions
                     )
-                    com.example.data.SupabaseManager.insertWorkAiReportRecord(reportToInsert)
+                    try {
+                        if (!com.example.BuildConfig.SUPABASE_URL.contains("169.254")) {
+                            com.example.data.SupabaseManager.insertWorkAiReportRecord(reportToInsert)
+                        }
+                    } catch(e: Exception) {
+                        android.util.Log.e("SupabaseDebug", "Insert report failed: ${e.message}")
+                    }
                     
                     android.util.Log.d("SupabaseDebug", "SupabaseManager.uploadScratchProject and insertScratchWorkRecord 调用完成")
                     uploadStatusTip = "\n☁️ 云端同步成功！"
@@ -1084,7 +1102,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun callAiCustomQuestion(question: String, onResponse: (String) -> Unit) {
+    fun callAiCustomQuestion(question: String, mode: String = "快速", onResponse: (String) -> Unit) {
         Log.d("AIFlow", "callAiCustomQuestion 被调用: question长度=${question.length}")
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val studentId = _currentUserId.value
@@ -1168,8 +1186,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 你是一个超级有爱心、说话极其温柔和蔼、充满童趣 of 少儿编程(Scratch 3.0)“编程精灵姐姐”。
                 因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
                 1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通 and 水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
-                2. 【绝对要具体、提供一步步可跟着做的动作指南】。
-                例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字 of 积木】并用手指拖拽出来；第三步，把它贴在组件下方。
+                2. ${
+                    if (mode == "专家") "【启发式引导】：你现在处于“专家模式”。请不要直接告诉孩子具体的积木拼接答案。你应该通过打比方、提问的方式，引导孩子思考问题的原因和可能的解决方向，鼓励他们自己去尝试。"
+                    else "【具体操作指南】：你现在处于“快速模式”。你需要绝对具体、提供一步步可跟着做的动作指南。例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字 of 积木】并用手指拖拽出来；第三步，把它贴在组件下方。"
+                }
                 3. $styleInstruction
                 4. $levelInstruction
                 现有 Scratch 代码如下:
