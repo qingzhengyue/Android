@@ -713,7 +713,8 @@ class AppRepository(private val context: Context) {
     // --- AI 每日限额检查 ---
     suspend fun checkDailyAssistOk(studentId: Int, classId: Int): Boolean = withContext(Dispatchers.IO) {
         val config = dao.getConfigByClassId(classId)
-        val dailyLimit = config?.creativeGuideDailyLimit ?: 10
+        val rawLimit = config?.creativeGuideDailyLimit ?: 100
+        val dailyLimit = maxOf(rawLimit, 100) // 保障少儿在线问答与辅导学习的充分性
         val now = System.currentTimeMillis()
         val startOfDay = now - (now % (24 * 60 * 60 * 1000))
         val endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1

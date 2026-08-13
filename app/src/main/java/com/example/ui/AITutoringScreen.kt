@@ -324,7 +324,8 @@ fun AITutoringScreen(viewModel: MainViewModel) {
                             attachedImageBitmap = null
                         }
                         if (sendPrompt.isNotBlank() && !isLoading) {
-                            viewModel.callAiCustomQuestion(sendPrompt, currentMode) { _ -> }
+                            val targetSid = selectedSessionId ?: activeSessionId
+                            viewModel.callAiCustomQuestion(sendPrompt, currentMode, targetSessionId = targetSid) { _ -> }
                         }
                     },
                     onCameraClick = {
@@ -340,10 +341,11 @@ fun AITutoringScreen(viewModel: MainViewModel) {
             },
             containerColor = SurfaceBg
         ) { innerPadding ->
-            if (displayRecords.isEmpty()) {
+            if (displayRecords.isEmpty() && !isLoading) {
                 ElegantEmptyState(
                     onPromptClick = { prompt ->
-                        viewModel.callAiCustomQuestion(prompt, currentMode) { _ -> }
+                        val targetSid = selectedSessionId ?: activeSessionId
+                        viewModel.callAiCustomQuestion(prompt, currentMode, targetSessionId = targetSid) { _ -> }
                     },
                     modifier = Modifier.padding(innerPadding)
                 )

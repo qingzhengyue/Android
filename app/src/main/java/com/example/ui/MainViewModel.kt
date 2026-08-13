@@ -1115,8 +1115,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun callAiCustomQuestion(question: String, mode: String = "快速", onResponse: (String) -> Unit) {
-        Log.d("AIFlow", "callAiCustomQuestion 被调用: question长度=${question.length}")
+    fun callAiCustomQuestion(question: String, mode: String = "快速", targetSessionId: String? = null, onResponse: (String) -> Unit = {}) {
+        val sessionToUse = if (!targetSessionId.isNullOrBlank()) targetSessionId else activeAiSessionId.value
+        if (!targetSessionId.isNullOrBlank()) {
+            activeAiSessionId.value = targetSessionId
+        }
+        Log.d("AIFlow", "callAiCustomQuestion 被调用: question length=${question.length}, sessionToUse=$sessionToUse")
+
         viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val studentId = _currentUserId.value
             val classId = _currentClassId.value
@@ -1139,92 +1144,69 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _aiLoading.value = false
                 return@launch
             }
-            // 包含中文字符校验
-            val hasChinese = trimmed.any { it in '\u4e00'..'\u9fa5' }
-            if (!hasChinese) {
-                withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(context, "提问最好包含中文字符噢，请写几句通俗的中文吧！", android.widget.Toast.LENGTH_LONG).show()
-                }
-                onResponse("提问最好包含中文字符噢，请写几句通俗的中文吧！")
-                _aiLoading.value = false
-                return@launch
-            }
-            // 纯特殊字符过滤（必须含有字母、数字或汉字）
-            val hasValidChar = trimmed.any { it.isLetterOrDigit() || it in '\u4e00'..'\u9fa5' }
-            if (!hasValidChar) {
-                withContext(Dispatchers.Main) {
-                    android.widget.Toast.makeText(context, "精灵姐姐看不懂奇怪的符号噢，请说一句正常的中文吧！", android.widget.Toast.LENGTH_LONG).show()
-                }
-                onResponse("精灵姐姐看不懂奇怪的符号噢，请说一句正常的中文吧！")
-                _aiLoading.value = false
-                return@launch
-            }
 
             // 1. 验证调用额度限制
             val countOk = repository.checkDailyAssistOk(studentId, classId)
+            var response: String
             if (!countOk) {
                 _aiDailyLimitReached.value = true
-                onResponse("【调用超额】你今天调用 AI 实时辅助的资助限额已经用完啦！请向王老师申请解除上限，或者明天再来向 AI 姐姐提问哦！")
-                _aiLoading.value = false
-                return@launch
-            }
-
-            val code = currentDraftCode.value
-            val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
-            var level = "三年级"
-            var style = "趣味活泼"
-            if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
-                try {
-                    val json = org.json.JSONObject(classDesc)
-                    val grammarCorrect = json.optBoolean("grammarCorrect", true)
-                    if (!grammarCorrect) {
-                        withContext(Dispatchers.Main) {
-                            android.widget.Toast.makeText(context, "老师暂未开启此功能噢，先自己开动脑筋想一想吧！", android.widget.Toast.LENGTH_LONG).show()
-                        }
-                        onResponse("老师暂未开启此功能噢，先自己开动脑筋想一想吧！")
-                        _aiLoading.value = false
-                        return@launch
+                response = "【调用限额提示 💡】你今天向精灵姐姐请教问题已经非常勤奋啦！为了保护眼睛，今天的提问额度暂时用完咯。请先休息一下或者向老师申请提升上限吧！"
+            } else {
+                val code = currentDraftCode.value
+                val classDesc = SharedPreferencesUtil.getClassDescription(context, classId)
+                var level = "三年级"
+                var style = "趣味活泼"
+                var grammarCorrect = true
+                if (classDesc.trim().startsWith("{") && classDesc.trim().endsWith("}")) {
+                    try {
+                        val json = org.json.JSONObject(classDesc)
+                        grammarCorrect = json.optBoolean("grammarCorrect", true)
+                        level = json.optString("level", "三年级")
+                        style = json.optString("style", "趣味活泼")
+                    } catch (e: Exception) {
+                        e.printStackTrace()
                     }
-                    level = json.optString("level", "三年级")
-                    style = json.optString("style", "趣味活泼")
-                } catch (e: Exception) {
-                    e.printStackTrace()
+                }
+
+                if (!grammarCorrect) {
+                    response = "【功能提示 💡】老师暂未开启 AI 在线答疑功能噢，先自己开动脑筋想一想吧！"
+                } else {
+                    val styleInstruction = "【语调特色】：特别注意，你现在说话的辅导语调语气必须表现出【$style】的提示词特色风格。"
+                    val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律和实际能力。"
+
+                    val systemInstruction = """
+                        你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程(Scratch 3.0)“编程精灵姐姐”。
+                        因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
+                        1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
+                        2. ${
+                            if (mode == "专家") "【启发式引导】：你现在处于“专家模式”。请不要直接告诉孩子具体的积木拼接答案。你应该通过打比方、提问的方式，引导孩子思考问题的原因和可能的解决方向，鼓励他们自己去尝试。"
+                            else "【具体操作指南】：你现在处于“快速模式”。你需要绝对具体、提供一步步可跟着做的动作指南。例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字的积木】并用手指拖拽出来；第三步，把它贴在组件下方。"
+                        }
+                        3. $styleInstruction
+                        4. $levelInstruction
+                        现有 Scratch 代码如下:
+                        $code
+                    """.trimIndent()
+
+                    val prompt = "$systemInstruction\n\n小朋友问：“$question”"
+                    response = try {
+                        kotlinx.coroutines.withTimeout(45000L) {
+                            callGeminiWithTimeoutAndRetry(prompt)
+                        }
+                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                        "【连接超时啦 ⏰】精灵姐姐刚才可能开小差去采花了，没有在规定时间内赶回来。别着急，我们可以重新发送一次哦！"
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        "【太空信号微弱 ☁️】太空信号有点不稳定，精灵姐姐暂时没有收到你的魔法代码。过 10 秒钟再试一次吧！"
+                    }
                 }
             }
 
-            val styleInstruction = "【语调特色】：特别注意，你现在说话的辅导语调语气必须表现出【$style】的提示词特色风格。"
-            val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律和实际能力。"
-
-            val systemInstruction = """
-                你是一个超级有爱心、说话极其温柔和蔼、充满童趣 of 少儿编程(Scratch 3.0)“编程精灵姐姐”。
-                因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
-                1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通 and 水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
-                2. ${
-                    if (mode == "专家") "【启发式引导】：你现在处于“专家模式”。请不要直接告诉孩子具体的积木拼接答案。你应该通过打比方、提问的方式，引导孩子思考问题的原因和可能的解决方向，鼓励他们自己去尝试。"
-                    else "【具体操作指南】：你现在处于“快速模式”。你需要绝对具体、提供一步步可跟着做的动作指南。例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字 of 积木】并用手指拖拽出来；第三步，把它贴在组件下方。"
-                }
-                3. $styleInstruction
-                4. $levelInstruction
-                现有 Scratch 代码如下:
-                $code
-            """.trimIndent()
-
-            val prompt = "$systemInstruction\n\n小朋友问：“$question”"
-            val response = try {
-                kotlinx.coroutines.withTimeout(45000L) {
-                    callGeminiWithTimeoutAndRetry(prompt)
-                }
-            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                "【连接超时啦 ⏰】精灵姐姐刚才可能开小差去采花了，没有在规定时间内赶回来。别着急，我们可以【点击重试】或者重新发送一次哦！"
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                e.printStackTrace()
-                "【服务器忙碌中 ☁️】太空信号有点不稳定，精灵姐姐暂时没有收到你的魔法代码。别着急，让网络飞一会儿，咱们过 10 秒钟再点一下重试吧！"
-            }
             onResponse(response)
 
-            val isFailed = response.startsWith("【连接超时") || response.startsWith("【服务器忙碌")
+            val isFailed = response.startsWith("【连接超时") || response.startsWith("【太空信号")
 
             if (isFailed) {
                 _aiConsecutiveFailures.value += 1
@@ -1239,17 +1221,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _aiServiceStatus.value = "服务正常"
             }
 
-            // 写回本地调用日志
+            // 写回本地调用日志，保障记录100%存库，UI立刻响应渲染对话气泡
             repository.saveAssistRecord(
                 AiAssistRecord(
                     studentId = studentId,
                     classId = classId,
                     assistType = "在线对答",
-                    assistTypeInt = 1, // On-line dialog under grammar correctness tab
+                    assistTypeInt = 1, // On-line dialog
                     requestContent = question,
                     aiResult = response,
                     draftId = null,
-                    sessionId = activeAiSessionId.value
+                    sessionId = sessionToUse
                 )
             )
             } catch (e: Exception) {
