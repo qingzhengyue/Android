@@ -259,10 +259,10 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
 
     val mirrors = remember {
         listOf(
-            "https://editor.scratch-cn.cn/editor",                // 源1
-            "https://scratch3.fun/editor",                        // 源2
-            "https://turbowarp.org/editor",                       // 源3
-            "file:///android_asset/scratch_blocks_viewer.html"    // 源4
+            "file:///android_asset/scratch_blocks_viewer.html",  // 源1: 内置零流量极速离线引擎 (秒开0白屏)
+            "https://editor.scratch-cn.cn/editor",                // 源2: 线上 Scratch 社区镜像
+            "https://scratch3.fun/editor",                        // 源3: 线上国内极速源
+            "https://turbowarp.org/editor"                        // 源4: TurboWarp 强力引擎
         )
     }
     var currentMirrorIndex by rememberSaveable { mutableStateOf(0) }
@@ -270,22 +270,26 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
     
     var isPageLoading by rememberSaveable { mutableStateOf(true) }
     var isAllFailed by remember { mutableStateOf(false) }
-    var loadingMessage by remember { mutableStateOf("正在加载 Scratch 编辑器 (1/${mirrors.size})...") }
+    var loadingMessage by remember { mutableStateOf("正在加载 Scratch 编辑器...") }
 
     LaunchedEffect(scratchUrl, webViewInstance) {
         val webView = webViewInstance ?: return@LaunchedEffect
         isPageLoading = true
         isAllFailed = false
-        loadingMessage = "正在加载 Scratch 编辑器 (${currentMirrorIndex + 1}/${mirrors.size})..."
+        val sourceName = if (scratchUrl.startsWith("file:///")) "内置零流量离线积木引擎" else "线上社区云端源 (${currentMirrorIndex + 1}/${mirrors.size})"
+        loadingMessage = "正在秒级装载 $sourceName..."
         webView.loadUrl(scratchUrl)
         
-        kotlinx.coroutines.delay(6000)
+        val timeoutMs = if (scratchUrl.startsWith("file:///")) 1500L else 3000L
+        kotlinx.coroutines.delay(timeoutMs)
         if (isPageLoading && !isAllFailed) {
             if (currentMirrorIndex < mirrors.size - 1) {
                 currentMirrorIndex++
                 scratchUrl = mirrors[currentMirrorIndex]
             } else {
-                isAllFailed = true
+                // 回退到本地引擎保障可用性
+                currentMirrorIndex = 0
+                scratchUrl = mirrors[0]
                 isPageLoading = false
             }
         }
@@ -535,8 +539,15 @@ fun InteractiveScratchProgrammingScreen(viewModel: MainViewModel, onBackToHall: 
         AndroidView(
             factory = { ctx ->
                 WebView(ctx).apply {
-                    // setLayerType(android.view.View.LAYER_TYPE_SOFTWARE, null)
+                    setBackgroundColor(android.graphics.Color.parseColor("#F1F5F9"))
                     webViewClient = object : WebViewClient() {
+                        override fun onReceivedSslError(
+                            view: WebView?,
+                            handler: android.webkit.SslErrorHandler?,
+                            error: android.net.http.SslError?
+                        ) {
+                            handler?.proceed() // 忽略 SSL 校验拦截，防止极速网络请求挂起导致的手机端白屏
+                        }
                         override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): WebResourceResponse? {
                             val url = request?.url?.toString() ?: return null
                             if (url.endsWith("/___android_injected_project.sb3")) {

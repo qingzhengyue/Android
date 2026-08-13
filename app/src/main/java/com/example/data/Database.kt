@@ -212,7 +212,10 @@ data class AiAssistRecord(
     val aiResult: String, // AI返回结果
     @ColumnInfo(name = "draftId") 
     @SerialName("draft_id")
-    val draftId: Int? // 关联草稿ID（可为空）
+    val draftId: Int?, // 关联草稿ID（可为空）
+    @ColumnInfo(name = "sessionId", defaultValue = "") 
+    @SerialName("session_id")
+    val sessionId: String = "" // 关联 AI 辅导会话 ID
 )
 
 // 8. Scratch提交作品 (ScratchWork)
@@ -641,7 +644,7 @@ interface AppDao {
         WorkAiReport::class,
         WorkLikeEntity::class
     ],
-    version = 6, // 升级到版本6，添加作品点赞关联表 work_likes
+    version = 7, // 升级到版本7，添加 AI 辅导会话 sessionId 隔离支持
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

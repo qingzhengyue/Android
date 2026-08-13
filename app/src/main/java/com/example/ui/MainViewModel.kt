@@ -206,6 +206,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _realTimeStateEnabled.value = enabled
     }
 
+    // --- AI 会话隔离 Session ID ---
+    val activeAiSessionId = MutableStateFlow<String>(java.util.UUID.randomUUID().toString())
+
+    fun startNewAiSession() {
+        activeAiSessionId.value = java.util.UUID.randomUUID().toString()
+    }
+
+    fun setActiveAiSessionId(id: String) {
+        if (id.isNotBlank()) {
+            activeAiSessionId.value = id
+        }
+    }
+
     // --- 智能精灵全局状态提升 (修复1-3) ---
     val showAiAssistSheet = MutableStateFlow(false)
     val aiActiveTab = MutableStateFlow("语法纠错")
@@ -1235,7 +1248,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     assistTypeInt = 1, // On-line dialog under grammar correctness tab
                     requestContent = question,
                     aiResult = response,
-                    draftId = null
+                    draftId = null,
+                    sessionId = activeAiSessionId.value
                 )
             )
             } catch (e: Exception) {

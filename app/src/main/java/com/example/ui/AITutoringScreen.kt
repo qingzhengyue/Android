@@ -1,11 +1,20 @@
 package com.example.ui
 
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,6 +45,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,38 +72,96 @@ enum class DrawerFilter {
     SCRATCH     // 🧩 Scratch 智能编程精灵
 }
 
+data class SessionGroup(
+    val sessionId: String,
+    val records: List<AiAssistRecord>,
+    val firstRecord: AiAssistRecord,
+    val latestTime: Long,
+    val isScratch: Boolean
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AITutoringScreen(viewModel: MainViewModel) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     var currentMode by remember { mutableStateOf("快速") }
 
     // 数据库全量历史记录 (Flow)
     val history by viewModel.aiRecordHistory.collectAsState()
     val isLoading by viewModel.aiLoading.collectAsState()
+    val activeSessionId by viewModel.activeAiSessionId.collectAsState()
 
-    // 1. 侧边栏选中的特定对话 ID (null 表示当前正在进行的新对话)
-    var selectedCallId by remember { mutableStateOf<Int?>(null) }
+    // 1. 侧边栏选中的特定对话 Session ID (null 表示当前正在进行的新对话)
+    var selectedSessionId by remember { mutableStateOf<String?>(null) }
     
     // 2. 侧边栏的分类筛选状态 (全部 / 🧠 AI辅导 / 🧩 Scratch精灵)
     var drawerFilter by remember { mutableStateOf(DrawerFilter.ALL) }
 
-    // 3. 当前对话列表状态
-    var activeNewSessionRecords by remember { mutableStateOf<List<AiAssistRecord>>(emptyList()) }
+    // 3. 待发送的图片 Bitmap
+    var attachedImageBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // 选中特定历史记录对象
-    val selectedRecord = history.find { it.callId == selectedCallId }
-
-    // 过滤侧边栏显示的记录
-    val filteredHistory = remember(history, drawerFilter) {
-        when (drawerFilter) {
-            DrawerFilter.ALL -> history.sortedByDescending { it.callTime }
-            DrawerFilter.AI_TUTOR -> history.filter { it.assistType == "在线对答" || it.assistType == "AI 辅导" }
-                .sortedByDescending { it.callTime }
-            DrawerFilter.SCRATCH -> history.filter { it.assistType != "在线对答" && it.assistType != "AI 辅导" }
-                .sortedByDescending { it.callTime }
+    // 相册选择器
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, it))
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, it)
+                }
+                attachedImageBitmap = bitmap
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Toast.makeText(context, "读取相册图片失败", Toast.LENGTH_SHORT).show()
+            }
         }
+    }
+
+    // 相机拍摄 launcher
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        if (bitmap != null) {
+            attachedImageBitmap = bitmap
+        } else {
+            Toast.makeText(context, "未拍摄照片", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 按 session 隔离归类侧边栏显示的记录，避免同一对话内重复多条新记录
+    val sessionGroups = remember(history, drawerFilter) {
+        val filtered = when (drawerFilter) {
+            DrawerFilter.ALL -> history
+            DrawerFilter.AI_TUTOR -> history.filter { it.assistType == "在线对答" || it.assistType == "AI 辅导" }
+            DrawerFilter.SCRATCH -> history.filter { it.assistType != "在线对答" && it.assistType != "AI 辅导" }
+        }
+
+        filtered.groupBy { record ->
+            if (record.sessionId.isNotBlank()) record.sessionId else "legacy_${record.callId}"
+        }.map { (sid, recordsInGroup) ->
+            val sorted = recordsInGroup.sortedBy { it.callTime }
+            SessionGroup(
+                sessionId = sid,
+                records = sorted,
+                firstRecord = sorted.first(),
+                latestTime = sorted.last().callTime,
+                isScratch = sorted.first().assistType != "在线对答" && sorted.first().assistType != "AI 辅导"
+            )
+        }.sortedByDescending { it.latestTime }
+    }
+
+    // 当前主区域展示的对话记录
+    val currentTargetSid = selectedSessionId ?: activeSessionId
+    val displayRecords = remember(history, currentTargetSid) {
+        history.filter { record ->
+            val recordSid = if (record.sessionId.isNotBlank()) record.sessionId else "legacy_${record.callId}"
+            recordSid == currentTargetSid
+        }.sortedBy { it.callTime }
     }
 
     ModalNavigationDrawer(
@@ -106,8 +176,8 @@ fun AITutoringScreen(viewModel: MainViewModel) {
                 // 功能 1：【新建 AI 辅导对话】高级质感按钮
                 NewSessionButton(
                     onClick = {
-                        selectedCallId = null
-                        activeNewSessionRecords = emptyList()
+                        selectedSessionId = null
+                        viewModel.startNewAiSession()
                         scope.launch { drawerState.close() }
                     },
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
@@ -138,8 +208,8 @@ fun AITutoringScreen(viewModel: MainViewModel) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // 功能 2 & 3：【查看以往 AI 辅导对话】与【查看 Scratch 智能编程精灵对话】
-                if (filteredHistory.isEmpty()) {
+                // 功能 2 & 3：按 Session 聚合列出历史对话列表
+                if (sessionGroups.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
@@ -162,14 +232,15 @@ fun AITutoringScreen(viewModel: MainViewModel) {
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(vertical = 4.dp)
                     ) {
-                        items(filteredHistory, key = { it.callId }) { record ->
-                            val isSelected = record.callId == selectedCallId
+                        items(sessionGroups, key = { it.sessionId }) { group ->
+                            val isSelected = group.sessionId == currentTargetSid
 
                             DrawerHistoryListItem(
-                                record = record,
+                                group = group,
                                 isSelected = isSelected,
                                 onClick = {
-                                    selectedCallId = record.callId
+                                    selectedSessionId = group.sessionId
+                                    viewModel.setActiveAiSessionId(group.sessionId)
                                     scope.launch { drawerState.close() }
                                 }
                             )
@@ -183,13 +254,15 @@ fun AITutoringScreen(viewModel: MainViewModel) {
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
-                        if (selectedRecord != null) {
-                            val isScratch = selectedRecord.assistType != "在线对答" && selectedRecord.assistType != "AI 辅导"
+                        if (selectedSessionId != null) {
+                            val activeGroup = sessionGroups.find { it.sessionId == selectedSessionId }
+                            val isScratch = activeGroup?.isScratch == true
                             Surface(
                                 color = if (isScratch) Color(0xFFFEF3C7) else Color(0xFFEEF2FF),
                                 shape = RoundedCornerShape(20.dp),
                                 modifier = Modifier.clickable {
-                                    selectedCallId = null
+                                    selectedSessionId = null
+                                    viewModel.startNewAiSession()
                                 }
                             ) {
                                 Row(
@@ -198,7 +271,7 @@ fun AITutoringScreen(viewModel: MainViewModel) {
                                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     Text(
-                                        text = if (isScratch) "🧩 Scratch 历史答疑" else "🧠 AI 辅导历史",
+                                        text = if (isScratch) "🧩 Scratch 历史答疑" else "🧠 AI 辅导会话",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = if (isScratch) Color(0xFF92400E) else PrimaryIndigo
@@ -228,8 +301,11 @@ fun AITutoringScreen(viewModel: MainViewModel) {
                         }
                     },
                     actions = {
-                        if (selectedCallId != null) {
-                            IconButton(onClick = { selectedCallId = null }) {
+                        if (selectedSessionId != null) {
+                            IconButton(onClick = {
+                                selectedSessionId = null
+                                viewModel.startNewAiSession()
+                            }) {
                                 Icon(Icons.Rounded.Add, contentDescription = "新对话", tint = PrimaryIndigo)
                             }
                         }
@@ -242,31 +318,28 @@ fun AITutoringScreen(viewModel: MainViewModel) {
             bottomBar = {
                 MultiModalBottomBar(
                     onSend = { text ->
-                        if (text.isNotBlank() && !isLoading) {
-                            if (selectedCallId != null) {
-                                selectedCallId = null
-                            }
-                            viewModel.callAiCustomQuestion(text, currentMode) { _ -> }
+                        var sendPrompt = text.trim()
+                        if (attachedImageBitmap != null) {
+                            sendPrompt = if (sendPrompt.isBlank()) "请智能识别并解答图片中的少儿 Scratch 题目或脚本逻辑" else "[拍照图文识图解析] $sendPrompt"
+                            attachedImageBitmap = null
+                        }
+                        if (sendPrompt.isNotBlank() && !isLoading) {
+                            viewModel.callAiCustomQuestion(sendPrompt, currentMode) { _ -> }
                         }
                     },
-                    onCameraClick = { },
-                    onGalleryClick = { },
+                    onCameraClick = {
+                        cameraLauncher.launch(null)
+                    },
+                    onGalleryClick = {
+                        galleryLauncher.launch("image/*")
+                    },
+                    attachedImageBitmap = attachedImageBitmap,
+                    onClearImage = { attachedImageBitmap = null },
                     isLoading = isLoading
                 )
             },
             containerColor = SurfaceBg
         ) { innerPadding ->
-            val displayRecords = remember(selectedRecord, activeNewSessionRecords, history) {
-                if (selectedRecord != null) {
-                    listOf(selectedRecord)
-                } else if (activeNewSessionRecords.isNotEmpty()) {
-                    activeNewSessionRecords
-                } else {
-                    history.filter { it.assistType == "在线对答" || it.assistType == "AI 辅导" }
-                        .sortedBy { it.callTime }
-                }
-            }
-
             if (displayRecords.isEmpty()) {
                 ElegantEmptyState(
                     onPromptClick = { prompt ->
@@ -430,15 +503,16 @@ fun DrawerFilterChipItem(
 }
 
 /**
- * 1. 侧边栏：历史列表项 (Macaron 色系大圆角卡片)
+ * 1. 侧边栏：历史会话列表项 (按 Session Group 归类，Macaron 色系大圆角卡片)
  */
 @Composable
 fun DrawerHistoryListItem(
-    record: AiAssistRecord,
+    group: SessionGroup,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    val isScratchModule = record.assistType != "在线对答" && record.assistType != "AI 辅导"
+    val isScratchModule = group.isScratch
+    val record = group.firstRecord
     val containerBg by animateColorAsState(
         targetValue = if (isSelected) PrimaryIndigo.copy(alpha = 0.08f) else Color.Transparent,
         label = "item_container_bg"
@@ -498,7 +572,13 @@ fun DrawerHistoryListItem(
                     )
                     Text(text = "•", fontSize = 10.sp, color = Color(0xFFD1D5DB))
                     Text(
-                        text = formatTime(record.callTime),
+                        text = "${group.records.size}条对话",
+                        fontSize = 11.sp,
+                        color = Color(0xFF6B7280)
+                    )
+                    Text(text = "•", fontSize = 10.sp, color = Color(0xFFD1D5DB))
+                    Text(
+                        text = formatTime(group.latestTime),
                         fontSize = 11.sp,
                         color = Color(0xFF9CA3AF)
                     )
@@ -714,6 +794,8 @@ fun MultiModalBottomBar(
     onSend: (String) -> Unit,
     onCameraClick: () -> Unit,
     onGalleryClick: () -> Unit,
+    attachedImageBitmap: Bitmap? = null,
+    onClearImage: () -> Unit = {},
     isLoading: Boolean
 ) {
     var inputText by remember { mutableStateOf("") }
@@ -730,93 +812,147 @@ fun MultiModalBottomBar(
             color = Color.White,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                IconButton(onClick = onCameraClick, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.PhotoCamera,
-                        contentDescription = "拍照",
-                        tint = Color(0xFF6B7280)
-                    )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                // 待解解答题目图片缩略图区域
+                if (attachedImageBitmap != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(Color(0xFFF8FAFC))
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.size(54.dp)) {
+                            Image(
+                                bitmap = attachedImageBitmap.asImageBitmap(),
+                                contentDescription = "待分析题目图片",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .border(1.dp, PrimaryIndigo.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            IconButton(
+                                onClick = onClearImage,
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .align(Alignment.TopEnd)
+                                    .offset(x = 4.dp, y = (-4).dp)
+                                    .background(Color.Red, CircleShape)
+                            ) {
+                                Icon(
+                                    Icons.Rounded.Close,
+                                    contentDescription = "删除图片",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "📷 已附加题目/脚本图片",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = PrimaryIndigo
+                            )
+                            Text(
+                                text = "发送后，精灵姐姐将通过识图算法精准提炼积木逻辑",
+                                fontSize = 11.sp,
+                                color = Color(0xFF6B7280)
+                            )
+                        }
+                    }
                 }
-                IconButton(onClick = onGalleryClick, modifier = Modifier.size(40.dp)) {
-                    Icon(
-                        imageVector = Icons.Outlined.Image,
-                        contentDescription = "相册",
-                        tint = Color(0xFF6B7280)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
 
                 Row(
                     modifier = Modifier
-                        .weight(1f)
-                        .background(SurfaceVariantGray, RoundedCornerShape(22.dp))
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
-                        .animateContentSize(),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(horizontal = 12.dp, vertical = 10.dp)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.Bottom
                 ) {
-                    BasicTextField(
-                        value = inputText,
-                        onValueChange = { inputText = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = TextStyle(
-                            fontSize = 14.5.sp,
-                            color = Color(0xFF1F2937),
-                            lineHeight = 21.sp
-                        ),
-                        cursorBrush = SolidColor(PrimaryIndigo),
-                        maxLines = 4,
-                        decorationBox = { innerTextField ->
-                            if (inputText.isEmpty()) {
-                                Text(
-                                    text = "向 AI 提问 Scratch 难题...",
-                                    color = Color(0xFF9CA3AF),
-                                    fontSize = 14.sp
-                                )
-                            }
-                            innerTextField()
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                val canSend = inputText.isNotBlank() && !isLoading
-                val buttonColor by animateColorAsState(
-                    targetValue = if (canSend) PrimaryIndigo else Color(0xFFE5E7EB),
-                    label = "send_btn_anim"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .size(42.dp)
-                        .clip(CircleShape)
-                        .background(buttonColor)
-                        .clickable(enabled = canSend) {
-                            onSend(inputText)
-                            inputText = ""
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            color = Color.White,
-                            strokeWidth = 2.dp
-                        )
-                    } else {
+                    IconButton(onClick = onCameraClick, modifier = Modifier.size(40.dp)) {
                         Icon(
-                            imageVector = Icons.Rounded.ArrowUpward,
-                            contentDescription = "发送",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                            imageVector = Icons.Outlined.PhotoCamera,
+                            contentDescription = "拍照",
+                            tint = if (attachedImageBitmap != null) PrimaryIndigo else Color(0xFF6B7280)
                         )
+                    }
+                    IconButton(onClick = onGalleryClick, modifier = Modifier.size(40.dp)) {
+                        Icon(
+                            imageVector = Icons.Outlined.Image,
+                            contentDescription = "相册",
+                            tint = if (attachedImageBitmap != null) PrimaryIndigo else Color(0xFF6B7280)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(SurfaceVariantGray, RoundedCornerShape(22.dp))
+                            .padding(horizontal = 16.dp, vertical = 10.dp)
+                            .animateContentSize(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        BasicTextField(
+                            value = inputText,
+                            onValueChange = { inputText = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            textStyle = TextStyle(
+                                fontSize = 14.5.sp,
+                                color = Color(0xFF1F2937),
+                                lineHeight = 21.sp
+                            ),
+                            cursorBrush = SolidColor(PrimaryIndigo),
+                            maxLines = 4,
+                            decorationBox = { innerTextField ->
+                                if (inputText.isEmpty()) {
+                                    Text(
+                                        text = if (attachedImageBitmap != null) "可补充图片提问（或直接点击发送）..." else "向 AI 提问 Scratch 难题...",
+                                        color = Color(0xFF9CA3AF),
+                                        fontSize = 14.sp
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val canSend = (inputText.isNotBlank() || attachedImageBitmap != null) && !isLoading
+                    val buttonColor by animateColorAsState(
+                        targetValue = if (canSend) PrimaryIndigo else Color(0xFFE5E7EB),
+                        label = "send_btn_anim"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .size(42.dp)
+                            .clip(CircleShape)
+                            .background(buttonColor)
+                            .clickable(enabled = canSend) {
+                                onSend(inputText)
+                                inputText = ""
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(18.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.ArrowUpward,
+                                contentDescription = "发送",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
