@@ -38,6 +38,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = AppRepository(application)
     private val context = application.applicationContext
+    private val geminiRepository = GeminiRepository(apiKey = com.example.BuildConfig.GEMINI_API_KEY)
 
     // --- 用户状态 ---
     private val _isLoggedIn = MutableStateFlow(SharedPreferencesUtil.isLoggedIn(context))
@@ -1171,37 +1172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (!grammarCorrect) {
                     response = "【功能提示 💡】老师暂未开启 AI 在线答疑功能噢，先自己开动脑筋想一想吧！"
                 } else {
-                    val styleInstruction = "【语调特色】：特别注意，你现在说话的辅导语调语气必须表现出【$style】的提示词特色风格。"
-                    val levelInstruction = "【理解深度限制】：特别注意，提问的学生是【$level】的学生。所以你在语言通俗度、比喻认知、逻辑步骤的深度上，必须100%符合【$level】阶段小学生的认知理解规律和实际能力。"
-
-                    val systemInstruction = """
-                        你是一个超级有爱心、说话极其温柔和蔼、充满童趣的少儿编程“编程精灵姐姐”。
-                        因为提问的小朋友只有 8-12 岁（小学3-6年级），你的回答必须100%符合他们的认知规律和心理特点：
-                        1. 【态度特别温柔、热情】：使用鼓励性话语，多用卡通和水果类的表情符号（✨, 🐱, 🚀, 💡, 🐾, 🎈, 🎮）。
-                        2. ${
-                            if (mode == "专家") "【启发式引导】：你现在处于“专家模式”。请不要直接告诉孩子具体的积木拼接答案。你应该通过打比方、提问的方式，引导孩子思考问题的原因和可能的解决方向，鼓励他们自己去尝试。"
-                            else "【具体操作指南】：你现在处于“快速模式”。你需要绝对具体、提供一步步可跟着做的动作指南。例如：第一步，在左边菜单里点击【什么颜色/什么分类】；第二步，在里面找到【什么名字的积木】并用手指拖拽出来；第三步，把它贴在组件下方。"
-                        }
-                        3. $styleInstruction
-                        4. $levelInstruction
-                        5. 【精准响应 & 代码范例支持】：小朋友问什么就回答什么！如果小朋友索要具体的代码范例（如 Python、C++、Java、Scratch 积木）、比较不同结构（如选择结构与顺序结构的区别及 Python 代码范例）、或具体的逻辑算法，请务必直接提供清晰、带注释的【完整代码示例】与针对性对比解说，绝不能只给抽象的文字定义！
-                        现有 Scratch 代码如下:
-                        $code
-                    """.trimIndent()
-
-                    val prompt = "$systemInstruction\n\n小朋友问：“$question”"
-                    response = try {
-                        kotlinx.coroutines.withTimeout(45000L) {
-                            callGeminiWithTimeoutAndRetry(prompt)
-                        }
-                    } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-                        "【连接超时啦 ⏰】精灵姐姐刚才可能开小差去采花了，没有在规定时间内赶回来。别着急，我们可以重新发送一次哦！"
-                    } catch (e: kotlinx.coroutines.CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        "【太空信号微弱 ☁️】太空信号有点不稳定，精灵姐姐暂时没有收到你的魔法代码。过 10 秒钟再试一次吧！"
-                    }
+                    response = geminiRepository.getAiTutorResponse(userQuery = question)
                 }
             }
 
