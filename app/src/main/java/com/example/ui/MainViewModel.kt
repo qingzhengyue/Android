@@ -38,7 +38,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = AppRepository(application)
     private val context = application.applicationContext
-    private val geminiRepository = GeminiRepository(apiKey = com.example.BuildConfig.GEMINI_API_KEY)
+    private val geminiRepository = GeminiRepository(
+        apiKey = com.example.BuildConfig.GEMINI_API_KEY.ifBlank { "AIzaSyCP8U0yipI8szm20UXAHBO861Jdfo2mR4I" }
+    )
+    private val cerebrasRepository = CerebrasRepository(
+        apiKey = com.example.BuildConfig.CEREBRAS_API_KEY.ifBlank { "csk-6h4pp6hne55etmhwy83pm2jdrtmy3rv5yxp5nedvyffn3w46" }
+    )
 
     // --- 用户状态 ---
     private val _isLoggedIn = MutableStateFlow(SharedPreferencesUtil.isLoggedIn(context))
@@ -1172,7 +1177,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 if (!grammarCorrect) {
                     response = "【功能提示 💡】老师暂未开启 AI 在线答疑功能噢，先自己开动脑筋想一想吧！"
                 } else {
-                    response = geminiRepository.getAiTutorResponse(userQuery = question)
+                    response = try {
+                        val cerebrasResult = cerebrasRepository.getAiTutorResponse(userQuery = question)
+                        if (cerebrasResult.isNotBlank() && !cerebrasResult.startsWith("【小精灵稍作休息") && !cerebrasResult.startsWith("【网络连接超时")) {
+                            cerebrasResult
+                        } else {
+                            geminiRepository.getAiTutorResponse(userQuery = question)
+                        }
+                    } catch (e: Exception) {
+                        geminiRepository.getAiTutorResponse(userQuery = question)
+                    }
                 }
             }
 

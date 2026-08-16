@@ -30,8 +30,11 @@ android {
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     
-    val geminiKey = localProperties.getProperty("GEMINI_API_KEY") ?: System.getenv("GEMINI_API_KEY") ?: ""
+    val geminiKey = (localProperties.getProperty("GEMINI_API_KEY") ?: System.getenv("GEMINI_API_KEY") ?: "").ifBlank { "AIzaSyCP8U0yipI8szm20UXAHBO861Jdfo2mR4I" }
     buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
+
+    val cerebrasKey = (localProperties.getProperty("CEREBRAS_API_KEY") ?: System.getenv("CEREBRAS_API_KEY") ?: "").ifBlank { "csk-6h4pp6hne55etmhwy83pm2jdrtmy3rv5yxp5nedvyffn3w46" }
+    buildConfigField("String", "CEREBRAS_API_KEY", "\"$cerebrasKey\"")
 
     val supabaseUrl = "http://169.254.8.1:8000"
     val supabaseKey = "sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH"

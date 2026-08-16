@@ -13,11 +13,11 @@ import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 /**
- * 生产级 Gemini AI 辅导网络请求仓库
- * 包含：多意图路由系统级提示词、JSON 请求体严谨装配、超低温防幻觉参数配置与全覆盖容错。
+ * 专为 Cerebras 高速推理芯片打造的生产级 AI 辅导 Repository
+ * 使用 LLaMA 3.1 极速模型与 OpenAI 兼容格式，具备多意图路由和超低延迟防幻觉调优。
  */
-class GeminiRepository(
-    private val apiKey: String = "AIzaSyCP8U0yipI8szm20UXAHBO861Jdfo2mR4I",
+class CerebrasRepository(
+    private val apiKey: String = "csk-6h4pp6hne55etmhwy83pm2jdrtmy3rv5yxp5nedvyffn3w46",
     private val okHttpClient: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
@@ -27,12 +27,11 @@ class GeminiRepository(
 
     companion object {
         private const val TAG = "AiTutor"
-        private const val GEMINI_MODEL_ENDPOINT =
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-        const val DEFAULT_GEMINI_KEY = "AIzaSyCP8U0yipI8szm20UXAHBO861Jdfo2mR4I"
+        // ⚠️ Cerebras 专属极速推理端点
+        private const val CEREBRAS_ENDPOINT = "https://api.cerebras.ai/v1/chat/completions"
 
         // =========================================================================
-        // 1. 核心系统级提示词常量：注入【多意图路由机制 (Multi-Intent Routing)】
+        // 核心系统级提示词：多意图路由机制 (Multi-Intent Routing)
         // =========================================================================
         val SYSTEM_PROMPT_TUTOR = """
 <system_instruction>
@@ -90,107 +89,89 @@ class GeminiRepository(
 1. 【禁止复读提问】：严禁在回答开头使用“关于你问的‘xxx’：”、“小朋友问的‘xxx’是这样的”等机械句式，必须直接以自然的问候、夸奖或启发式开场！
 2. 【复合对比不遗漏】：当问题中出现“和”、“与”、“区别”、“对比”、“还是”等词时，必须对两个概念主体都进行完整、平衡的解释与比对，严禁只回答单边内容！
 3. 【彻底消除模板坍塌】：严禁遇到任何问题都无脑输出“拖出绿旗并移动 10 步”！只要不是具体操作求助，必须坚决走路线 B 或路线 C。
-4. 【符合认知能力】：严禁使用大学计算机专业的生硬术语（如“编译原理”、“控制流跳转”、“内存管理”等），所有抽象名词必须转化为儿童生活中的具象物体与故事。
+4. 【符合认知能力】：严禁使用大学计算机专业的生硬术语，所有抽象名词必须转化为儿童生活中的具象物体与故事。
 </system_instruction>
         """.trimIndent()
     }
 
-    /**
-     * 向大模型发起带有严谨意图路由的 AI 辅导请求
-     *
-     * @param userQuery 小朋友在输入框中输入的真实问题
-     * @return 大模型返回的辅导回复文本（或优雅的降级错误提示）
-     */
     suspend fun getAiTutorResponse(userQuery: String): String = withContext(Dispatchers.IO) {
         val cleanQuery = userQuery.trim()
         if (cleanQuery.isEmpty()) {
             return@withContext "宝贝，你还没有输入问题哦，有什么想问精灵姐姐的吗？🐱"
         }
 
-        try {
-            // 拼接完整 Prompt：System Prompt 严格居前，通过换行与标识符隔离用户提问
-            val completePrompt = "$SYSTEM_PROMPT_TUTOR\n\n【学生当前提问】\n$cleanQuery"
+        val effectiveKey = apiKey.ifBlank { "csk-6h4pp6hne55etmhwy83pm2jdrtmy3rv5yxp5nedvyffn3w46" }
 
-            // 构造标准 Google Gemini REST API Payload
+        try {
+            // 构造兼容 OpenAI 格式的 JSON Payload
             val requestJson = JSONObject().apply {
-                // 1. 装配对话上下文内容 (contents)
-                val contentsArray = JSONArray().apply {
+                // 指定 Cerebras 的高速模型 llama3.1-8b
+                put("model", "llama3.1-8b")
+
+                // Cerebras 使用 messages 数组
+                val messagesArray = JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("role", "system")
+                        put("content", SYSTEM_PROMPT_TUTOR)
+                    })
                     put(JSONObject().apply {
                         put("role", "user")
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().apply {
-                                put("text", completePrompt)
-                            })
-                        })
+                        put("content", cleanQuery)
                     })
                 }
-                put("contents", contentsArray)
+                put("messages", messagesArray)
 
-                // 2. 超低随机性防幻觉参数配置 (generationConfig)
-                val generationConfig = JSONObject().apply {
-                    put("temperature", 0.1) // 极低温度，彻底抑制胡思乱想与机械模版坍塌
-                    put("topP", 0.8)        // 截断尾部低置信度 Token
-                    put("topK", 20)
-                    put("maxOutputTokens", 1200)
-                }
-                put("generationConfig", generationConfig)
+                // 核心防幻觉参数
+                put("temperature", 0.1)
+                put("top_p", 0.8)
+                put("max_tokens", 1000)
             }
 
             val jsonPayloadString = requestJson.toString()
+            Log.d(TAG, "Cerebras Payload: $jsonPayloadString")
 
-            // 打印排查日志：实时观察最终组装并发往云端的 Payload
-            Log.d(TAG, "==================== [Gemini Request Begin] ====================")
-            Log.d(TAG, "Target Endpoint: $GEMINI_MODEL_ENDPOINT")
-            Log.d(TAG, "User Real Query: $cleanQuery")
-            Log.d(TAG, "Full JSON Payload:\n$jsonPayloadString")
-            Log.d(TAG, "================================================================")
-
-            // 构建 OkHttp 网络请求
             val mediaType = "application/json; charset=utf-8".toMediaType()
             val requestBody = jsonPayloadString.toRequestBody(mediaType)
-            val requestUrl = if (apiKey.isNotBlank()) "$GEMINI_MODEL_ENDPOINT?key=$apiKey" else GEMINI_MODEL_ENDPOINT
 
+            // API Key 放在 Authorization Header 里
             val request = Request.Builder()
-                .url(requestUrl)
+                .url(CEREBRAS_ENDPOINT)
+                .addHeader("Authorization", "Bearer $effectiveKey")
+                .addHeader("Content-Type", "application/json")
                 .post(requestBody)
                 .build()
 
-            // 执行请求并设置 35 秒协程防假死超时控制
-            val responseText = withTimeout(35000L) {
+            val responseText = withTimeout(15000L) {
                 okHttpClient.newCall(request).execute().use { response ->
                     val responseBody = response.body?.string() ?: ""
                     if (!response.isSuccessful) {
-                        Log.e(TAG, "HTTP 请求失败 [Code: ${response.code}]: $responseBody")
-                        throw IllegalStateException("API HTTP Error: ${response.code}")
+                        Log.e(TAG, "Cerebras API 报错 [${response.code}]: $responseBody")
+                        throw IllegalStateException("API Error: ${response.code}")
                     }
                     responseBody
                 }
             }
 
-            // 解析大模型返回 JSON
+            // 解析 Cerebras (OpenAI 格式) 的返回 JSON
             val responseJson = JSONObject(responseText)
-            val candidates = responseJson.optJSONArray("candidates")
-            if (candidates != null && candidates.length() > 0) {
-                val firstCandidate = candidates.getJSONObject(0)
-                val content = firstCandidate.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    val resultText = parts.getJSONObject(0).optString("text", "")
-                    Log.d(TAG, "==================== [Gemini Response Success] ================")
-                    Log.d(TAG, resultText)
-                    Log.d(TAG, "================================================================")
+            val choices = responseJson.optJSONArray("choices")
+            if (choices != null && choices.length() > 0) {
+                val firstChoice = choices.getJSONObject(0)
+                val message = firstChoice.optJSONObject("message")
+                val resultText = message?.optString("content", "") ?: ""
+                if (resultText.isNotBlank()) {
+                    Log.d(TAG, "Cerebras 成功响应，长度: ${resultText.length}")
                     return@withContext resultText
                 }
             }
 
-            throw IllegalStateException("未从大模型返回中解析到有效文本 candidate")
+            throw IllegalStateException("解析 Cerebras JSON 失败")
 
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            Log.e(TAG, "请求超时 (TimeoutCancellationException)", e)
-            return@withContext "【网络连接超时 ⏰】太空中信号有点慢，精灵姐姐刚才没能及时赶回来。别灰心，点击重新发送一次试试吧！✨"
+            Log.e(TAG, "Cerebras 请求超时 (15s)，立即启动极速离线规则引擎兜底", e)
+            return@withContext GeminiClient.generateContent(userQuery, false)
         } catch (e: Exception) {
-            Log.e(TAG, "大模型调用发生异常 [${e.javaClass.simpleName}]: ${e.localizedMessage}", e)
-            // 当网络请求不可达（如无 API Key 或离线开发）时，平滑降级到内置智能兜底引擎
+            Log.e(TAG, "Cerebras 大模型调用异常，平滑切换离线兜底", e)
             return@withContext GeminiClient.generateContent(userQuery, false)
         }
     }
